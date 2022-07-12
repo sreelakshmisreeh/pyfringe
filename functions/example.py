@@ -5,7 +5,8 @@ Created on Thu Jun 30 11:15:30 2022
 
 @author: Sreelakshmi
 """
-
+ # The example.py shows how to call each functions.
+  
 import sys
 sys.path.append('/Users/Sreelakshmi/Documents/Raspberry/raspi_files/')
 import calib
@@ -33,17 +34,24 @@ delta_distance = 300 #
 int_limit = 170 # intensity limit to extract white region of board
 resid_outlier_limit = 10
 val_label = 176.777
+# Define the path from which data is to be read. The calibration parameters will be saved in the same path. 
+#White region reconstruction will also be saved in the same path folder white
+
 mf_path = '/Users/Sreelakshmi/Documents/Raspberry/reconstruction/July_5_cali_img'
 
 #%% Instantiate calibration class
 calib_inst = calib.calibration(width, height, limit, type_unwrap, N_list, pitch_list, board_gridrows, board_gridcolumns, dist_betw_circle, mf_path)
-# Calibration of both camera na dprojector. calibration parameters are saved as path + {type_unwrap}__calibration_param.npz
+
+#%% Calibration of both camera na dprojector. calibration parameters are saved as path + {type_unwrap}__calibration_param.npz
 unwrapv_lst, unwraph_lst, white_lst, mod_lst, proj_img_lst, cam_objpts, cam_imgpts, proj_imgpts, euler_angles, cam_mean_error, cam_delta, cam_df1, proj_mean_error, proj_delta, proj_df1   = calib_inst.calib(no_pose, bobdetect_areamin, bobdetect_convexity, kernel_v = 1, kernel_h=1)
+
 #%% If required this function removes poses based on absolute reprojection error
 unwrapv_lst, unwraph_lst, white_lst, mod_lst, proj_img_lst,cam_objpts, cam_imgpts, proj_imgpts, euler_angles, cam_mean_error, cam_delta, cam_df1, proj_mean_error, proj_delta, proj_df1   = calib_inst.update_list_calib(proj_df1, unwrapv_lst, unwraph_lst, white_lst, mod_lst,proj_img_lst, bobdetect_areamin, bobdetect_convexity)
+
 #%% Plot for reprojection error analysis
 calib_inst.intrinsic_errors_plts( cam_mean_error, cam_delta, cam_df1, 'Camera')
 calib_inst.intrinsic_errors_plts( proj_mean_error, proj_delta, proj_df1, 'Projector') 
+
 #%% To reconstruct calibration board and plot error in x,y and z directions
 mf_delta_df, mf_abs_delta_df,center_cordi_lst = calib_inst.calib_center_reconstruction(cam_imgpts, unwrapv_lst) 
 #%% To reconstruct the white region of the board and fit plane to calculate residue
@@ -51,7 +59,7 @@ white_img = white_lst.copy()
 white_cord = calib_inst.white_centers(unwrapv_lst, distance, delta_distance, white_img, int_limit, resid_outlier_limit)
 #%% To calculate error in calculated distance between reconstructed centers
 distance_df = calib_inst.pp_distance_analysis(center_cordi_lst, val_label)
-#%%
+#%% For checking saved calibration parameters.
 calibration = np.load(os.path.join(mf_path,'{}_calibration_param.npz'.format(type_unwrap)))
 c_mtx = calibration["arr_0"]
 c_dist = calibration["arr_1"]
