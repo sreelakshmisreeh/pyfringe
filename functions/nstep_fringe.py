@@ -151,7 +151,7 @@ def calib_generate(width, height, type_unwrap, N_list, pitch_list, phase_st, int
             fringe_lst.append(cos_h)
             delta_deck_list.append(delta_deck)
         fringe_arr = np.ceil(np.vstack(fringe_lst)).astype('uint8')
-    np.save(os.path.join(path, '{}_fringes.npy'.format(type_unwrap)), fringe_lst) 
+    np.save(os.path.join(path, '{}_fringes.npy'.format(type_unwrap)), fringe_arr) 
     
     return fringe_arr, delta_deck_list 
 
@@ -201,7 +201,7 @@ def recon_generate(width, height, type_unwrap, N_list, pitch_list, phase_st, int
             fringe_lst.append(cos)
             delta_deck_list.append(delta_deck)
         fringe_arr=np.ceil(np.vstack(fringe_lst)).astype('uint8') 
-     #np.save(os.path.join(path, '{}_fringes.npy'.format(type_unwrap)), fringe_lst) 
+    np.save(os.path.join(path, '{}_fringes.npy'.format(type_unwrap)), fringe_arr) 
     return fringe_arr, delta_deck_list
 
 def mask_img(images, limit ):
