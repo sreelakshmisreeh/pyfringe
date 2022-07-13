@@ -150,7 +150,7 @@ def calib_generate(width, height, type_unwrap, N_list, pitch_list, phase_st, int
             fringe_lst.append(cos_v)
             fringe_lst.append(cos_h)
             delta_deck_list.append(delta_deck)
-        fringe_arr=np.ceil(np.vstack(fringe_lst)).astype('uint8')
+        fringe_arr = np.ceil(np.vstack(fringe_lst)).astype('uint8')
     np.save(os.path.join(path, '{}_fringes.npy'.format(type_unwrap)), fringe_lst) 
     
     return fringe_arr, delta_deck_list 
@@ -190,6 +190,7 @@ def recon_generate(width, height, type_unwrap, N_list, pitch_list, phase_st, int
             step = step_func(inte_rang, pitch_list[0], 'h', delta_deck_list)
             cos, absolute_phi_h = cos_func(inte_rang, pitch_list[0], 'h', phase_st, delta_deck_list)
         fringe_lst = np.concatenate((cos, step),axis = 0)
+        fringe_arr = np.ceil (fringe_lst).astype('uint8') 
     elif (type_unwrap == 'multifreq' or type_unwrap == 'multiwave'):
         for p, n in zip(pitch_list, N_list): 
             delta_deck = delta_deck_gen(n, height, width)
