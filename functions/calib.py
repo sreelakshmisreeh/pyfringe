@@ -17,12 +17,14 @@ import open3d as o3d
 from scipy.optimize import leastsq
 from scipy.spatial import distance
 
+EPSILON = -0.5
+
 class calibration:
     '''
     Calibration class is used to calibrate camera and projector setting. User can choose between phase coded , multifrequency and multiwavelength temporal unwrapping.
     After calibration the camera and projector parameters are saved as npz file at the given calibration image path.
     '''
-    def __init__(self,proj_width, proj_height, mask_limit, type_unwrap, N, pitch, board_gridrows, board_gridcolumns, dist_betw_circle, path):
+    def __init__(self,proj_width, proj_height, mask_limit, type_unwrap, N_list, pitch_list, board_gridrows, board_gridcolumns, dist_betw_circle, path):
         '''
 
         Parameters
@@ -34,8 +36,8 @@ class calibration:
                       'phase' = phase coded unwrapping method, 
                       'multifreq' = multifrequency unwrapping method
                       'multiwave' = multiwavelength unwrapping method.
-        N : type: float array. The number of steps in phase shifting algorithm. If phase coded unwrapping method is used this is a single element array. For other methods corresponding to each pitch one element in the list.
-        pitch = type: float. Number of pixels per fringe period.
+        N_list : type: float array. The number of steps in phase shifting algorithm. If phase coded unwrapping method is used this is a single element array. For other methods corresponding to each pitch one element in the list.
+        pitch_list = type: float. Number of pixels per fringe period.
         board_gridrows = type: int. Number of rows in the assymetric circle pattern.
         board_gridcolumns = type: int. Number of columns in the asymmetric circle pattern.
         dist_betw_circle = type: float. Distance between circle centers.
@@ -48,8 +50,8 @@ class calibration:
         self.height =  proj_height
         self.limit = mask_limit
         self.type_unwrap =  type_unwrap
-        self.N = N
-        self.pitch = pitch
+        self.N = N_list
+        self.pitch = pitch_list
         self.path = path
         self.board_gridrows = board_gridrows
         self.board_gridcolumns = board_gridcolumns
@@ -431,8 +433,8 @@ class calibration:
                 #index_h = np.argmax(abs(np.diff(multi_phase_h1, axis = 1)))
                 #multi_phase_v1[:,index_v:] = multi_phase_v1[:,index_v:] + 2 * np.pi
                 #multi_phase_h1[index_h:] = multi_phase_h1[index_h:] + 2 * np.pi
-                multi_phase_v1[multi_phase_v1<0] = multi_phase_v1[multi_phase_v1<0] + 2 * np.pi
-                multi_phase_h1[multi_phase_h1<0] = multi_phase_h1[multi_phase_h1<0] + 2 * np.pi
+                multi_phase_v1[multi_phase_v1<0] = multi_phase_v1[multi_phase_v1 < EPSILON ] + 2 * np.pi
+                multi_phase_h1[multi_phase_h1<0] = multi_phase_h1[multi_phase_h1 < EPSILON ] + 2 * np.pi
                 
                 phase_arr_v = np.stack([multi_phase_v1, multi_phase_v2, multi_phase_v3, multi_phase_v4])
                 phase_arr_h = np.stack([multi_phase_h1, multi_phase_h2, multi_phase_h3, multi_phase_h4])

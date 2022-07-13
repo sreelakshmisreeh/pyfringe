@@ -4,6 +4,7 @@
 
 import numpy as np
 import scipy.ndimage
+import os
 
 
 
@@ -39,7 +40,7 @@ def cos_func(inte_rang, pitch, direc, phase_st, delta_deck): #phase_st=datatype:
     ----------
     inte_rang = type: float. Operating intensity range or projector's linear operation region.
     pitch = type:float. Number of pixels per fringe period.
-    direc = type: string. Vertical (v) or horizontal(h) pattern.
+    direc = type: string. Visually vertical (v) or horizontal(h) pattern.
     phase_st = type: float. Starting phase. To apply multifrequency and multiwavelength temporal unwraping starting phase should be zero. Whereas for phase coding trmporal unwrapping starting phase should be -π.
     delta_deck =  type: float. Delta values at each pixel for each N step pattern.
     
@@ -103,6 +104,104 @@ def step_func(inte_rang, pitch, direc, delta_deck):
     inte = i0 + i1 * np.cos(phi_s + delta_deck) 
     return inte
 
+def calib_generate(width, height, type_unwrap, N_list, pitch_list, phase_st, inte_rang, path):
+    '''
+    Function to generate fringe patterns based on type of unwrapping. 
+    This function generates both vertically and horizontally varying fringe patterns which is usually required for system calibration.
+
+    Parameters
+    ----------
+    width = type: float. Width of pattern image.
+    height = type: float. Height of the pattern image.
+    type_unwrap = type: string. Type of temporal unwrapping to be applied. 
+                  'phase' = phase coded unwrapping method, 
+                  'multifreq' = multifrequency unwrapping method
+                  'multiwave' = multiwavelength unwrapping method.
+    N_list = type: float array. The number of steps in phase shifting algorithm. If phase coded unwrapping method is used this is a single element array. 
+                                For other methods corresponding to each pitch one element in the list.
+    pitch_list = type: float. Number of pixels per fringe period.
+    phase_st = type: float. Starting phase. To apply multifrequency and multiwavelength temporal unwraping starting phase should be zero. 
+                            Whereas for phase coding trmporal unwrapping starting phase should be -π.
+    inte_rang = type: float. Operating intensity range or projector's linear operation region.
+    path = type: string. Path to which the generated pattern is to be saved.
+
+    Returns
+    -------
+    fringe_arr = type: Array of uint8. Array of generated fringe patterns in both directions.
+    delta_deck_list = type:List of float. List of N delta images.
+
+    '''
+    
+    fringe_lst = []; delta_deck_list = []
+    if type_unwrap == 'phase':
+        delta_deck_list = delta_deck_gen(N_list[0], height, width)
+        step_v = step_func(inte_rang, pitch_list[0], 'v', delta_deck_list)
+        step_h = step_func(inte_rang, pitch_list[0], 'h', delta_deck_list)
+        cos_v, absolute_phi_v = cos_func(inte_rang, pitch_list[0], 'v', phase_st, delta_deck_list)
+        cos_h, absolute_phi_h = cos_func(inte_rang, pitch_list[0], 'h', phase_st, delta_deck_list)
+        fringe_lst = np.concatenate((cos_v, cos_h, step_v, step_h),axis=0)
+        fringe_arr = np.ceil (fringe_lst).astype('uint8')  # for rounding to the next int number to avoid phase ambiguity
+        
+    elif (type_unwrap == 'multifreq' or type_unwrap == 'multiwave'):
+        for p, n in zip(pitch_list, N_list): 
+            delta_deck = delta_deck_gen(n, height, width)
+            cos_v, absolute_phi_v = cos_func(inte_rang, p,'v', phase_st, delta_deck)
+            cos_h, absolute_phi_h = cos_func(inte_rang, p,'h', phase_st, delta_deck)
+            fringe_lst.append(cos_v)
+            fringe_lst.append(cos_h)
+            delta_deck_list.append(delta_deck)
+        fringe_arr=np.ceil(np.vstack(fringe_lst)).astype('uint8')
+    np.save(os.path.join(path, '{}_fringes.npy'.format(type_unwrap)), fringe_lst) 
+    
+    return fringe_arr, delta_deck_list 
+
+def recon_generate(width, height, type_unwrap, N_list, pitch_list, phase_st, inte_rang, direc, path):
+    '''
+    Function is used to generate fringe pattern in a specified direction.
+
+    width = type: float. Width of pattern image.
+    height = type: float. Height of the pattern image.
+    type_unwrap = type: string. Type of temporal unwrapping to be applied. 
+                  'phase' = phase coded unwrapping method, 
+                  'multifreq' = multifrequency unwrapping method
+                  'multiwave' = multiwavelength unwrapping method.
+    N_list = type: float array. The number of steps in phase shifting algorithm. If phase coded unwrapping method is used this is a single element array. 
+                                For other methods corresponding to each pitch one element in the list.
+    pitch_list = type: float. Number of pixels per fringe period.
+    phase_st = type: float. Starting phase. To apply multifrequency and multiwavelength temporal unwraping starting phase should be zero. 
+                            Whereas for phase coding trmporal unwrapping starting phase should be -π.
+    inte_rang = type: float. Operating intensity range or projector's linear operation region.
+    direc = type: string. Visually vertical (v) or horizontal(h) pattern.
+    path = type: string. Path to which the generated pattern is to be saved.
+
+    Returns
+    -------
+    fringe_arr = type: Array of uint8. Array of generated fringe patterns in single direction.
+    delta_deck_list = type:List of float. List of N delta images.
+
+    '''
+    fringe_lst = []; delta_deck_list = []
+    if type_unwrap == 'phase':
+        delta_deck_list = delta_deck_gen(N_list[0], height, width)
+        if direc =='v':
+            step = step_func(inte_rang, pitch_list[0], 'v', delta_deck_list)
+            cos, absolute_phi_v = cos_func(inte_rang, pitch_list[0], 'v', phase_st, delta_deck_list)
+        elif direc == 'h':    
+            step = step_func(inte_rang, pitch_list[0], 'h', delta_deck_list)
+            cos, absolute_phi_h = cos_func(inte_rang, pitch_list[0], 'h', phase_st, delta_deck_list)
+        fringe_lst = np.concatenate((cos, step),axis = 0)
+    elif (type_unwrap == 'multifreq' or type_unwrap == 'multiwave'):
+        for p, n in zip(pitch_list, N_list): 
+            delta_deck = delta_deck_gen(n, height, width)
+            if direc =='v':
+                cos, absolute_phi = cos_func(inte_rang, p,'v', phase_st, delta_deck)
+            elif direc == 'h':
+                cos, absolute_phi = cos_func(inte_rang, p,'h', phase_st, delta_deck)
+            fringe_lst.append(cos)
+            delta_deck_list.append(delta_deck)
+        fringe_arr=np.ceil(np.vstack(fringe_lst)).astype('uint8') 
+     #np.save(os.path.join(path, '{}_fringes.npy'.format(type_unwrap)), fringe_lst) 
+    return fringe_arr, delta_deck_list
 
 def mask_img(images, limit ):
     '''
