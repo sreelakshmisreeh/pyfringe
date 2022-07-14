@@ -1039,10 +1039,28 @@ class calibration:
         #ax.legend(loc="upper left",bbox_to_anchor=(1.2, 1),fontsize=15)
         plt.tight_layout()
         plt.savefig(os.path.join(self.path,'error.png'))
-        plt.figure()
-        plt.title('Abs error histogram of all poses compared to true coordinates', fontsize = 20)
+        fig=plt.figure(figsize=(16,15))
+        fig.suptitle('Abs error histogram of all poses compared to true coordinates', fontsize = 20)
         abs_plot = sns.histplot(abs_delta_df,multiple="layer")
         labels = ['$\Delta x$','$\Delta y$','$\Delta z$']
+        mean_deltas = abs_delta_df.mean()
+        std_deltas = abs_delta_df.std()
+        ax.text(0.7,0.8,'Mean',fontsize=20,horizontalalignment='center',
+                 verticalalignment='center',transform = ax.transAxes)
+        ax.text(0.85,0.8,'Std',fontsize=20,horizontalalignment='center',
+                 verticalalignment='center',transform = ax.transAxes)
+        ax.text(0.7,0.75,'$\Delta x $:{0:.3f}'.format(mean_deltas[0]),fontsize=20,horizontalalignment='center',
+                 verticalalignment='center',transform = ax.transAxes)
+        ax.text(0.85,0.75,'{0:.3f}'.format(std_deltas[0]),fontsize=20,horizontalalignment='center',
+                 verticalalignment='center',transform = ax.transAxes)
+        ax.text(0.7,0.7,'$\Delta y $:{0:.3f}'.format(mean_deltas[1]),fontsize=20,horizontalalignment='center',
+                 verticalalignment='center',transform = ax.transAxes)
+        ax.text(0.85,0.7,'{0:.3f}'.format(std_deltas[1]),fontsize=20,horizontalalignment='center',
+                 verticalalignment='center',transform = ax.transAxes)
+        ax.text(0.7,0.65,'$\Delta z $:{0:.3f}'.format(mean_deltas[2]),fontsize=20,horizontalalignment='center',
+                 verticalalignment='center',transform = ax.transAxes)
+        ax.text(0.85,0.65,'{0:.3f}'.format(std_deltas[2]),fontsize=20,horizontalalignment='center',
+                 verticalalignment='center',transform = ax.transAxes)
         plt.xlabel('abs(error) mm',fontsize = 20)
         plt.ylabel('Count',fontsize = 20)
         plt.xticks(fontsize = 20)
