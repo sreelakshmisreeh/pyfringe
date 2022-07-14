@@ -433,8 +433,8 @@ class calibration:
                 #index_h = np.argmax(abs(np.diff(multi_phase_h1, axis = 1)))
                 #multi_phase_v1[:,index_v:] = multi_phase_v1[:,index_v:] + 2 * np.pi
                 #multi_phase_h1[index_h:] = multi_phase_h1[index_h:] + 2 * np.pi
-                multi_phase_v1[multi_phase_v1<0] = multi_phase_v1[multi_phase_v1 < EPSILON ] + 2 * np.pi
-                multi_phase_h1[multi_phase_h1<0] = multi_phase_h1[multi_phase_h1 < EPSILON ] + 2 * np.pi
+                multi_phase_v1[multi_phase_v1< EPSILON] = multi_phase_v1[multi_phase_v1 < EPSILON ] + 2 * np.pi
+                multi_phase_h1[multi_phase_h1< EPSILON] = multi_phase_h1[multi_phase_h1 < EPSILON ] + 2 * np.pi
                 
                 phase_arr_v = np.stack([multi_phase_v1, multi_phase_v2, multi_phase_v3, multi_phase_v4])
                 phase_arr_h = np.stack([multi_phase_h1, multi_phase_h2, multi_phase_h3, multi_phase_h4])
