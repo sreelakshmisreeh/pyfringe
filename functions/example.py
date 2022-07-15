@@ -8,7 +8,7 @@ Created on Thu Jun 30 11:15:30 2022
  # The example.py shows how to call each functions.
   
 import sys
-sys.path.append('/Users/Sreelakshmi/Documents/Raspberry/raspi_files/')
+sys.path.append('/Users/Sreelakshmi/Documents/Github/pyfringe/functions')
 import calib
 import numpy as np
 import os
@@ -37,16 +37,18 @@ val_label = 176.777
 # Define the path from which data is to be read. The calibration parameters will be saved in the same path. 
 #White region reconstruction will also be saved in the same path folder white
 
-mf_path = '/Users/Sreelakshmi/Documents/Raspberry/reconstruction/July_5_cali_img'
+mf_path = '/Users/Sreelakshmi/Documents/Raspberry/reconstruction/July_8_Calib_img/calib_images'
+# Reprojection criteria
+reproj_criteria = 0.45
 
 #%% Instantiate calibration class
 calib_inst = calib.calibration(width, height, limit, type_unwrap, N_list, pitch_list, board_gridrows, board_gridcolumns, dist_betw_circle, mf_path)
 
-#%% Calibration of both camera na dprojector. calibration parameters are saved as path + {type_unwrap}__calibration_param.npz
+#%% Calibration of both camera and projector. calibration parameters are saved as path + {type_unwrap}__calibration_param.npz
 unwrapv_lst, unwraph_lst, white_lst, mod_lst, proj_img_lst, cam_objpts, cam_imgpts, proj_imgpts, euler_angles, cam_mean_error, cam_delta, cam_df1, proj_mean_error, proj_delta, proj_df1   = calib_inst.calib(no_pose, bobdetect_areamin, bobdetect_convexity, kernel_v = 1, kernel_h=1)
 
 #%% If required this function removes poses based on absolute reprojection error
-unwrapv_lst, unwraph_lst, white_lst, mod_lst, proj_img_lst,cam_objpts, cam_imgpts, proj_imgpts, euler_angles, cam_mean_error, cam_delta, cam_df1, proj_mean_error, proj_delta, proj_df1   = calib_inst.update_list_calib(proj_df1, unwrapv_lst, unwraph_lst, white_lst, mod_lst,proj_img_lst, bobdetect_areamin, bobdetect_convexity)
+unwrapv_lst, unwraph_lst, white_lst, mod_lst, proj_img_lst,cam_objpts, cam_imgpts, proj_imgpts, euler_angles, cam_mean_error, cam_delta, cam_df1, proj_mean_error, proj_delta, proj_df1   = calib_inst.update_list_calib(proj_df1, unwrapv_lst, unwraph_lst, white_lst, mod_lst,proj_img_lst, bobdetect_areamin, bobdetect_convexity, reproj_criteria)
 
 #%% Plot for reprojection error analysis
 calib_inst.intrinsic_errors_plts( cam_mean_error, cam_delta, cam_df1, 'Camera')
