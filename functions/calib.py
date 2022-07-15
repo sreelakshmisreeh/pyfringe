@@ -89,16 +89,13 @@ class calibration:
         objp = self.world_points(self.dist_betw_circle, self.board_gridrows, self.board_gridcolumns)
         if self.type_unwrap == 'phase':
             phase_st = -np.pi
-            unwrapv_lst,unwraph_lst, white_lst, avg_lst, mod_lst, gamma_lst, kv_lst, kh_lst, coswrapv_lst, coswraph_lst, stepwrapv_lst, stepwraph_lst=self.projcam_calib_img_phase(no_pose,self.limit, self.N[0], self.pitch[-1],
                                                                                                                                                                                    self.width, self.height,kernel_v, kernel_h, self.path)
         elif self.type_unwrap == 'multifreq':
             phase_st = 0
-            unwrapv_lst, unwraph_lst, white_lst, avg_vlst, avg_hlst, mod_vlst, mod_hlst, gamma_vlst, gamma_hlst, wrapv_lst, wraph_lst, kv_lst, kh_lst = self.projcam_calib_img_multifreq(no_pose, self.limit, self.N, self.pitch,
                                                                                                                                                                                          self.width, self.height, self.path)
             mod_lst = np.vstack((mod_vlst,mod_hlst))
         elif self.type_unwrap == 'multiwave':
             phase_st = 0
-            unwrapv_lst, unwraph_lst, white_lst, avg_vlst, avg_hlst, mod_vlst, mod_hlst, gamma_vlst, gamma_hlst, wrapv_lst, wraph_lst, kv_lst, kh_lst = self.projcam_calib_img_multiwave(no_pose,self.limit, self.N, self.pitch, 
                                                                                                                                                                                          self.width, self.height, kernel_v, kernel_h, self.path)
             mod_lst = np.vstack((mod_vlst,mod_hlst))
             
@@ -134,7 +131,7 @@ class calibration:
         
         return unwrapv_lst, unwraph_lst, white_lst, mod_lst, proj_img_lst, cam_objpts, cam_imgpts, proj_imgpts, euler_angles, cam_mean_error, cam_delta, cam_df1, proj_mean_error, proj_delta, proj_df1 
     
-    def update_list_calib(self, proj_df1, unwrapv_lst, unwraph_lst, white_lst, mod_lst,proj_img_lst, bobdetect_areamin, bobdetect_convexity):
+    def update_list_calib(self, proj_df1, unwrapv_lst, unwraph_lst, white_lst, mod_lst,proj_img_lst, bobdetect_areamin, bobdetect_convexity, reproj_criteria):
         '''
         Function to remove outlier calibration poses.
 
@@ -148,6 +145,7 @@ class calibration:
         proj_img_lst = type: float. List of circle center grid coordinates for each pose of projector calibration.
         bobdetect_areamin = type: float. Minimum area of area for bob detector. 
         bobdetect_convexity = type: float. Circle convexity for bob detector.
+        reproj_criteria = type: float. Criteria to remove outlier poses.
 
         Returns
         -------
@@ -168,7 +166,7 @@ class calibration:
         proj_df1 = type: pandas dataframe of floats. Dataframe of projector absolute error in x and y directions of updated list of poses.
 
         '''
-        up_lst = list(set(proj_df1[proj_df1['absdelta_x']>(0.45)]['image'].to_list() + proj_df1[proj_df1['absdelta_y']>(0.4)]['image'].to_list()))
+        up_lst = list(set(proj_df1[proj_df1['absdelta_x']>(reproj_criteria)]['image'].to_list() + proj_df1[proj_df1['absdelta_y']>(reproj_criteria)]['image'].to_list()))
         up_white_lst =[]; up_unwrapv_lst=[];up_unwraph_lst=[];up_mod_lst=[];up_proj_img_lst=[]
         for index, element in enumerate(white_lst):
             if index not in up_lst:
@@ -358,7 +356,7 @@ class calibration:
                 stepwrapv_lst.append(step_wrap_v)
                 stepwraph_lst.append(step_wrap_h)
                 
-        return unwrap_v_lst, unwrap_h_lst, white_lst, avg_lst, mod_lst, gamma_lst, kv_lst, kh_lst, coswrapv_lst, coswraph_lst, stepwrapv_lst, stepwraph_lst 
+        return unwrap_v_lst, unwrap_h_lst, white_lst, avg_lst, mod_lst, gamma_lst
 
     def projcam_calib_img_multifreq(self,no_pose,limit,N_list,pitch_list,width,height,path):
         '''
@@ -462,7 +460,7 @@ class calibration:
                 unwrapv_lst.append(multifreq_unwrap_v)
                 unwraph_lst.append(multifreq_unwrap_h)
                 
-        return unwrapv_lst, unwraph_lst, white_lst, avg_vlst, avg_hlst, mod_vlst, mod_hlst, gamma_vlst, gamma_hlst, wrapv_lst, wraph_lst, kv_lst, kh_lst
+        return unwrapv_lst, unwraph_lst, white_lst, avg_vlst, avg_hlst, mod_vlst, mod_hlst, gamma_vlst, gamma_hlst
 
     def projcam_calib_img_multiwave(self,no_pose, limit, N_arr, pitch_arr, width, height, kernel_v, kernel_h, path):
         '''
@@ -572,7 +570,7 @@ class calibration:
                 unwrapv_lst.append(multiwav_unwrap_v)
                 unwraph_lst.append(multiwav_unwrap_h)
                 
-        return unwrapv_lst, unwraph_lst, white_lst, avg_vlst, avg_hlst, mod_vlst, mod_hlst, gamma_vlst, gamma_hlst, wrapv_lst, wraph_lst, kv_lst, kh_lst
+        return unwrapv_lst, unwraph_lst, white_lst, avg_vlst, avg_hlst, mod_vlst, mod_hlst, gamma_vlst, gamma_hlst
     
 
 
@@ -1024,7 +1022,7 @@ class calibration:
         n_colors = len(delta_group)  #no. of poses
         cm = plt.get_cmap('gist_rainbow')
         fig=plt.figure(figsize=(16,15))
-        fig.suptitle(' Error in recostructed coordinates compared to true coordinates ',fontsize = 20)
+        fig.suptitle(' Error in reconstructed coordinates compared to true coordinates ',fontsize = 20)
         ax = plt.axes(projection='3d')
         ax.set_prop_cycle(color=[cm(1.*i/n_colors) for i in range(n_colors)])
         cm = plt.get_cmap('gist_rainbow')
@@ -1039,7 +1037,7 @@ class calibration:
         #ax.legend(loc="upper left",bbox_to_anchor=(1.2, 1),fontsize=15)
         plt.tight_layout()
         plt.savefig(os.path.join(self.path,'error.png'))
-        fig=plt.figure(figsize=(16,15))
+        fig, ax = plt.subplots()
         fig.suptitle('Abs error histogram of all poses compared to true coordinates', fontsize = 20)
         abs_plot = sns.histplot(abs_delta_df,multiple="layer")
         labels = ['$\Delta x$','$\Delta y$','$\Delta z$']
