@@ -89,13 +89,16 @@ class calibration:
         objp = self.world_points(self.dist_betw_circle, self.board_gridrows, self.board_gridcolumns)
         if self.type_unwrap == 'phase':
             phase_st = -np.pi
+            unwrapv_lst,unwraph_lst, white_lst, avg_lst, mod_lst, gamma_lst = self.projcam_calib_img_phase(no_pose,self.limit, self.N[0], self.pitch[-1],
                                                                                                                                                                                    self.width, self.height,kernel_v, kernel_h, self.path)
         elif self.type_unwrap == 'multifreq':
             phase_st = 0
+            unwrapv_lst, unwraph_lst, white_lst, avg_vlst, avg_hlst, mod_vlst, mod_hlst, gamma_vlst, gamma_hlst = self.projcam_calib_img_multifreq(no_pose, self.limit, self.N, self.pitch,
                                                                                                                                                                                          self.width, self.height, self.path)
             mod_lst = np.vstack((mod_vlst,mod_hlst))
         elif self.type_unwrap == 'multiwave':
             phase_st = 0
+            unwrapv_lst, unwraph_lst, white_lst, avg_vlst, avg_hlst, mod_vlst, mod_hlst, gamma_vlst, gamma_hlst = self.projcam_calib_img_multiwave(no_pose,self.limit, self.N, self.pitch, 
                                                                                                                                                                                          self.width, self.height, kernel_v, kernel_h, self.path)
             mod_lst = np.vstack((mod_vlst,mod_hlst))
             
