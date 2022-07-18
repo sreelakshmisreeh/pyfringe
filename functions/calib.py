@@ -93,14 +93,12 @@ class calibration:
                                                                                                                                                                                    self.width, self.height,kernel_v, kernel_h, self.path)
         elif self.type_unwrap == 'multifreq':
             phase_st = 0
-            unwrapv_lst, unwraph_lst, white_lst, avg_vlst, avg_hlst, mod_vlst, mod_hlst, gamma_vlst, gamma_hlst = self.projcam_calib_img_multifreq(no_pose, self.limit, self.N, self.pitch,
+            unwrapv_lst, unwraph_lst, white_lst, avg_lst, mod_lst, gamma_lst = self.projcam_calib_img_multifreq(no_pose, self.limit, self.N, self.pitch,
                                                                                                                                                                                          self.width, self.height, self.path)
-            mod_lst = np.vstack((mod_vlst,mod_hlst))
         elif self.type_unwrap == 'multiwave':
             phase_st = 0
-            unwrapv_lst, unwraph_lst, white_lst, avg_vlst, avg_hlst, mod_vlst, mod_hlst, gamma_vlst, gamma_hlst = self.projcam_calib_img_multiwave(no_pose,self.limit, self.N, self.pitch, 
+            unwrapv_lst, unwraph_lst, white_lst, avg_lst, mod_lst, gamma_lst,  = self.projcam_calib_img_multiwave(no_pose,self.limit, self.N, self.pitch, 
                                                                                                                                                                                          self.width, self.height, kernel_v, kernel_h, self.path)
-            mod_lst = np.vstack((mod_vlst,mod_hlst))
             
         #Projector images
         proj_img_lst=self.projector_img(unwrapv_lst, unwraph_lst, white_lst, self.width, self.height, self.pitch[-1], phase_st)
@@ -393,12 +391,9 @@ class calibration:
     
         '''
         
-        avg_vlst = []
-        avg_hlst = []
-        mod_vlst = []
-        mod_hlst = []
-        gamma_vlst = []
-        gamma_hlst = []
+        avg_lst = []
+        mod_lst = []
+        gamma_lst = []
         white_lst = []
         kv_lst = []
         kh_lst = []
@@ -445,12 +440,9 @@ class calibration:
                 multifreq_unwrap_v.fill_value=np.nan
                 multifreq_unwrap_h.fill_value=np.nan
                 
-                avg_vlst.append(np.array([multi_avg_v1, multi_avg_v2, multi_avg_v3, multi_avg_v4]))
-                avg_hlst.append(np.array([multi_avg_h1, multi_avg_h2, multi_avg_h3, multi_avg_h4]))
-                mod_vlst.append(np.array([multi_mod_v1, multi_mod_v2, multi_mod_v3, multi_mod_v4]))
-                mod_hlst.append(np.array([multi_mod_h1, multi_mod_h2, multi_mod_h3, multi_mod_h4]))
-                gamma_vlst.append(np.array([multi_gamma_v1, multi_gamma_v2, multi_gamma_v3, multi_gamma_v4]))
-                gamma_hlst.append(np.array([multi_gamma_h1, multi_gamma_h2, multi_gamma_h3, multi_gamma_h4]))
+                avg_lst.append(np.array([multi_avg_v1, multi_avg_v2, multi_avg_v3, multi_avg_v4,multi_avg_h1, multi_avg_h2, multi_avg_h3, multi_avg_h4]))
+                mod_lst.append(np.array([multi_mod_v1, multi_mod_v2, multi_mod_v3, multi_mod_v4, multi_mod_h1, multi_mod_h2, multi_mod_h3, multi_mod_h4]))
+                gamma_lst.append(np.array([multi_gamma_v1, multi_gamma_v2, multi_gamma_v3, multi_gamma_v4, multi_gamma_h1, multi_gamma_h2, multi_gamma_h3, multi_gamma_h4]))
                 
                 white_lst.append(orig_img)
                 
@@ -463,7 +455,7 @@ class calibration:
                 unwrapv_lst.append(multifreq_unwrap_v)
                 unwraph_lst.append(multifreq_unwrap_h)
                 
-        return unwrapv_lst, unwraph_lst, white_lst, avg_vlst, avg_hlst, mod_vlst, mod_hlst, gamma_vlst, gamma_hlst
+        return unwrapv_lst, unwraph_lst, white_lst, avg_lst, mod_lst,  gamma_lst
 
     def projcam_calib_img_multiwave(self,no_pose, limit, N_arr, pitch_arr, width, height, kernel_v, kernel_h, path):
         '''
@@ -500,12 +492,9 @@ class calibration:
     
         '''
         
-        avg_vlst = []
-        avg_hlst = []
-        mod_vlst = []
-        mod_hlst = []
-        gamma_vlst = []
-        gamma_hlst = []
+        avg_lst = []
+        mod_lst = []
+        gamma_lst = []
         white_lst = []
         kv_lst = []
         kh_lst = []
@@ -555,13 +544,10 @@ class calibration:
                 multiwav_unwrap_h, k_arr_h = nstep.multiwave_unwrap(pitch_arr, phase_arr_h, kernel_h, 'h')
                 
                 
-                avg_vlst.append(np.array([multi_avg_v3, multi_avg_v2, multi_avg_v1]))
-                avg_hlst.append(np.array([multi_avg_h3, multi_avg_h2, multi_avg_h1]))
-                mod_vlst.append(np.array([multi_mod_v3, multi_mod_v2, multi_mod_v1]))
-                mod_hlst.append(np.array([multi_mod_h3, multi_mod_h2, multi_mod_h1]))
-                gamma_vlst.append(np.array([multi_gamma_v3, multi_gamma_v2, multi_gamma_v1]))
-                gamma_hlst.append(np.array([multi_gamma_h3, multi_gamma_h2, multi_gamma_h1]))
-                
+                avg_lst.append(np.array([multi_avg_v3, multi_avg_v2, multi_avg_v1,multi_avg_h3, multi_avg_h2, multi_avg_h1]))
+                mod_lst.append(np.array([multi_mod_v3, multi_mod_v2, multi_mod_v1, multi_mod_h3, multi_mod_h2, multi_mod_h1]))
+                gamma_lst.append(np.array([multi_gamma_v3, multi_gamma_v2, multi_gamma_v1, multi_gamma_h3, multi_gamma_h2, multi_gamma_h1]))
+              
                 white_lst.append(orig_img)
                 
                 wrapv_lst.append(phase_arr_v)
@@ -573,7 +559,7 @@ class calibration:
                 unwrapv_lst.append(multiwav_unwrap_v)
                 unwraph_lst.append(multiwav_unwrap_h)
                 
-        return unwrapv_lst, unwraph_lst, white_lst, avg_vlst, avg_hlst, mod_vlst, mod_hlst, gamma_vlst, gamma_hlst
+        return unwrapv_lst, unwraph_lst, white_lst, avg_lst, mod_lst, gamma_lst
     
 
 
