@@ -17,7 +17,7 @@ import os
 # proj properties
 width = 800; height = 1280
 #type of unwrapping 
-type_unwrap =  'multifreq'
+type_unwrap =  'phase'
 # modulation mask limit
 limit = 2
 # circle detection parameters
@@ -26,23 +26,39 @@ no_pose = 60
 dist_betw_circle = 25; #Distance between centers
 board_gridrows = 5; board_gridcolumns = 15 # calibration board parameters
 #multifrequency unwrapping parameters
-pitch_list =[1375, 275, 55, 11] 
-N_list = [3, 3, 3, 9]
+if type_unwrap == 'multifreq':
+    pitch_list =[1375, 275, 55, 11] 
+    N_list = [3, 3, 3, 9]
+    kernel_v = 1; kernel_h=1
+    path = '/Users/Sreelakshmi/Documents/Raspberry/reconstruction/testing_data/multifreq_calib_images'
+# multiwavelength unwrapping parameters
+if type_unwrap == 'multiwave':
+    pitch_list = [139,21,18]
+    N_list =[5,5,9]
+    kernel_v = 40; kernel_h=30
+    path = '/Users/Sreelakshmi/Documents/Raspberry/reconstruction/testing_data/multiwave_calib_images'
+
+# phase coding unwrapping parameters
+if type_unwrap == 'phase':
+    pitch_list =[18]
+    N_list =[9]
+    kernel_v = 30; kernel_h=35
+    path = '/Users/Sreelakshmi/Documents/Raspberry/reconstruction/testing_data/phase_calib_images'
 # For calibration reconstruction
 distance = 700 # distance between board and camera projector
 delta_distance = 300 #
-int_limit = 170 # intensity limit to extract white region of board
+int_limit = 70 # intensity limit to extract white region of board
 resid_outlier_limit = 10
 val_label = 176.777
 # Define the path from which data is to be read. The calibration parameters will be saved in the same path. 
 #White region reconstruction will also be saved in the same path folder white
 
-mf_path = '/Users/Sreelakshmi/Documents/Raspberry/reconstruction/July_8_Calib_img/calib_images'
+
 # Reprojection criteria
 reproj_criteria = 0.45
 
 #%% Instantiate calibration class
-calib_inst = calib.calibration(width, height, limit, type_unwrap, N_list, pitch_list, board_gridrows, board_gridcolumns, dist_betw_circle, mf_path)
+calib_inst = calib.calibration(width, height, limit, type_unwrap, N_list, pitch_list, board_gridrows, board_gridcolumns, dist_betw_circle, path)
 
 #%% Calibration of both camera and projector. calibration parameters are saved as path + {type_unwrap}__calibration_param.npz
 unwrapv_lst, unwraph_lst, white_lst, mod_lst, proj_img_lst, cam_objpts, cam_imgpts, proj_imgpts, euler_angles, cam_mean_error, cam_delta, cam_df1, proj_mean_error, proj_delta, proj_df1   = calib_inst.calib(no_pose, bobdetect_areamin, bobdetect_convexity, kernel_v = 1, kernel_h=1)
@@ -55,14 +71,14 @@ calib_inst.intrinsic_errors_plts( cam_mean_error, cam_delta, cam_df1, 'Camera')
 calib_inst.intrinsic_errors_plts( proj_mean_error, proj_delta, proj_df1, 'Projector') 
 
 #%% To reconstruct calibration board and plot error in x,y and z directions
-mf_delta_df, mf_abs_delta_df,center_cordi_lst = calib_inst.calib_center_reconstruction(cam_imgpts, unwrapv_lst) 
+delta_df, abs_delta_df,center_cordi_lst = calib_inst.calib_center_reconstruction(cam_imgpts, unwrapv_lst) 
 #%% To reconstruct the white region of the board and fit plane to calculate residue
-white_img = white_lst.copy()
+white_img = list( white_lst)
 white_cord = calib_inst.white_centers(unwrapv_lst, distance, delta_distance, white_img, int_limit, resid_outlier_limit)
 #%% To calculate error in calculated distance between reconstructed centers
 distance_df = calib_inst.pp_distance_analysis(center_cordi_lst, val_label)
 #%% For checking saved calibration parameters.
-calibration = np.load(os.path.join(mf_path,'{}_calibration_param.npz'.format(type_unwrap)))
+calibration = np.load(os.path.join(path,'{}_calibration_param.npz'.format(type_unwrap)))
 c_mtx = calibration["arr_0"]
 c_dist = calibration["arr_1"]
 p_mtx = calibration["arr_2"]
