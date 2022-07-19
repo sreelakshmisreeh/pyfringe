@@ -18,8 +18,6 @@ def inv_mtx(a11,a12,a13,a21,a22,a23,a31,a32,a33):
     '''
     Function to calculate inversion matrix required for object reconstruction.
     Ref: S.Zhong, High-Speed 3D Imaging with Digital Fringe Projection Techniques, CRC Press, 2016.
-
-
     '''
    
     
