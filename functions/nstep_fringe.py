@@ -228,10 +228,10 @@ def mask_img(images, limit ):
     images = images.astype(np.float64)
     sin_delta = np.sin(delta_deck)
     sin_delta[np.abs(sin_delta) < 1e-15] = 0 
-    sin_lst = (np.sum(images * sin_delta, axis = 0))**2
+    sin_lst = (np.sum(images * sin_delta, axis = 0)) ** 2
     cos_delta = np.cos(delta_deck)
     cos_delta[np.abs(cos_delta)<1e-15] = 0
-    cos_lst = (np.sum(images * cos_delta, axis = 0))**2
+    cos_lst = (np.sum(images * cos_delta, axis = 0)) ** 2
     modulation = 2 * np.sqrt(sin_lst + cos_lst) / N
     avg = np.sum(images, axis = 0) / N
     gamma = modulation / avg
