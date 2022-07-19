@@ -732,7 +732,7 @@ class calibration:
         unwrap_h_lst = type: list of float. List of absolute phase maps for vertically varying patterns for each calibration pose.
         proj_img_lst = type: list of float. List of computed projector image for each calibration pose.
         pitch = type: float. Number of pixels per fringe period. 
-        phi0 = type:float. Initial phase to be subtracted for phase to coordinate conversion.
+        phase_st = type:float. Initial phase to be subtracted for phase to coordinate conversion.
         grid_row = type: int. Number of rows in the asymmetric circle pattern.
         grid_column = type: int. Number of columns in the asymmetric circle pattern.
     
