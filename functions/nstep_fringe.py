@@ -225,7 +225,7 @@ def mask_img(images, limit ):
     '''
     delta_deck = delta_deck_gen(images.shape[0], images.shape[1], images.shape[2])
     N = delta_deck.shape[0]
-    images = images.astype(np.float32)
+    images = images.astype(np.float64)
     sin_delta = np.sin(delta_deck)
     sin_delta[np.abs(sin_delta) < 1e-15] = 0 
     sin_lst = (np.sum(images * sin_delta, axis = 0))**2
