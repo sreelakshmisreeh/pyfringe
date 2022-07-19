@@ -19,7 +19,6 @@ width = 800; height = 1280
 inte_rang = [50,240]
 # Set type of unwrapping
 type_unwrap = 'phase'
-limit = 2
 EPSILON = 0.5
 
 #multifrequency unwrapping parameters
