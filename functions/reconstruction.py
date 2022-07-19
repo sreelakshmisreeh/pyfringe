@@ -15,6 +15,12 @@ import open3d as o3d
 import os
 
 def inv_mtx(a11,a12,a13,a21,a22,a23,a31,a32,a33):
+    '''
+    Function to calculate inversion matrix required for object reconstruction.
+    Ref: S.Zhong, High-Speed 3D Imaging with Digital Fringe Projection Techniques, CRC Press, 2016.
+
+
+    '''
    
     
     det = (a11 * a22 * a33) + (a12 * a23 * a31) + (a13 * a21 * a32) - (a13 * a22 * a31) - (a12 * a21 * a33) - (a11* a23* a32)    
@@ -38,7 +44,30 @@ def inv_mtx(a11,a12,a13,a21,a22,a23,a31,a32,a33):
     
     
     
-def reconstruction_pts(uv_true,unwrapv,c_mtx,c_dist,p_mtx,cp_rot_mtx,cp_trans_mtx,phi0,pitch):
+def reconstruction_pts(uv_true, unwrapv, c_mtx, c_dist, p_mtx, cp_rot_mtx, cp_trans_mtx, phase_st, pitch):
+    '''
+    Function to reconstruct 3D point cordinates of 2D points. 
+
+    Parameters
+    ----------
+    uv_true = type: float. 2D point cordinates
+    unwrapv = type: float array. Unwrapped phase map of object.
+    c_mtx = type: float array. Camera matrix from calibration.
+    c_dist = type: float array. Camera distortion matrix from calibration.
+    p_mtx = type: float array. Projector matrix from calibration.
+    cp_rot_mtx = type: float array. Projector distortion matrix from calibration.
+    cp_trans_mtx = type: float array. Camera-projector translational matrix from calibration.
+    phase_st = type:float. Initial phase to be subtracted for phase to coordinate conversion.
+    pitch  = type:float. Number of pixels per fringe period.
+
+    Returns
+    -------
+    Coordinates array for given 2D points
+    x = type: float. 
+    y = type: float. 
+    z = type: float. 
+
+    '''
     no_pts = uv_true.shape[0]
     uv = cv2.undistortPoints(uv_true, c_mtx, c_dist, None, c_mtx )
     uv = uv.reshape(uv.shape[0],2)
@@ -48,7 +77,7 @@ def reconstruction_pts(uv_true,unwrapv,c_mtx,c_dist,p_mtx,cp_rot_mtx,cp_trans_mt
     vc = uv[:,1].reshape(no_pts,1)
     
     # Determinate 'up' from circle center
-    up = np.array([(nstep.bilinear_interpolate(unwrapv,i) - phi0) * (pitch / (2*np.pi)) for i in uv_true])
+    up = np.array([(nstep.bilinear_interpolate(unwrapv,i) - phase_st) * (pitch / (2*np.pi)) for i in uv_true])
     up = up.reshape(no_pts,1)
     
     # Calculate H matrix for proj from intrinsics and extrinsics
@@ -80,6 +109,11 @@ def reconstruction_pts(uv_true,unwrapv,c_mtx,c_dist,p_mtx,cp_rot_mtx,cp_trans_mt
     return x, y, z
 
 def point_error(cord1,cord2):
+    '''
+    Function to plot error 
+
+    '''
+    
     delta = cord1 - cord2
     abs_delta = abs(delta)
     err_df =  pd.DataFrame(np.hstack((delta,abs_delta)) , columns = ['$\Delta x$','$\Delta y$','$\Delta z$','$abs(\Delta x)$', '$abs(\Delta y)$', '$abs(\Delta z)$'])
@@ -94,13 +128,34 @@ def point_error(cord1,cord2):
     plt.setp(gfg.get_legend().get_texts(), fontsize='20') 
     return err_df
     
-def reconstruction_obj(unwrapv, c_mtx, c_dist, p_mtx, cp_rot_mtx, cp_trans_mtx, phi0, pitch):
+def reconstruction_obj(unwrapv, c_mtx, c_dist, p_mtx, cp_rot_mtx, cp_trans_mtx, phase_st, pitch):
+    '''
+    Sub function to reconstruct object from phase map
+
+    Parameters
+    ----------
+    unwrapv = type: float array. Unwrapped phase map of object.
+    c_mtx = type: float array. Camera matrix from calibration.
+    c_dist = type: float array. Camera distortion matrix from calibration.
+    p_mtx = type: float array. Projector matrix from calibration.
+    cp_rot_mtx = type: float array. Projector distortion matrix from calibration.
+    cp_trans_mtx = type: float array. Camera-projector translational matrix from calibration.
+    phase_st = type: float. Initial phase to be subtracted for phase to coordinate conversion.
+    pitch  = type:float. Number of pixels per fringe period.
+
+    Returns
+    -------
+    Coordinates array for all points
+    x = type: float array . 
+    y = type: float array. 
+    z = type: float array. 
+    '''
     
     unwrap_dist = cv2.undistort(unwrapv, c_mtx, c_dist)
     u = np.arange(0,unwrap_dist.shape[1])
     v = np.arange(0,unwrap_dist.shape[0])
     uc, vc = np.meshgrid(u,v)
-    up = (unwrap_dist - phi0) * pitch / (2*np.pi) 
+    up = (unwrap_dist - phase_st) * pitch / (2*np.pi) 
     # Calculate H matrix for proj from intrinsics and extrinsics
     proj_h_mtx = np.dot(p_mtx, np.hstack((cp_rot_mtx, cp_trans_mtx)))
 
@@ -130,13 +185,38 @@ def reconstruction_obj(unwrapv, c_mtx, c_dist, p_mtx, cp_rot_mtx, cp_trans_mtx, 
     z = b31 * c1 + b32 * c2 + b33 * c3
     return x, y, z 
 
-def complete_recon(unwrap, inte_rgb, modulation, limit, dist,delta_dist, c_mtx, c_dist, p_mtx, cp_rot_mtx, cp_trans_mtx, phi0, pitch, obj_path):
-    
+def complete_recon(unwrap, inte_rgb, modulation, limit, dist,delta_dist, c_mtx, c_dist, p_mtx, cp_rot_mtx, cp_trans_mtx, phase_st, pitch, obj_path):
+    '''
+    Function to completely reconstruct object applying modulation mask to saving point cloud.
+
+    Parameters
+    ----------
+    unwrap = type: float array. Unwrapped phase map of object.
+    inte_rgb = type: float array. Texture image.
+    modulation = type: float array. Intensity modulation image.
+    limit = type: float. Intensity modulation limit for mask.
+    dist = type: float. Distance at which object is placed in mm.
+    delta_dist = type: float. Volumetric distance to remove outliers.
+    c_mtx = type: float array. Camera matrix from calibration.
+    c_dist = type: float array. Camera distortion matrix from calibration.
+    p_mtx = type: float array. Projector matrix from calibration.
+    cp_rot_mtx = type: float array. Projector distortion matrix from calibration.
+    cp_trans_mtx = type: float array. Camera-projector translational matrix from calibration.
+    phase_st = type: float. Initial phase to be subtracted for phase to coordinate conversion.
+    pitch  = type:float. Number of pixels per fringe period.
+    obj_path = type: string. Path to save point 3D reconstructed point cloud. 
+
+    Returns
+    -------
+    cordi = type:  float array. x,y,z coordinate array of each object point.
+    intensity = type: float array. Intensity (texture/ color) at each point.
+
+    '''
     roi_mask = np.full(unwrap.shape, False)
     roi_mask[modulation > limit] = True
     unwrap[~roi_mask] = np.nan
     inte_rgb[~roi_mask] = False
-    obj_x, obj_y,obj_z = reconstruction_obj(unwrap, c_mtx, c_dist, p_mtx, cp_rot_mtx, cp_trans_mtx, phi0, pitch)
+    obj_x, obj_y,obj_z = reconstruction_obj(unwrap, c_mtx, c_dist, p_mtx, cp_rot_mtx, cp_trans_mtx, phase_st, pitch)
     flag = (obj_z > (dist - delta_dist)) & (obj_z < (dist + delta_dist))
     xt = obj_x[flag]
     yt = obj_y[flag]
