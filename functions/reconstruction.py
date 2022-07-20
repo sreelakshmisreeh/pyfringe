@@ -14,6 +14,8 @@ import cv2
 import open3d as o3d
 import os
 
+EPSILON = 0.5
+
 def inv_mtx(a11,a12,a13,a21,a22,a23,a31,a32,a33):
     '''
     Function to calculate inversion matrix required for object reconstruction.
@@ -226,5 +228,108 @@ def complete_recon(unwrap, inte_rgb, modulation, limit, dist,delta_dist, c_mtx, 
     pcd.colors = o3d.utility.Vector3dVector(intensity)
     o3d.io.write_point_cloud(os.path.join(obj_path,'obj.ply'), pcd)
     return cordi,intensity
-    
 
+def obj_reconst_wrapper(width, height, pitch_list, N_list, limit, dist, delta_dist, phase_st, direc, type_unwrap, calib_path, obj_path, kernel = 1):
+   '''
+    Function for 3D reconstruction of object based on different unwrapping method.
+
+    Parameters
+    ----------
+    width =type: float. Width of projector.
+    height = type: float. Height of projector.
+    pitch_list : TYPE
+        DESCRIPTION.
+    N_list = type: float array. The number of steps in phase shifting algorithm. If phase coded unwrapping method is used this is a single element array. For other methods corresponding to each pitch one element in the list.
+    limit = type: float array. Array of number of pixels per fringe period.
+    dist = type: float. Distance at which object is placed in mm.
+    delta_dist = type: float. Volumetric distance to remove outliers.
+    phase_st = type: float. Initial phase to be subtracted for phase to coordinate conversion.
+    direc = type: string. Visually vertical (v) or horizontal(h) pattern.
+    type_unwrap = type: string. Type of temporal unwrapping to be applied. 
+                  'phase' = phase coded unwrapping method, 
+                  'multifreq' = multifrequency unwrapping method
+                  'multiwave' = multiwavelength unwrapping method.
+    calib_path = type: string. Path to read calibration paraneters.
+    obj_path = type: string. Path to read captured images
+    kernel = type: int. Kernel size for median filter. The default is 1.
+
+    Returns
+    -------
+    obj_cordi = type : float array. Array of reconstructed x,y,z coordinates of each points on the object
+    obj_color = type: float array. Color (texture/ intensity) at each point.
+
+    '''
+   
+   calibration = np.load(os.path.join(calib_path,'{}_calibration_param.npz'.format(type_unwrap)))
+   c_mtx = calibration["arr_0"]
+   c_dist = calibration["arr_1"]
+   p_mtx = calibration["arr_2"]
+   cp_rot_mtx = calibration["arr_3"]
+   cp_trans_mtx = calibration["arr_4"]
+   if type_unwrap == 'phase':
+       object_cos, obj_cos_mod, obj_cos_avg, obj_cos_gamma, delta_deck_cos  = nstep.mask_img(np.array([cv2.imread(os.path.join(obj_path,'capt_%d.jpg'%i),0) for i in range(0, N_list[0])]), limit)
+       object_step, obj_step_mod, obj_step_avg, obj_step_gamma, delta_deck_step = nstep.mask_img(np.array([cv2.imread(os.path.join(obj_path,'capt_%d.jpg'%i),0) for i in range(N_list[0],2 * N_list[0])]), limit)
+
+       #wrapped phase
+       phase_cos = nstep.phase_cal(object_cos, N_list, delta_deck_cos )
+       phase_step = nstep.phase_cal(object_step, N_list, delta_deck_step )
+       phase_step = nstep.step_rectification(phase_step,direc)
+       #unwrapped phase
+       unwrap0, k0 = nstep.unwrap_cal(phase_step, phase_cos, pitch_list[0], width, height, direc)
+       unwrap, k = nstep.filt(unwrap0, kernel, direc)
+       inte_img = cv2.imread(os.path.join(obj_path,'white.jpg'))
+       inte_rgb = inte_img[...,::-1].copy()
+       obj_cordi, obj_color = complete_recon(unwrap, inte_rgb, obj_cos_mod,limit, dist, delta_dist, c_mtx, c_dist, p_mtx, cp_rot_mtx,cp_trans_mtx, phase_st, pitch_list[-1], obj_path)
+       
+   elif type_unwrap == 'multifreq':
+       object_freq1, mod_freq1, avg_freq1, gamma_freq1, delta_deck_freq1  = nstep.mask_img(np.array([cv2.imread(os.path.join(obj_path,'capt_%d.jpg'%i),0) for i in range(0, N_list[0])]), limit)
+       object_freq2, mod_freq2, avg_freq2, gamma_freq2, delta_deck_freq2 = nstep.mask_img(np.array([cv2.imread(os.path.join(obj_path,'capt_%d.jpg'%i),0) for i in range(N_list[0], N_list[0] + N_list[1])]), limit)
+       object_freq3, mod_freq3, avg_freq3, gamma_freq3, delta_deck_freq3 = nstep.mask_img(np.array([cv2.imread(os.path.join(obj_path,'capt_%d.jpg'%i),0) for i in range( N_list[0] + N_list[1], N_list[0]+ N_list[1]+ N_list[2])]), limit)
+       object_freq4, mod_freq4, avg_freq4, gamma_freq4, delta_deck_freq4 = nstep.mask_img(np.array([cv2.imread(os.path.join(obj_path,'capt_%d.jpg'%i),0) for i in range(N_list[0]+ N_list[1]+ N_list[2], N_list[0]+ N_list[1]+ N_list[2] + N_list[3])]), limit)
+
+       #wrapped phase
+       phase_freq1 = nstep.phase_cal(object_freq1, N_list[0], delta_deck_freq1 )
+       phase_freq2 = nstep.phase_cal(object_freq2, N_list[1], delta_deck_freq2 )
+       phase_freq3 = nstep.phase_cal(object_freq3, N_list[2], delta_deck_freq3 )
+       phase_freq4 = nstep.phase_cal(object_freq4, N_list[3], delta_deck_freq4 )
+       phase_freq1[phase_freq1 < EPSILON] = phase_freq1[phase_freq1 < EPSILON] + 2 * np.pi
+
+       #unwrapped phase
+       phase_arr = np.stack([phase_freq1, phase_freq2, phase_freq3, phase_freq4])
+       unwrap, k = nstep.multifreq_unwrap(pitch_list, phase_arr)
+       inte_img = cv2.imread(os.path.join(obj_path,'white.jpg'))
+       inte_rgb = inte_img[...,::-1].copy()
+       obj_cordi, obj_color = complete_recon(unwrap, inte_rgb, mod_freq4,limit, dist, delta_dist, c_mtx, c_dist, p_mtx, cp_rot_mtx,cp_trans_mtx, phase_st, pitch_list[-1], obj_path)
+       
+   elif type_unwrap == 'multiwave':
+       eq_wav12 = (pitch_list[-1] * pitch_list[1]) / (pitch_list[1]-pitch_list[-1])
+       eq_wav123 = pitch_list[0] *eq_wav12 / (pitch_list[0] - eq_wav12)
+
+       pitch_list=np.insert(pitch_list,0,eq_wav123)
+       pitch_list=np.insert(pitch_list,2,eq_wav12)
+       
+       object_wav3, mod_wav3, avg_wav3, gamma_wav1, delta_deck_wav3  = nstep.mask_img(np.array([cv2.imread(os.path.join(obj_path,'capt_%d.jpg'%i),0) for i in range(0, N_list[0])]), limit)
+       object_wav2, mod_wav2, avg_wav2, gamma_wav2, delta_deck_wav2 = nstep.mask_img(np.array([cv2.imread(os.path.join(obj_path,'capt_%d.jpg'%i),0) for i in range(N_list[0], N_list[0] + N_list[1])]), limit)
+       object_wav1, mod_wav1, avg_wav1, gamma_wav3, delta_deck_wav1 = nstep.mask_img(np.array([cv2.imread(os.path.join(obj_path,'capt_%d.jpg'%i),0) for i in range(N_list[0] + N_list[1], N_list[0]+ N_list[1]+ N_list[2])]), limit)
+
+       #wrapped phase
+       phase_wav1 = nstep.phase_cal(object_wav1, N_list[2], delta_deck_wav1 )
+       phase_wav2 = nstep.phase_cal(object_wav2, N_list[1], delta_deck_wav2 )
+       phase_wav3 = nstep.phase_cal(object_wav3, N_list[0], delta_deck_wav3 )
+       phase_wav12 = np.mod(phase_wav1 - phase_wav2, 2 * np.pi)
+       phase_wav123 = np.mod(phase_wav12 - phase_wav3, 2 * np.pi)
+       phase_wav123 = nstep.edge_rectification(phase_wav123, 'v')
+
+       #unwrapped phase
+       phase_arr = np.stack([phase_wav123, phase_wav3, phase_wav12, phase_wav2, phase_wav1])
+       unwrap, k = nstep.multiwave_unwrap(pitch_list, phase_arr, kernel, direc)
+       inte_img = cv2.imread(os.path.join(obj_path,'white.jpg'))
+       inte_rgb = inte_img[...,::-1].copy()
+       obj_cordi, obj_color = complete_recon(unwrap, inte_rgb, mod_wav3,limit, dist, delta_dist, c_mtx, c_dist, p_mtx, cp_rot_mtx,cp_trans_mtx, phase_st, pitch_list[-1], obj_path)
+       
+   
+   return obj_cordi, obj_color
+       
+       
+       
+       
