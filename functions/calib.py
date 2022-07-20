@@ -36,8 +36,8 @@ class calibration:
                       'phase' = phase coded unwrapping method, 
                       'multifreq' = multifrequency unwrapping method
                       'multiwave' = multiwavelength unwrapping method.
-        N_list : type: float array. The number of steps in phase shifting algorithm. If phase coded unwrapping method is used this is a single element array. For other methods corresponding to each pitch one element in the list.
-        pitch_list = type: float. Number of pixels per fringe period.
+        N_list = type: float array. The number of steps in phase shifting algorithm. If phase coded unwrapping method is used this is a single element array. For other methods corresponding to each pitch one element in the list.
+        pitch_list = type: float array. Array of number of pixels per fringe period.
         board_gridrows = type: int. Number of rows in the assymetric circle pattern.
         board_gridcolumns = type: int. Number of columns in the asymmetric circle pattern.
         dist_betw_circle = type: float. Distance between circle centers.
