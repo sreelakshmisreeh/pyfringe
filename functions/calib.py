@@ -16,6 +16,7 @@ import reconstruction as rc
 import open3d as o3d
 from scipy.optimize import leastsq
 from scipy.spatial import distance
+from copy import deepcopy
 
 EPSILON = -0.5
 
@@ -703,7 +704,7 @@ class calibration:
         flags = cv2.CALIB_ZERO_TANGENT_DIST + cv2.CALIB_FIX_K3 + cv2.CALIB_FIX_K4 + cv2.CALIB_FIX_K5 + cv2.CALIB_FIX_K6
         #camera calibration
         cam_ret, cam_mtx, cam_dist, cam_rvecs, cam_tvecs = cv2.calibrateCamera(objpoints, 
-                                                                             cam_imgpoints, white.shape[::-1], 
+                                                                             cam_imgpoints, white_lst[0].shape[::-1], 
                                                                                None, None, flags=flags,criteria = criteria)
        
         #Average reprojection error
@@ -1060,7 +1061,7 @@ class calibration:
         
         return delta_df, abs_delta_df
     
-    def recon_xyz(self,unwrap_phase, distance, delta_distance, modulation, white_imgs):
+    def recon_xyz(self,unwrap_phase, distance, delta_distance, white_imgs, mask_cond, modulation= None, int_limit = None, resid_outlier_limit = None):
         '''
         Function to reconstruct 3d coordinates of calibration board and save as point cloud for each calibration pose. 
 
@@ -1069,8 +1070,14 @@ class calibration:
         unwrap_phase = type: float. Unwrapped phase maps of each calibration pose.
         distance = type: float. Distance between camera - projector system and calibration board. 
         delta_distance = type: float. Volumetric distance around the given object.
-        modulation = type: float. Modulation image for each calibration pose.
         white_imgs = type: float. True intensity image for texture mapping.
+        mask_cond = type: string. Mask condition for reconstruction based on 'intensity' or 'modulation' . 
+                                  Intensity based mask is applied for reconstructing selected regions based on surface texture. 
+                                  Eg: if appropriate int_limit is set and mask_condition =  'intensity' the white region of the calibration board can be reconstructed. 
+        modulation = type: float. Modulation image for each calibration pose for applying mask to build the calibration board.
+                                  Default value is None and used if 'intensity' is used as 'mask_cond'.
+        int_limit  = type: float. Minimum intensity value to extract white region. 
+        resid_outlier_limit type: float. This parameter is used to eliminate outlier points (points too far).
 
         Returns
         -------
@@ -1088,87 +1095,50 @@ class calibration:
             phi0 = -np.pi
         elif (self.type_unwrap == 'multifreq') or (self.type_unwrap == 'multiwave'):
             phi0 = 0
-        b_cordi_lst = []
-        b_color_lst = []
-        for i,(u,w) in tqdm(enumerate (zip(unwrap_phase,white_imgs)),desc='building board 3d coordinates'):  
-            roi_mask = np.full(u.shape, False)
-            roi_mask[modulation[i][-1] > self.mask_limit] = True
-            u[~roi_mask] = np.nan
-            w[~roi_mask] = False
-            x, y, z = rc.reconstruction_obj(u, c_mtx, c_dist, p_mtx, cp_rot_mtx, cp_trans_mtx, phi0, self.pitch[-1])
-            flag = (z > (distance - delta_distance)) & (z < (distance + delta_distance))
+        cordi_lst = []
+        color_lst = []
+        for i,(u,w) in tqdm(enumerate (zip(unwrap_phase,white_imgs)),desc='building board 3d coordinates'): 
+            u_copy = deepcopy(u)
+            w_copy = deepcopy(w)
+            roi_mask = np.full(u_copy.shape, False)
+            if mask_cond == 'modulation': 
+                if modulation.size != 0 :
+                    roi_mask[modulation[i][-1] > self.limit] = True
+                else:
+                    print('Please provide modulation images for mask.')
+            elif mask_cond == 'intensity' :
+                  if w.size != 0:
+                      roi_mask[ w > int_limit]= True
+                  else:
+                      print('Please provide intensity (texture) image.')
+            u_copy[~roi_mask] = np.nan
+            w_copy[~roi_mask] = np.nan
+            x, y, z = rc.reconstruction_obj(u_copy, c_mtx, c_dist, p_mtx, cp_rot_mtx, cp_trans_mtx, phi0, self.pitch[-1])
+            flag = (z > (distance - delta_distance)) & (z < (distance + delta_distance)) & roi_mask
             xt = x[flag]
             yt = y[flag]
             zt = z[flag]
-            intensity = w[flag] / np.nanmax(w[flag])
+            intensity = w_copy[flag] / np.nanmax(w_copy[flag])
             cordi = np.vstack((xt, yt, zt)).T
             color = np.vstack((intensity, intensity, intensity)).T
-            b_cordi_lst.append(cordi)
-            b_color_lst.append(color)
+            cordi_lst.append(cordi)
+            color_lst.append(color)
             pcd = o3d.geometry.PointCloud()
             pcd.points = o3d.utility.Vector3dVector(cordi)
             pcd.colors = o3d.utility.Vector3dVector(color)
-            board_path = os.path.join(self.path, 'board')
-            if not os.path.exists(board_path):
-                os.makedirs(board_path)
-            o3d.io.write_point_cloud(os.path.join(self.board_path,'obj_%d.ply'%i), pcd)
-        return b_cordi_lst, b_color_lst
-    
-    def white_centers(self,unwrap_phase, distance, delta_distance, white_imgs, int_limit, resid_outlier_limit):
-        '''
-        Function reconstruct only white circle region of calibration board.
-
-        Parameters
-        ----------
-        unwrap_phase = type: float. Unwrapped phase maps of each calibration pose.
-        distance = type: float. Distance between camera - projector system and calibration board. 
-        delta_distance = type: float. Volumetric distance around the given object.
-        white_imgs = type: float. True intensity image for texture mapping.
-        int_limit = type: float. Value to extract white region.  
-        resid_outlier_limit type: float. This parameter is used to eliminate outlier points (points too far).
-
-        Returns
-        -------
-        w_cordi_lst = type: float. List of 3d coordinates of white points.
-        w_color_lst = type: float. List of color (intensity) for each 3d point.
-
-        '''
-        calibration = np.load(os.path.join(self.path,'{}_calibration_param.npz'.format(self.type_unwrap)))
-        c_mtx = calibration["arr_0"]
-        c_dist = calibration["arr_1"]
-        p_mtx = calibration["arr_2"]
-        cp_rot_mtx = calibration["arr_3"]
-        cp_trans_mtx = calibration["arr_4"]
-        if self.type_unwrap == 'phase':
-            phi0 = -np.pi
-        elif (self.type_unwrap == 'multifreq') or (self.type_unwrap == 'multiwave'):
-            phi0 = 0
-        w_cordi_lst = []
-        w_color_lst = []
-        for i,(u,w) in tqdm(enumerate(zip(unwrap_phase,white_imgs)),desc='white area 3d coordinates'):  
-            roi_mask = np.full(w.shape, False)
-            roi_mask[ w > int_limit]= True
-            w[~roi_mask]=np.nan
-            u[~roi_mask]=np.nan
-            x, y, z = rc.reconstruction_obj(u, c_mtx, c_dist, p_mtx, cp_rot_mtx, cp_trans_mtx, phi0, self.pitch[-1])
-            flag = (z > (distance - delta_distance)) & (z < (distance + delta_distance))
-            xt = x[flag]
-            yt = y[flag]
-            zt = z[flag]
-            white_cordi = np.vstack((xt,yt,zt)).T
-            w_cordi_lst.append(white_cordi)
-            color = w[flag] / np.nanmax(w[flag])
-            white_color = np.vstack((color,color,color)).T
-            w_color_lst.append(white_color)
-            pcd = o3d.geometry.PointCloud()
-            pcd.points = o3d.utility.Vector3dVector(white_cordi)
-            pcd.colors = o3d.utility.Vector3dVector(white_color)
-            white_path = os.path.join(self.path, 'white')
-            if not os.path.exists(white_path):
-                os.makedirs(white_path)
-            o3d.io.write_point_cloud(os.path.join(white_path,'white_%d.ply'%i), pcd)
-        residual_lst, outlier_lst = self.white_center_planefit(w_cordi_lst, resid_outlier_limit)
-        return w_cordi_lst, w_color_lst     
+            if mask_cond == 'modulation':
+                board_path = os.path.join(self.path, 'board')
+                if not os.path.exists(board_path):
+                    os.makedirs(board_path)
+                o3d.io.write_point_cloud(os.path.join(board_path,'obj_%d.ply'%i), pcd)
+            elif mask_cond == 'intensity' : 
+                white_path = os.path.join(self.path, 'white')
+                if not os.path.exists(white_path):
+                    os.makedirs(white_path)
+                o3d.io.write_point_cloud(os.path.join(white_path,'white_%d.ply'%i), pcd)  
+        if mask_cond == 'intensity':
+            residual_lst, outlier_lst = self.white_center_planefit(cordi_lst, resid_outlier_limit)
+        return cordi_lst, color_lst
     
     def white_center_planefit(self, cordi_lst, resid_outlier_limit):
         '''
