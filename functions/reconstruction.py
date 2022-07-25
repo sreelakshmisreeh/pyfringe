@@ -218,7 +218,7 @@ def complete_recon(unwrap, inte_rgb, modulation, limit, dist,delta_dist, c_mtx, 
     u_copy = deepcopy(unwrap)
     w_copy = deepcopy(inte_rgb)
     u_copy[~roi_mask] = np.nan
-    w_copy[~roi_mask] = np.nan
+    w_copy[~roi_mask] = False
     obj_x, obj_y,obj_z = reconstruction_obj(u_copy, c_mtx, c_dist, p_mtx, cp_rot_mtx, cp_trans_mtx, phase_st, pitch)
     flag = (obj_z > (dist - delta_dist)) & (obj_z < (dist + delta_dist)) & roi_mask
     xt = obj_x[flag]
