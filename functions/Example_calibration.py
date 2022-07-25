@@ -55,7 +55,7 @@ if type_unwrap == 'phase':
 # For calibration reconstruction
 distance = 700 # distance between board and camera projector
 delta_distance = 300 #
-int_limit = 140 # intensity limit to extract white region of board
+int_limit = 120 # intensity limit to extract white region of board
 resid_outlier_limit = 10
 val_label = 176.777
 
