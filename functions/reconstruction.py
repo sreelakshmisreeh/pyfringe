@@ -13,6 +13,7 @@ import matplotlib.pyplot as plt
 import cv2
 import open3d as o3d
 import os
+from copy import deepcopy
 
 EPSILON = 0.5
 
@@ -214,14 +215,16 @@ def complete_recon(unwrap, inte_rgb, modulation, limit, dist,delta_dist, c_mtx, 
     '''
     roi_mask = np.full(unwrap.shape, False)
     roi_mask[modulation > limit] = True
-    unwrap[~roi_mask] = np.nan
-    inte_rgb[~roi_mask] = False
-    obj_x, obj_y,obj_z = reconstruction_obj(unwrap, c_mtx, c_dist, p_mtx, cp_rot_mtx, cp_trans_mtx, phase_st, pitch)
-    flag = (obj_z > (dist - delta_dist)) & (obj_z < (dist + delta_dist))
+    u_copy = deepcopy(unwrap)
+    w_copy = deepcopy(inte_rgb)
+    u_copy[~roi_mask] = np.nan
+    w_copy[~roi_mask] = np.nan
+    obj_x, obj_y,obj_z = reconstruction_obj(u_copy, c_mtx, c_dist, p_mtx, cp_rot_mtx, cp_trans_mtx, phase_st, pitch)
+    flag = (obj_z > (dist - delta_dist)) & (obj_z < (dist + delta_dist)) & roi_mask
     xt = obj_x[flag]
     yt = obj_y[flag]
     zt = obj_z[flag]
-    intensity = inte_rgb[flag] / np.nanmax(inte_rgb[flag])
+    intensity = w_copy[flag] / np.nanmax(w_copy[flag])
     cordi = np.vstack((xt, yt, zt)).T
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(cordi)
