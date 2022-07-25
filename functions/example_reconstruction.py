@@ -18,7 +18,7 @@ inte_rang = [50,240]
 type_unwrap = 'multifreq'
 limit = 2
 dist = 700
-delta_dist =200
+delta_dist =300
 direc = 'v'
 #multifrequency unwrapping parameters
 if type_unwrap == 'multifreq':
