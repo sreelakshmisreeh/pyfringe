@@ -39,7 +39,7 @@ if type_unwrap == 'multiwave':
 
 # phase coding unwrapping parameters
 if type_unwrap == 'phase':
-    pitch_list =[18]
+    pitch_list =[20]
     N_list =[9]
     kernel_v = 30; kernel_h=35
     phase_st = -np.pi
