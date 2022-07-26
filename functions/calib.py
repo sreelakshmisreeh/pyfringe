@@ -19,6 +19,7 @@ from scipy.spatial import distance
 from copy import deepcopy
 
 EPSILON = -0.5
+TAU = 5.5
 
 class calibration:
     '''
@@ -431,7 +432,7 @@ class calibration:
                 #multi_phase_v1[:,index_v:] = multi_phase_v1[:,index_v:] + 2 * np.pi
                 #multi_phase_h1[index_h:] = multi_phase_h1[index_h:] + 2 * np.pi
                 multi_phase_v1[multi_phase_v1< EPSILON] = multi_phase_v1[multi_phase_v1 < EPSILON ] + 2 * np.pi
-                multi_phase_h1[multi_phase_h1< EPSILON] = multi_phase_h1[multi_phase_h1 < EPSILON ] + 2 * np.pi
+                multi_phase_h1[multi_phase_h1< EPSILON] = multi_phase_h1[multi_phase_h1 < EPSILON ] + 2 * np.pi 
                 
                 phase_arr_v = np.stack([multi_phase_v1, multi_phase_v2, multi_phase_v3, multi_phase_v4])
                 phase_arr_h = np.stack([multi_phase_h1, multi_phase_h2, multi_phase_h3, multi_phase_h4])
@@ -535,8 +536,11 @@ class calibration:
                 multi_phase_v123 = np.mod(multi_phase_v12 - multi_phase_v3, 2 * np.pi)
                 multi_phase_h123 = np.mod(multi_phase_h12 - multi_phase_h3, 2 * np.pi)
                 
-                multi_phase_v123 = nstep.edge_rectification(multi_phase_v123, 'v')
-                multi_phase_h123 = nstep.edge_rectification(multi_phase_h123, 'h')
+                #multi_phase_v123 = nstep.edge_rectification(multi_phase_v123, 'v')
+                #multi_phase_h123 = nstep.edge_rectification(multi_phase_h123, 'h')
+                
+                multi_phase_v123[multi_phase_v123 > TAU] = multi_phase_v123[multi_phase_v123 > TAU] - 2 * np.pi
+                multi_phase_h123[multi_phase_h123 > TAU] = multi_phase_h123[multi_phase_h123 > TAU] - 2 * np.pi                
                 
                 phase_arr_v = np.stack([multi_phase_v123, multi_phase_v3, multi_phase_v12,multi_phase_v2, multi_phase_v1])
                 phase_arr_h = np.stack([multi_phase_h123, multi_phase_h3, multi_phase_h12,multi_phase_h2, multi_phase_h1])
@@ -1102,15 +1106,18 @@ class calibration:
             w_copy = deepcopy(w)
             roi_mask = np.full(u_copy.shape, False)
             if mask_cond == 'modulation': 
-                if modulation.size != 0 :
+                if len(modulation) > 0:
                     roi_mask[modulation[i][-1] > self.limit] = True
                 else:
                     print('Please provide modulation images for mask.')
             elif mask_cond == 'intensity' :
                   if w.size != 0:
-                      roi_mask[ w > int_limit]= True
+                      roi_mask[w > int_limit]= True
                   else:
                       print('Please provide intensity (texture) image.')
+            else:
+                roi_mask[:] = True # all pixels are sellected.
+                print("The inpput mask_cond is not supported, no mask is applied.")
             u_copy[~roi_mask] = np.nan
             w_copy[~roi_mask] = np.nan
             x, y, z = rc.reconstruction_obj(u_copy, c_mtx, c_dist, p_mtx, cp_rot_mtx, cp_trans_mtx, phi0, self.pitch[-1])
@@ -1127,15 +1134,18 @@ class calibration:
             pcd.points = o3d.utility.Vector3dVector(cordi)
             pcd.colors = o3d.utility.Vector3dVector(color)
             if mask_cond == 'modulation':
-                board_path = os.path.join(self.path, 'board')
-                if not os.path.exists(board_path):
-                    os.makedirs(board_path)
-                o3d.io.write_point_cloud(os.path.join(board_path,'obj_%d.ply'%i), pcd)
+                point_cloud_dir = os.path.join(self.path, 'modulation_mask')
+                if not os.path.exists(point_cloud_dir):
+                    os.makedirs(point_cloud_dir)                
             elif mask_cond == 'intensity' : 
-                white_path = os.path.join(self.path, 'white')
-                if not os.path.exists(white_path):
-                    os.makedirs(white_path)
-                o3d.io.write_point_cloud(os.path.join(white_path,'white_%d.ply'%i), pcd)  
+                point_cloud_dir = os.path.join(self.path, 'intensity_mask')
+                if not os.path.exists(point_cloud_dir):
+                    os.makedirs(point_cloud_dir)
+            else:
+                point_cloud_dir = os.path.join(self.path, 'no_mask')
+                if not os.path.exists(point_cloud_dir):
+                    os.makedirs(point_cloud_dir)                
+            o3d.io.write_point_cloud(os.path.join(point_cloud_dir,'obj_%d.ply'%i), pcd)  
         if mask_cond == 'intensity':
             residual_lst, outlier_lst = self.white_center_planefit(cordi_lst, resid_outlier_limit)
         return cordi_lst, color_lst
@@ -1171,7 +1181,8 @@ class calibration:
             residual_lst.append(updated_resid)
             outlier_lst.append(outliers)
         plane_resid_plot(residual_lst)
-        return residual_lst, outlier_lst   
+        return residual_lst, outlier_lst
+    
     def pp_distance_analysis(self, center_cordi_lst, val_label):
         '''
         Function to compute given point to point distance on the calibration board over all calibration poses and plot error plot.
