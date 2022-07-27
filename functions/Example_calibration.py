@@ -18,12 +18,12 @@ import matplotlib.pyplot as plt
 # proj properties
 width = 800; height = 1280
 #type of unwrapping 
-type_unwrap =  'multifreq'
+type_unwrap =  'phase'
 # modulation mask limit
 limit = 2
 # circle detection parameters
 bobdetect_areamin = 100; bobdetect_convexity = 0.75
-no_pose = 60
+no_pose = 20
 dist_betw_circle = 25; #Distance between centers
 board_gridrows = 5; board_gridcolumns = 15 # calibration board parameters
 
@@ -31,8 +31,8 @@ board_gridrows = 5; board_gridcolumns = 15 # calibration board parameters
 #White region reconstruction will also be saved in the same path folder white
 
 # Setting the dir on the desktop pointing to the google drive folder
-root_dir = r'/Users/Sreelakshmi/Documents/Raspberry/reconstruction/July_8_Calib_img/calib_images/' 
-#path = os.path.join(root_dir, '%s_calib_images' %type_unwrap)
+root_dir = r'/Users/Sreelakshmi/Documents/Raspberry/reconstruction/testing_data/' 
+path = os.path.join(root_dir, '%s_calib_images' %type_unwrap)
 
 #multifrequency unwrapping parameters
 if type_unwrap == 'multifreq':
@@ -48,9 +48,9 @@ if type_unwrap == 'multiwave':
 
 # phase coding unwrapping parameters
 if type_unwrap == 'phase':
-    pitch_list =[18]
+    pitch_list =[20]
     N_list =[9]
-    kernel_v = 30; kernel_h=35
+    kernel_v = 25; kernel_h=25
     
 # For calibration reconstruction
 distance = 700 # distance between board and camera projector
@@ -60,13 +60,13 @@ resid_outlier_limit = 10
 val_label = 176.777
 
 # Reprojection criteria
-reproj_criteria = 0.45
+reproj_criteria = 0.5
 
 #%% Instantiate calibration class
-calib_inst = calib.calibration(width, height, limit, type_unwrap, N_list, pitch_list, board_gridrows, board_gridcolumns, dist_betw_circle, root_dir)
+calib_inst = calib.calibration(width, height, limit, type_unwrap, N_list, pitch_list, board_gridrows, board_gridcolumns, dist_betw_circle, path)
 
 #%% Calibration of both camera and projector. calibration parameters are saved as path + {type_unwrap}__calibration_param.npz
-unwrapv_lst, unwraph_lst, white_lst, mod_lst, proj_img_lst, cam_objpts, cam_imgpts, proj_imgpts, euler_angles, cam_mean_error, cam_delta, cam_df1, proj_mean_error, proj_delta, proj_df1   = calib_inst.calib(no_pose, bobdetect_areamin, bobdetect_convexity, kernel_v = 1, kernel_h=1)
+unwrapv_lst, unwraph_lst, white_lst, mod_lst, proj_img_lst, cam_objpts, cam_imgpts, proj_imgpts, euler_angles, cam_mean_error, cam_delta, cam_df1, proj_mean_error, proj_delta, proj_df1   = calib_inst.calib(no_pose, bobdetect_areamin, bobdetect_convexity, kernel_v, kernel_h)
 #%% Plot projector images for each pose
 calib_inst.image_analysis(proj_img_lst)
 #%% plot horizontal unwrapped phase for each pose
@@ -98,7 +98,7 @@ white_cord, white_color = calib_inst.recon_xyz(unwrapv_lst, distance, delta_dist
 #%% To calculate error in calculated distance between reconstructed centers
 distance_df = calib_inst.pp_distance_analysis(center_cordi_lst, val_label)
 #%% For checking saved calibration parameters.
-calibration = np.load(os.path.join(root_dir,'{}_calibration_param.npz'.format(type_unwrap)))
+calibration = np.load(os.path.join(path,'{}_calibration_param.npz'.format(type_unwrap)))
 c_mtx = calibration["arr_0"]
 c_dist = calibration["arr_1"]
 p_mtx = calibration["arr_2"]
