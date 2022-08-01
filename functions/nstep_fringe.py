@@ -5,8 +5,7 @@
 import numpy as np
 import scipy.ndimage
 import os
-
-
+import matplotlib.pyplot as plt
 
 def delta_deck_gen(N, height, width):
     ''' 
@@ -320,10 +319,9 @@ def unwrap_cal(step_wrap,cos_wrap,pitch,width,height,direc):
         n_fring = np.ceil(width/pitch)
     elif direc == 'h':
         n_fring = np.ceil(height/pitch)
-    k = np.round((n_fring - 1) * (step_wrap + (np.pi)) / (2 * np.pi))
-    cos_unwrap = (2 * np.pi * k) + cos_wrap 
+    k = np.round((n_fring - 1) * (step_wrap + (np.pi)) / (2 * np.pi))    
+    cos_unwrap = (2 * np.pi * k) + cos_wrap
     return cos_unwrap, k
-
 
 #median filter 
 def filt(unwrap, kernel ,direc):
@@ -352,8 +350,6 @@ def filt(unwrap, kernel ,direc):
     k_array = np.round((dup_img - med_fil) / (2 * np.pi))
     correct_unwrap = dup_img - (k_array * 2 * np.pi)
     return correct_unwrap, k_array
-
-
 
 def ph_temp_unwrap(mask_cos_v, mask_cos_h, mask_step_v, mask_step_h, pitch, height,width, capt_delta_deck, kernel_v, kernel_h):
     '''
@@ -423,11 +419,9 @@ def multi_kunwrap(wavelength, ph):
     '''
     k = np.round(((wavelength[0] / wavelength[1]) * ph[0] - ph[1])/ (2 * np.pi))
     unwrap = ph[1] + 2 * np.pi * k
-    return unwrap, k 
+    return unwrap, k
 
-
-
-def multifreq_unwrap(wavelength_arr,phase_arr):
+def multifreq_unwrap(wavelength_arr, phase_arr, kernel, direc):
     '''
     Function performs sequential temporal multifrequency phase unwrapping from high wavelength (low frequency) wrapped phase map to low wavelength (high frequency) wrapped phase map.
 
@@ -442,11 +436,10 @@ def multifreq_unwrap(wavelength_arr,phase_arr):
     k4 = type: int. The fringe order of low wavelength (high frequency) phase map.
 
     '''
-    absolute_ph,k = multi_kunwrap(wavelength_arr[0:2], phase_arr[0:2])
+    absolute_ph,k = multi_kunwrap(wavelength_arr[0:2], phase_arr[0:2])   
     for i in range(1,len(wavelength_arr)-1):
-        absolute_ph,k = multi_kunwrap(wavelength_arr[i:i+2], np.stack((absolute_ph, phase_arr[i+1])))
-    
-   
+        absolute_ph,k = multi_kunwrap(wavelength_arr[i:i+2], [absolute_ph, phase_arr[i+1]])    
+    absolute_ph, k0 = filt(absolute_ph, kernel, direc)    
     return absolute_ph, k
 
 def multiwave_unwrap(wavelength_arr, phase_arr, kernel, direc):
@@ -466,15 +459,13 @@ def multiwave_unwrap(wavelength_arr, phase_arr, kernel, direc):
     k1 = type: int. The fringe order of low wavelength (high frequency) phase map. 
 
     '''
-        
-    absolute_ph3, k3 = multi_kunwrap(wavelength_arr[0:2], phase_arr[0:2])
-    absolute_ph3, k03 = filt(absolute_ph3, kernel, direc)
-    absolute_ph12,k12 = multi_kunwrap(wavelength_arr[1:3], np.stack((absolute_ph3, phase_arr[2])))
-    absolute_ph12, k012 = filt(absolute_ph12, kernel, direc)
-    absolute_ph2,k2 = multi_kunwrap(wavelength_arr[2:4], np.stack((absolute_ph12, phase_arr[3])))
-    absolute_ph2, k02 = filt(absolute_ph2, kernel, direc)
-    absolute_ph1,k1 = multi_kunwrap(wavelength_arr[3:5], np.stack((absolute_ph2, phase_arr[4])))
-    return absolute_ph1, k1
+    
+    absolute_ph,k = multi_kunwrap(wavelength_arr[0:2], phase_arr[0:2])
+    absolute_ph, k0 = filt(absolute_ph, kernel, direc)
+    for i in range(1,len(wavelength_arr)-1):
+        absolute_ph,k = multi_kunwrap(wavelength_arr[i:i+2], [absolute_ph, phase_arr[i+1]])    
+    absolute_ph, k0 = filt(absolute_ph, kernel, direc)    
+    return absolute_ph, k
 
 def edge_rectification(multi_phase_123,direc):
     '''
