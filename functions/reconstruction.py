@@ -15,7 +15,8 @@ import open3d as o3d
 import os
 from copy import deepcopy
 
-EPSILON = 0.5
+EPSILON = -0.5
+TAU = 5.5
 
 def inv_mtx(a11,a12,a13,a21,a22,a23,a31,a32,a33):
     '''
@@ -299,19 +300,19 @@ def obj_reconst_wrapper(width, height, pitch_list, N_list, limit, dist, delta_di
 
        #unwrapped phase
        phase_arr = np.stack([phase_freq1, phase_freq2, phase_freq3, phase_freq4])
-       unwrap, k = nstep.multifreq_unwrap(pitch_list, phase_arr)
+       unwrap, k = nstep.multifreq_unwrap(pitch_list, phase_arr, kernel, direc)
        inte_img = cv2.imread(os.path.join(obj_path,'white.jpg'))
        inte_rgb = inte_img[...,::-1].copy()
        obj_cordi, obj_color = complete_recon(unwrap, inte_rgb, mod_freq4,limit, dist, delta_dist, c_mtx, c_dist, p_mtx, cp_rot_mtx,cp_trans_mtx, phase_st, pitch_list[-1], obj_path)
        
    elif type_unwrap == 'multiwave':
        eq_wav12 = (pitch_list[-1] * pitch_list[1]) / (pitch_list[1]-pitch_list[-1])
-       eq_wav123 = pitch_list[0] *eq_wav12 / (pitch_list[0] - eq_wav12)
+       eq_wav123 = pitch_list[0] * eq_wav12 / (pitch_list[0] - eq_wav12)
 
-       pitch_list=np.insert(pitch_list,0,eq_wav123)
-       pitch_list=np.insert(pitch_list,2,eq_wav12)
+       pitch_list = np.insert(pitch_list, 0, eq_wav123)
+       pitch_list = np.insert(pitch_list, 2, eq_wav12)
        
-       object_wav3, mod_wav3, avg_wav3, gamma_wav1, delta_deck_wav3  = nstep.mask_img(np.array([cv2.imread(os.path.join(obj_path,'capt_%d.jpg'%i),0) for i in range(0, N_list[0])]), limit)
+       object_wav3, mod_wav3, avg_wav3, gamma_wav1, delta_deck_wav3 = nstep.mask_img(np.array([cv2.imread(os.path.join(obj_path,'capt_%d.jpg'%i),0) for i in range(0, N_list[0])]), limit)
        object_wav2, mod_wav2, avg_wav2, gamma_wav2, delta_deck_wav2 = nstep.mask_img(np.array([cv2.imread(os.path.join(obj_path,'capt_%d.jpg'%i),0) for i in range(N_list[0], N_list[0] + N_list[1])]), limit)
        object_wav1, mod_wav1, avg_wav1, gamma_wav3, delta_deck_wav1 = nstep.mask_img(np.array([cv2.imread(os.path.join(obj_path,'capt_%d.jpg'%i),0) for i in range(N_list[0] + N_list[1], N_list[0]+ N_list[1]+ N_list[2])]), limit)
 
@@ -321,16 +322,15 @@ def obj_reconst_wrapper(width, height, pitch_list, N_list, limit, dist, delta_di
        phase_wav3 = nstep.phase_cal(object_wav3, N_list[0], delta_deck_wav3 )
        phase_wav12 = np.mod(phase_wav1 - phase_wav2, 2 * np.pi)
        phase_wav123 = np.mod(phase_wav12 - phase_wav3, 2 * np.pi)
-       phase_wav123 = nstep.edge_rectification(phase_wav123, 'v')
+       # phase_wav123 = nstep.edge_rectification(phase_wav123, 'v')
+       phase_wav123[phase_wav123 > TAU] = phase_wav123[phase_wav123 > TAU] - 2 * np.pi
 
        #unwrapped phase
        phase_arr = np.stack([phase_wav123, phase_wav3, phase_wav12, phase_wav2, phase_wav1])
        unwrap, k = nstep.multiwave_unwrap(pitch_list, phase_arr, kernel, direc)
        inte_img = cv2.imread(os.path.join(obj_path,'white.jpg'))
        inte_rgb = inte_img[...,::-1].copy()
-       obj_cordi, obj_color = complete_recon(unwrap, inte_rgb, mod_wav3,limit, dist, delta_dist, c_mtx, c_dist, p_mtx, cp_rot_mtx,cp_trans_mtx, phase_st, pitch_list[-1], obj_path)
-       
-   
+       obj_cordi, obj_color = complete_recon(unwrap, inte_rgb, mod_wav3,limit, dist, delta_dist, c_mtx, c_dist, p_mtx, cp_rot_mtx,cp_trans_mtx, phase_st, pitch_list[-1], obj_path)   
    return obj_cordi, obj_color
        
        
