@@ -91,16 +91,13 @@ class calibration:
         objp = self.world_points(self.dist_betw_circle, self.board_gridrows, self.board_gridcolumns)
         if self.type_unwrap == 'phase':
             phase_st = -np.pi
-            unwrapv_lst,unwraph_lst, white_lst, avg_lst, mod_lst, gamma_lst = self.projcam_calib_img_phase(no_pose,self.limit, self.N[0], self.pitch[-1],
-                                                                                                                                                                                   self.width, self.height,kernel_v, kernel_h, self.path)
+            unwrapv_lst, unwraph_lst, white_lst, avg_lst, mod_lst, gamma_lst, wrapped_phase_lst = self.projcam_calib_img_phase(no_pose,self.limit, self.N[0], self.pitch[-1], self.width, self.height, kernel_v, kernel_h, self.path)
         elif self.type_unwrap == 'multifreq':
             phase_st = 0
-            unwrapv_lst, unwraph_lst, white_lst, avg_lst, mod_lst, gamma_lst = self.projcam_calib_img_multifreq(no_pose, self.limit, self.N, self.pitch,
-                                                                                                                                                                                         self.width, self.height, self.path)
+            unwrapv_lst, unwraph_lst, white_lst, avg_lst, mod_lst, gamma_lst, wrapped_phase_lst = self.projcam_calib_img_multifreq(no_pose, self.limit, self.N, self.pitch, self.width, self.height, kernel_v, kernel_h, self.path)
         elif self.type_unwrap == 'multiwave':
             phase_st = 0
-            unwrapv_lst, unwraph_lst, white_lst, avg_lst, mod_lst, gamma_lst,  = self.projcam_calib_img_multiwave(no_pose,self.limit, self.N, self.pitch, 
-                                                                                                                                                                                         self.width, self.height, kernel_v, kernel_h, self.path)
+            unwrapv_lst, unwraph_lst, white_lst, avg_lst, mod_lst, gamma_lst, wrapped_phase_lst = self.projcam_calib_img_multiwave(no_pose,self.limit, self.N, self.pitch, self.width, self.height, kernel_v, kernel_h, self.path)
             
         #Projector images
         proj_img_lst=self.projector_img(unwrapv_lst, unwraph_lst, white_lst, self.width, self.height, self.pitch[-1], phase_st)
@@ -132,7 +129,7 @@ class calibration:
         np.savez(os.path.join(self.path,'{}_calibration_param.npz'.format(self.type_unwrap)), st_cam_mtx,st_cam_dist, st_proj_mtx, st_cam_proj_rmat, st_cam_proj_tvec) 
         np.savez(os.path.join(self.path,'{}_cam_rot_tvecs.npz'.format(self.type_unwrap)),cam_rvecs,cam_tvecs)
         
-        return unwrapv_lst, unwraph_lst, white_lst, mod_lst, proj_img_lst, cam_objpts, cam_imgpts, proj_imgpts, euler_angles, cam_mean_error, cam_delta, cam_df1, proj_mean_error, proj_delta, proj_df1 
+        return unwrapv_lst, unwraph_lst, white_lst, mod_lst, proj_img_lst, cam_objpts, cam_imgpts, proj_imgpts, euler_angles, cam_mean_error, cam_delta, cam_df1, proj_mean_error, proj_delta, proj_df1
     
     def update_list_calib(self, proj_df1, unwrapv_lst, unwraph_lst, white_lst, mod_lst,proj_img_lst, bobdetect_areamin, bobdetect_convexity, reproj_criteria):
         '''
@@ -346,8 +343,8 @@ class calibration:
                                                                                                               kernel_v, kernel_h)
                 # True image for a given pose  
                 orig_img = (avg2 ) + (mod2 )
-                unwrap_v_lst.append(unwrap_v.data)
-                unwrap_h_lst.append(unwrap_h.data)
+                unwrap_v_lst.append(unwrap_v)
+                unwrap_h_lst.append(unwrap_h)
                 white_lst.append(orig_img)
                 avg_lst.append(np.array([avg1, avg2, avg3, avg4]))
                 mod_lst.append(np.array([mod1, mod2, mod3, mod4]))
@@ -358,10 +355,16 @@ class calibration:
                 coswraph_lst.append(cos_wrap_h)
                 stepwrapv_lst.append(step_wrap_v)
                 stepwraph_lst.append(step_wrap_h)
+                wrapped_phase_lst = {
+                    "wrapv":coswrapv_lst,
+                    "wraph":coswraph_lst,
+                    "stepwrapv":stepwrapv_lst,
+                    "stepwraph":stepwraph_lst
+                    }
                 
-        return unwrap_v_lst, unwrap_h_lst, white_lst, avg_lst, mod_lst, gamma_lst
+        return unwrap_v_lst, unwrap_h_lst, white_lst, avg_lst, mod_lst, gamma_lst, wrapped_phase_lst
 
-    def projcam_calib_img_multifreq(self,no_pose,limit,N_list,pitch_list,width,height,path):
+    def projcam_calib_img_multifreq(self, no_pose, limit, N_list, pitch_list, width, height, kernel_v, kernel_h, path):
         '''
         Function is used to generate absolute phase map and true (single channel gray) images (object image without fringe patterns) from fringe image for camera and projector calibration from raw captured images using multifrequency temporal unwrapping method.
     
@@ -425,8 +428,8 @@ class calibration:
                 multi_phase_v3 = nstep.phase_cal(multi_cos_v_int3, N_list[2], multi_delta_deck_v3 )
                 multi_phase_h3 = nstep.phase_cal(multi_cos_h_int3, N_list[2], multi_delta_deck_h3 )
                 multi_phase_v4 = nstep.phase_cal(multi_cos_v_int4, N_list[3], multi_delta_deck_v4 )
-                multi_phase_h4 = nstep.phase_cal(multi_cos_h_int4, N_list[3], multi_delta_deck_h4 )
-                
+                multi_phase_h4 = nstep.phase_cal(multi_cos_h_int4, N_list[3], multi_delta_deck_h4 )                    
+
                 #index_v = np.argmax(abs(np.diff(multi_phase_v1, axis = 0)))
                 #index_h = np.argmax(abs(np.diff(multi_phase_h1, axis = 1)))
                 #multi_phase_v1[:,index_v:] = multi_phase_v1[:,index_v:] + 2 * np.pi
@@ -434,14 +437,12 @@ class calibration:
                 multi_phase_v1[multi_phase_v1< EPSILON] = multi_phase_v1[multi_phase_v1 < EPSILON ] + 2 * np.pi
                 multi_phase_h1[multi_phase_h1< EPSILON] = multi_phase_h1[multi_phase_h1 < EPSILON ] + 2 * np.pi 
                 
-                phase_arr_v = np.stack([multi_phase_v1, multi_phase_v2, multi_phase_v3, multi_phase_v4])
-                phase_arr_h = np.stack([multi_phase_h1, multi_phase_h2, multi_phase_h3, multi_phase_h4])
+                phase_arr_v = [multi_phase_v1, multi_phase_v2, multi_phase_v3, multi_phase_v4]
+                phase_arr_h = [multi_phase_h1, multi_phase_h2, multi_phase_h3, multi_phase_h4]
                 
-                multifreq_unwrap_v, k_arr_v = nstep.multifreq_unwrap(pitch_list, phase_arr_v)
-                multifreq_unwrap_h, k_arr_h = nstep.multifreq_unwrap(pitch_list, phase_arr_h)
-                multifreq_unwrap_v.fill_value=np.nan
-                multifreq_unwrap_h.fill_value=np.nan
-                
+                multifreq_unwrap_v, k_arr_v = nstep.multifreq_unwrap(pitch_list, phase_arr_v, kernel_v, 'v')
+                multifreq_unwrap_h, k_arr_h = nstep.multifreq_unwrap(pitch_list, phase_arr_h, kernel_h, 'h')                
+               
                 avg_lst.append(np.array([multi_avg_v1, multi_avg_v2, multi_avg_v3, multi_avg_v4,multi_avg_h1, multi_avg_h2, multi_avg_h3, multi_avg_h4]))
                 mod_lst.append(np.array([multi_mod_v1, multi_mod_v2, multi_mod_v3, multi_mod_v4, multi_mod_h1, multi_mod_h2, multi_mod_h3, multi_mod_h4]))
                 gamma_lst.append(np.array([multi_gamma_v1, multi_gamma_v2, multi_gamma_v3, multi_gamma_v4, multi_gamma_h1, multi_gamma_h2, multi_gamma_h3, multi_gamma_h4]))
@@ -451,13 +452,18 @@ class calibration:
                 wrapv_lst.append(phase_arr_v)
                 wraph_lst.append(phase_arr_h)
                 
+                wrapped_phase_lst = {
+                    "wrapv":wrapv_lst,
+                    "wraph":wraph_lst
+                    }
+                
                 kv_lst.append(k_arr_v)
                 kh_lst.append(k_arr_h)
                 
                 unwrapv_lst.append(multifreq_unwrap_v)
                 unwraph_lst.append(multifreq_unwrap_h)
                 
-        return unwrapv_lst, unwraph_lst, white_lst, avg_lst, mod_lst,  gamma_lst
+        return unwrapv_lst, unwraph_lst, white_lst, avg_lst, mod_lst,  gamma_lst, wrapped_phase_lst
 
     def projcam_calib_img_multiwave(self,no_pose, limit, N_arr, pitch_arr, width, height, kernel_v, kernel_h, path):
         '''
@@ -542,8 +548,8 @@ class calibration:
                 multi_phase_v123[multi_phase_v123 > TAU] = multi_phase_v123[multi_phase_v123 > TAU] - 2 * np.pi
                 multi_phase_h123[multi_phase_h123 > TAU] = multi_phase_h123[multi_phase_h123 > TAU] - 2 * np.pi                
                 
-                phase_arr_v = np.stack([multi_phase_v123, multi_phase_v3, multi_phase_v12,multi_phase_v2, multi_phase_v1])
-                phase_arr_h = np.stack([multi_phase_h123, multi_phase_h3, multi_phase_h12,multi_phase_h2, multi_phase_h1])
+                phase_arr_v = [multi_phase_v123, multi_phase_v3, multi_phase_v12, multi_phase_v2, multi_phase_v1]
+                phase_arr_h = [multi_phase_h123, multi_phase_h3, multi_phase_h12, multi_phase_h2, multi_phase_h1]
                 
                 multiwav_unwrap_v, k_arr_v = nstep.multiwave_unwrap(pitch_arr, phase_arr_v, kernel_v, 'v')
                 multiwav_unwrap_h, k_arr_h = nstep.multiwave_unwrap(pitch_arr, phase_arr_h, kernel_h, 'h')
@@ -558,13 +564,18 @@ class calibration:
                 wrapv_lst.append(phase_arr_v)
                 wraph_lst.append(phase_arr_h)
                 
+                wrapped_phase_lst = {
+                    "wrapv":wrapv_lst,
+                    "wraph":wraph_lst
+                    }
+                
                 kv_lst.append(k_arr_v)
                 kh_lst.append(k_arr_h)
                 
                 unwrapv_lst.append(multiwav_unwrap_v)
                 unwraph_lst.append(multiwav_unwrap_h)
                 
-        return unwrapv_lst, unwraph_lst, white_lst, avg_lst, mod_lst, gamma_lst
+        return unwrapv_lst, unwraph_lst, white_lst, avg_lst, mod_lst, gamma_lst, wrapped_phase_lst
     
 
 
@@ -804,14 +815,13 @@ class calibration:
             plt.title('Unwrap phase map',fontsize=20)
         return
 
-    def phase_wrap_analysis(self, coswrap_lst, stepwrap_lst,direc):
+    def wrap_profile_analysis(self, wrapped_phase_lst, direc):
         '''
         Function to plot cross-section of calculated wrapped phase map of cosine and stair patterns in phase coded temporal unwrapping method for verification.
     
         Parameters
         ----------
-        coswrap_lst = type: List of wrapped phase maps of cosine varying intensity pattern for all calibration poses.
-        stepwrap_lst = type: List of wrapped phase maps of stair varying intensity patterns for all calibration poses.
+        wrapped_phase_lst = type: dictionary of wrapped phase maps of cosine varying intensity pattern for all calibration poses.
         direc = type: string. vertical (v) or horizontal(h) patterns.
     
         Returns
@@ -819,19 +829,43 @@ class calibration:
         None.
     
         '''
-        for i in range(0,len(stepwrap_lst)):
+        
+        if self.type_unwrap == 'phase':        
+            for i in range(0,len(wrapped_phase_lst['wrapv'])):
+                if direc == 'v':
+                    plt.figure()
+                    plt.plot(wrapped_phase_lst['wrapv'][i][600])
+                    plt.plot(wrapped_phase_lst['stepwrapv'][i][600])
+                elif direc == 'h':
+                     plt.figure()
+                     plt.plot(wrapped_phase_lst['wraph'][i][:,960])
+                     plt.plot(wrapped_phase_lst['stepwraph'][i][:,960])
+                plt.title('Wrap phase map %s'%direc,fontsize=20)
+                plt.xlabel('Dimension',fontsize=20)
+                plt.ylabel('Phase',fontsize=20)
+        elif self.type_unwrap in {'multifreq', 'multiwave'}:
             if direc == 'v':
-                plt.figure()
-                plt.plot(coswrap_lst[i][200])
-                plt.plot(stepwrap_lst[i][200])
-            elif direc == 'h':
-                 plt.figure()
-                 plt.plot(coswrap_lst[i][:,200])
-                 plt.plot(stepwrap_lst[i][:,200])
-            plt.title('Wrap phase map %s'%direc,fontsize=20)
-            plt.xlabel('Dimension',fontsize=20)
-            plt.ylabel('Phase',fontsize=20)
-        return
+                for phase_arr_v in wrapped_phase_lst['wrapv']:
+                    plt.figure()
+                    n_subplot = len(phase_arr_v)
+                    for i,wrapped_phase in enumerate(phase_arr_v):
+                        plt.subplot(n_subplot,1,i+1)
+                        plt.plot(wrapped_phase[600])
+                    plt.title('Wrap phase map %s'%direc,fontsize=20)
+                    plt.xlabel('Dimension',fontsize=20)
+                    plt.ylabel('Phase',fontsize=20)                    
+            if direc == 'h':
+                for phase_arr_h in wrapped_phase_lst['wraph']:
+                    plt.figure()
+                    n_subplot = len(phase_arr_h)
+                    for i,wrapped_phase in enumerate(phase_arr_h):
+                        plt.subplot(n_subplot,1,i+1)
+                        plt.plot(wrapped_phase[:,960])
+                    plt.title('Wrap phase map %s'%direc,fontsize=20)
+                    plt.xlabel('Dimension',fontsize=20)
+                    plt.ylabel('Phase',fontsize=20)
+        else:
+            print('Unwrap method is not supported.')
 
     def intrinsic_error_analysis(self, objpts, imgpts, mtx , dist , rvecs , tvecs ):
         '''
