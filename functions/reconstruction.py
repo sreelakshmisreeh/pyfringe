@@ -187,7 +187,7 @@ def reconstruction_obj(unwrapv, c_mtx, c_dist, p_mtx, cp_rot_mtx, cp_trans_mtx, 
     z = b31 * c1 + b32 * c2 + b33 * c3
     return x, y, z 
 
-def complete_recon(unwrap, inte_rgb, modulation, limit, dist,delta_dist, c_mtx, c_dist, p_mtx, cp_rot_mtx, cp_trans_mtx, phase_st, pitch, obj_path):
+def complete_recon(unwrap, inte_rgb, modulation, recon_limit, dist,delta_dist, c_mtx, c_dist, p_mtx, cp_rot_mtx, cp_trans_mtx, phase_st, pitch, obj_path):
     '''
     Function to completely reconstruct object applying modulation mask to saving point cloud.
 
@@ -215,7 +215,7 @@ def complete_recon(unwrap, inte_rgb, modulation, limit, dist,delta_dist, c_mtx, 
 
     '''
     roi_mask = np.full(unwrap.shape, False)
-    roi_mask[modulation > limit] = True
+    roi_mask[modulation > recon_limit] = True
     u_copy = deepcopy(unwrap)
     w_copy = deepcopy(inte_rgb)
     u_copy[~roi_mask] = np.nan
@@ -233,7 +233,7 @@ def complete_recon(unwrap, inte_rgb, modulation, limit, dist,delta_dist, c_mtx, 
     o3d.io.write_point_cloud(os.path.join(obj_path,'obj.ply'), pcd)
     return cordi,intensity
 
-def obj_reconst_wrapper(width, height, pitch_list, N_list, limit, dist, delta_dist, phase_st, direc, type_unwrap, calib_path, obj_path, kernel = 1):
+def obj_reconst_wrapper(width, height, pitch_list, N_list, limit, recon_limit, dist, delta_dist, phase_st, direc, type_unwrap, calib_path, obj_path, kernel = 1):
    '''
     Function for 3D reconstruction of object based on different unwrapping method.
 
@@ -283,7 +283,7 @@ def obj_reconst_wrapper(width, height, pitch_list, N_list, limit, dist, delta_di
        unwrap, k = nstep.filt(unwrap0, kernel, direc)
        inte_img = cv2.imread(os.path.join(obj_path,'white.jpg'))
        inte_rgb = inte_img[...,::-1].copy()
-       obj_cordi, obj_color = complete_recon(unwrap, inte_rgb, obj_cos_mod,limit, dist, delta_dist, c_mtx, c_dist, p_mtx, cp_rot_mtx,cp_trans_mtx, phase_st, pitch_list[-1], obj_path)
+       obj_cordi, obj_color = complete_recon(unwrap, inte_rgb, obj_cos_mod, recon_limit, dist, delta_dist, c_mtx, c_dist, p_mtx, cp_rot_mtx,cp_trans_mtx, phase_st, pitch_list[-1], obj_path)
        
    elif type_unwrap == 'multifreq':
        object_freq1, mod_freq1, avg_freq1, gamma_freq1, delta_deck_freq1  = nstep.mask_img(np.array([cv2.imread(os.path.join(obj_path,'capt_%d.jpg'%i),0) for i in range(0, N_list[0])]), limit)
@@ -303,7 +303,7 @@ def obj_reconst_wrapper(width, height, pitch_list, N_list, limit, dist, delta_di
        unwrap, k = nstep.multifreq_unwrap(pitch_list, phase_arr, kernel, direc)
        inte_img = cv2.imread(os.path.join(obj_path,'white.jpg'))
        inte_rgb = inte_img[...,::-1].copy()
-       obj_cordi, obj_color = complete_recon(unwrap, inte_rgb, mod_freq4,limit, dist, delta_dist, c_mtx, c_dist, p_mtx, cp_rot_mtx,cp_trans_mtx, phase_st, pitch_list[-1], obj_path)
+       obj_cordi, obj_color = complete_recon(unwrap, inte_rgb, mod_freq4, recon_limit, dist, delta_dist, c_mtx, c_dist, p_mtx, cp_rot_mtx,cp_trans_mtx, phase_st, pitch_list[-1], obj_path)
        
    elif type_unwrap == 'multiwave':
        eq_wav12 = (pitch_list[-1] * pitch_list[1]) / (pitch_list[1]-pitch_list[-1])
@@ -330,7 +330,7 @@ def obj_reconst_wrapper(width, height, pitch_list, N_list, limit, dist, delta_di
        unwrap, k = nstep.multiwave_unwrap(pitch_list, phase_arr, kernel, direc)
        inte_img = cv2.imread(os.path.join(obj_path,'white.jpg'))
        inte_rgb = inte_img[...,::-1].copy()
-       obj_cordi, obj_color = complete_recon(unwrap, inte_rgb, mod_wav3,limit, dist, delta_dist, c_mtx, c_dist, p_mtx, cp_rot_mtx,cp_trans_mtx, phase_st, pitch_list[-1], obj_path)   
+       obj_cordi, obj_color = complete_recon(unwrap, inte_rgb, mod_wav3, recon_limit, dist, delta_dist, c_mtx, c_dist, p_mtx, cp_rot_mtx,cp_trans_mtx, phase_st, pitch_list[-1], obj_path)   
    return obj_cordi, obj_color
        
        
