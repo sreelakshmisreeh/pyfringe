@@ -14,6 +14,7 @@ import cv2
 import open3d as o3d
 import os
 from copy import deepcopy
+from plyfile import PlyData, PlyElement
 
 EPSILON = -0.5
 TAU = 5.5
@@ -187,7 +188,7 @@ def reconstruction_obj(unwrapv, c_mtx, c_dist, p_mtx, cp_rot_mtx, cp_trans_mtx, 
     z = b31 * c1 + b32 * c2 + b33 * c3
     return x, y, z 
 
-def complete_recon(unwrap, inte_rgb, modulation, recon_limit, dist,delta_dist, c_mtx, c_dist, p_mtx, cp_rot_mtx, cp_trans_mtx, phase_st, pitch, obj_path):
+def complete_recon(unwrap, inte_rgb, temperature, modulation, recon_limit, dist,delta_dist, c_mtx, c_dist, p_mtx, cp_rot_mtx, cp_trans_mtx, phase_st, pitch, obj_path):
     '''
     Function to completely reconstruct object applying modulation mask to saving point cloud.
 
@@ -225,13 +226,24 @@ def complete_recon(unwrap, inte_rgb, modulation, recon_limit, dist,delta_dist, c
     xt = obj_x[flag]
     yt = obj_y[flag]
     zt = obj_z[flag]
-    intensity = w_copy[flag] / np.nanmax(w_copy[flag])
+    t_vect = np.array(temperature[flag], dtype=[('temperature', 'f4')])
+    rgb_intensity_vect = w_copy[flag] / np.nanmax(w_copy[flag])
     cordi = np.vstack((xt, yt, zt)).T
-    pcd = o3d.geometry.PointCloud()
-    pcd.points = o3d.utility.Vector3dVector(cordi)
-    pcd.colors = o3d.utility.Vector3dVector(intensity)
-    o3d.io.write_point_cloud(os.path.join(obj_path,'obj.ply'), pcd)
-    return cordi,intensity
+    xyz = list(map(tuple, cordi)) # shape is Nx3
+    color = list(map(tuple, rgb_intensity_vect))
+    
+    PlyData(
+        [
+            PlyElement.describe(np.array(xyz, dtype=[('x', 'f4'), ('y', 'f4'), ('z', 'f4')]), 'points'),
+            PlyElement.describe(np.array(color, dtype=[('r', 'f4'), ('g', 'f4'), ('b', 'f4')]), 'color'),
+            PlyElement.describe(np.array(t_vect, dtype=[('temperature', 'f4')]), 'temperature')
+        ]).write(os.path.join(obj_path,'obj.ply'))
+    
+    # pcd = o3d.geometry.PointCloud()
+    # pcd.points = o3d.utility.Vector3dVector(cordi)
+    # pcd.colors = o3d.utility.Vector3dVector(rgb_intensity_vect)
+    # o3d.io.write_point_cloud(os.path.join(obj_path,'obj.ply'), pcd)
+    return cordi, rgb_intensity_vect, t_vect
 
 def obj_reconst_wrapper(width, height, pitch_list, N_list, limit, recon_limit, dist, delta_dist, phase_st, direc, type_unwrap, calib_path, obj_path, kernel = 1):
    '''
@@ -281,9 +293,10 @@ def obj_reconst_wrapper(width, height, pitch_list, N_list, limit, recon_limit, d
        #unwrapped phase
        unwrap0, k0 = nstep.unwrap_cal(phase_step, phase_cos, pitch_list[0], width, height, direc)
        unwrap, k = nstep.filt(unwrap0, kernel, direc)
-       inte_img = cv2.imread(os.path.join(obj_path,'white.jpg'))
+       inte_img = cv2.imread(os.path.join(obj_path,'white.jpg'))       
+       temperature = np.load(os.path.join(obj_path,'temperature.npy'))
        inte_rgb = inte_img[...,::-1].copy()
-       obj_cordi, obj_color = complete_recon(unwrap, inte_rgb, obj_cos_mod, recon_limit, dist, delta_dist, c_mtx, c_dist, p_mtx, cp_rot_mtx,cp_trans_mtx, phase_st, pitch_list[-1], obj_path)
+       obj_cordi, obj_color, obj_t = complete_recon(unwrap, inte_rgb, temperature, obj_cos_mod, recon_limit, dist, delta_dist, c_mtx, c_dist, p_mtx, cp_rot_mtx,cp_trans_mtx, phase_st, pitch_list[-1], obj_path)
        
    elif type_unwrap == 'multifreq':
        object_freq1, mod_freq1, avg_freq1, gamma_freq1, delta_deck_freq1  = nstep.mask_img(np.array([cv2.imread(os.path.join(obj_path,'capt_%d.jpg'%i),0) for i in range(0, N_list[0])]), limit)
@@ -301,9 +314,10 @@ def obj_reconst_wrapper(width, height, pitch_list, N_list, limit, recon_limit, d
        #unwrapped phase
        phase_arr = np.stack([phase_freq1, phase_freq2, phase_freq3, phase_freq4])
        unwrap, k = nstep.multifreq_unwrap(pitch_list, phase_arr, kernel, direc)
-       inte_img = cv2.imread(os.path.join(obj_path,'white.jpg'))
+       inte_img = cv2.imread(os.path.join(obj_path,'white.jpg'))       
+       temperature = np.load(os.path.join(obj_path,'temperature.npy'))
        inte_rgb = inte_img[...,::-1].copy()
-       obj_cordi, obj_color = complete_recon(unwrap, inte_rgb, mod_freq4, recon_limit, dist, delta_dist, c_mtx, c_dist, p_mtx, cp_rot_mtx,cp_trans_mtx, phase_st, pitch_list[-1], obj_path)
+       obj_cordi, obj_color, obj_t = complete_recon(unwrap, inte_rgb, temperature, mod_freq4, recon_limit, dist, delta_dist, c_mtx, c_dist, p_mtx, cp_rot_mtx,cp_trans_mtx, phase_st, pitch_list[-1], obj_path)
        
    elif type_unwrap == 'multiwave':
        eq_wav12 = (pitch_list[-1] * pitch_list[1]) / (pitch_list[1]-pitch_list[-1])
@@ -321,17 +335,17 @@ def obj_reconst_wrapper(width, height, pitch_list, N_list, limit, recon_limit, d
        phase_wav2 = nstep.phase_cal(object_wav2, N_list[1], delta_deck_wav2 )
        phase_wav3 = nstep.phase_cal(object_wav3, N_list[0], delta_deck_wav3 )
        phase_wav12 = np.mod(phase_wav1 - phase_wav2, 2 * np.pi)
-       phase_wav123 = np.mod(phase_wav12 - phase_wav3, 2 * np.pi)
-       # phase_wav123 = nstep.edge_rectification(phase_wav123, 'v')
+       phase_wav123 = np.mod(phase_wav12 - phase_wav3, 2 * np.pi)       
        phase_wav123[phase_wav123 > TAU] = phase_wav123[phase_wav123 > TAU] - 2 * np.pi
 
        #unwrapped phase
        phase_arr = np.stack([phase_wav123, phase_wav3, phase_wav12, phase_wav2, phase_wav1])
        unwrap, k = nstep.multiwave_unwrap(pitch_list, phase_arr, kernel, direc)
-       inte_img = cv2.imread(os.path.join(obj_path,'white.jpg'))
+       inte_img = cv2.imread(os.path.join(obj_path,'white.jpg'))       
+       temperature = np.load(os.path.join(obj_path,'temperature.npy'))
        inte_rgb = inte_img[...,::-1].copy()
-       obj_cordi, obj_color = complete_recon(unwrap, inte_rgb, mod_wav3, recon_limit, dist, delta_dist, c_mtx, c_dist, p_mtx, cp_rot_mtx,cp_trans_mtx, phase_st, pitch_list[-1], obj_path)   
-   return obj_cordi, obj_color
+       obj_cordi, obj_color, obj_t = complete_recon(unwrap, inte_rgb, temperature, mod_wav3, recon_limit, dist, delta_dist, c_mtx, c_dist, p_mtx, cp_rot_mtx,cp_trans_mtx, phase_st, pitch_list[-1], obj_path)   
+   return obj_cordi, obj_color, obj_t
        
        
        
