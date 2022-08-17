@@ -1059,9 +1059,12 @@ class calibration:
             y1 = delta_group[i]['delta_y']
             z1 = delta_group[i]['delta_z']
             ax.scatter(x1,y1,z1, label='Pose %d'%i)
-        ax.set_xlabel('$\Delta x$',fontsize = 15)
-        ax.set_ylabel('$\Delta y$',fontsize = 15)
-        ax.set_zlabel('$\Delta z$',fontsize = 15)
+        ax.set_xlabel('$\Delta x$ (mm)',fontsize = 20, labelpad = 10)
+        ax.set_ylabel('$\Delta y$ (mm)',fontsize = 20, labelpad = 10)
+        ax.set_zlabel('$\Delta z$ (mm)',fontsize = 20, labelpad = 10)
+        ax.tick_params(axis = 'x', labelsize = 15)
+        ax.tick_params(axis = 'y', labelsize = 15)
+        ax.tick_params(axis = 'z', labelsize = 15)
         #ax.legend(loc="upper left",bbox_to_anchor=(1.2, 1),fontsize=15)
         plt.tight_layout()
         plt.savefig(os.path.join(self.path,'error.png'))
