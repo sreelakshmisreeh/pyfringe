@@ -1260,7 +1260,7 @@ class calibration:
                      verticalalignment='center',transform = ax.transAxes)
             plt.xticks(fontsize=20)
             plt.yticks(fontsize=20)
-            ax.set_xlabel('Distance {}mm'.format(val_label),fontsize=20)
+            ax.set_xlabel('Measured error for true value {}mm'.format(val_label),fontsize=20)
             ax.set_ylabel('Count',fontsize=20)
         else:
             print ('Invalid point to point distance. For given calibration board distance values are {}'.format(true_val))
