@@ -12,6 +12,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import cv2
 import open3d as o3d
+import pickle
 import os
 from copy import deepcopy
 from plyfile import PlyData, PlyElement
@@ -296,6 +297,8 @@ def obj_reconst_wrapper(width, height, pitch_list, N_list, limit, recon_limit, d
        inte_img = cv2.imread(os.path.join(obj_path,'white.jpg'))       
        temperature = np.load(os.path.join(obj_path,'temperature.npy'))
        inte_rgb = inte_img[...,::-1].copy()
+       with open(os.path.join(obj_path,'obj_mod.pkl'), 'wb') as f:
+           pickle.dump(obj_cos_mod, f)
        obj_cordi, obj_color, obj_t = complete_recon(unwrap, inte_rgb, temperature, obj_cos_mod, recon_limit, dist, delta_dist, c_mtx, c_dist, p_mtx, cp_rot_mtx,cp_trans_mtx, phase_st, pitch_list[-1], obj_path)
        
    elif type_unwrap == 'multifreq':
