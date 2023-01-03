@@ -104,7 +104,7 @@ class dlpc350(object):
         :param device: lcr4500 USB device.
         """
         self.dlpc = device
-        self.mode = 'pattern' #
+        self.mode = 'pattern' 
         self.source = 'flash'
         self.exposure_period = None
         self.frame_period = None
