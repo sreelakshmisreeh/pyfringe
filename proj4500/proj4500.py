@@ -104,9 +104,13 @@ class dlpc350(object):
         :param device: lcr4500 USB device.
         """
         self.dlpc = device
+        self.mode = 'pattern' #
+        self.source = 'flash'
+        self.exposure_period = None
+        self.frame_period = None
         
     def command(self,
-                mode,
+                rw_mode,
                 sequence_byte,
                 com1,
                 com2,
@@ -114,7 +118,7 @@ class dlpc350(object):
         """
         Sends a command to the dlpc.
 
-        :param str mode: Whether reading or writing.
+        :param str rw_mode: Whether reading or writing.
         :param int sequence_byte:
         :param int com1: Command 1
         :param int com2: Command 3
@@ -123,7 +127,7 @@ class dlpc350(object):
 
         buffer = []
 
-        if mode == 'r':
+        if rw_mode == 'r':
             flagstring = 0xc0  # 0b11000000
         else:
             flagstring = 0x40  # 0b01000000
@@ -200,7 +204,7 @@ class dlpc350(object):
 
          (USB: CMD2: 0x02, CMD3: 0x0C)
          """
-        self.command('r', 0x00, 0x1a, 0x0c, [])  # mode, sequence,com1,com2=0x0c for main status, data
+        self.command('r', 0x00, 0x1a, 0x0c, [])  # rw_mode, sequence,com1,com2=0x0c for main status, data
         if pretty_print:
             # ans = str(bin(self.ans[4]))[2:]
             ans = format(self.ans[4], '08b')
@@ -229,7 +233,7 @@ class dlpc350(object):
         ans = bin(self.ans[4]) 
         print(f'Current mode:{"pattern" if int(ans[-1]) else "video"}')
     
-    def set_display_mode(self, mode='pattern'):  #default mode is 'pattern'
+    def set_display_mode(self, mode):  #default mode is 'pattern'
         """
         Selects the input mode for the projector.
 
@@ -239,6 +243,7 @@ class dlpc350(object):
             :0: "video" mode
             :1: "pattern" mode
         """
+        self. mode = mode
         modes = ['video', 'pattern'] #video = 0, pattern =1
         if mode in modes:
             mode = modes.index(mode)
@@ -253,7 +258,7 @@ class dlpc350(object):
         ans = bin(self.ans[4])
         print(f'Current input source:{"video" if ans[-2:] == 11 else "flash"}')
         
-    def set_pattern_input_source(self, mode='video'):  # pattern source default = 'video'
+    def set_pattern_input_source(self, source='video'):  # pattern source default = 'video'
         """
         Selects the input type for pattern sequence.
 
@@ -263,11 +268,12 @@ class dlpc350(object):
             :0: "video"
             :3: "flash"
         """
-        modes = ['video', '', '', 'flash']  # video = 0, reserved, reserved, flash=11 (bin 3)
-        if mode in modes:
-            mode = modes.index(mode)
+        self.source = source
+        sources = ['video', '', '', 'flash']  # video = 0, reserved, reserved, flash=11 (bin 3)
+        if source in sources:
+            source = sources.index(source)
 
-        self.command('w', 0x00, 0x1a, 0x22, [mode])
+        self.command('w', 0x00, 0x1a, 0x22, [source])
         
     
     def read_pattern_config(self):
@@ -382,9 +388,7 @@ class dlpc350(object):
         print('Pattern exposure time:%f'%exposure_time)
         print('Frame period:%f'%frame_period)
     
-    def set_exposure_frame_period(self,
-                                  exposure_period,
-                                  frame_period):
+    def set_exposure_frame_period(self, exposure_period, frame_period):
         """
         The Pattern Display Exposure and Frame Period dictates the time a pattern is exposed and the frame period.
         Either the exposure time must be equivalent to the frame period, or the exposure time must be less than the
@@ -396,6 +400,8 @@ class dlpc350(object):
         :param int exposure_period: Exposure time in microseconds (4 bytes).
         :param int frame_period: Frame period in microseconds (4 bytes).
         """
+        self.exposure_period = exposure_period
+        self.frame_period = frame_period
         exposure_period = conv_len(exposure_period, 32) # decimal to bit string of size 32
         frame_period = conv_len(frame_period, 32) # decimal to bit string of size 32
 
