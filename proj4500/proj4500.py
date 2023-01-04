@@ -186,7 +186,6 @@ class dlpc350(object):
 
                 self.dlpc.write(1, buffer)
 
-        
         try:
             self.ans = self.dlpc.read(0x81, 64)            
             length_lsb = self.ans[2]
@@ -723,7 +722,7 @@ class dlpc350(object):
         self.pattern_LUT_entries = ans
         self.open_mailbox(0)
         return self.image_LUT_entries, self.pattern_LUT_entries
-
+        
 
 def get_image_LUT_swap_location(image_index_list):
     swap_location_list = [0] + [i for i in range(1,len(image_index_list)) if image_index_list[i]!=image_index_list[i-1]]
@@ -821,7 +820,7 @@ def pattern_LUT_design(image_index_list, exposure_period = 27084, frame_period =
     image_index_list_recovered, swap_location_list_read = new_LUT_validation(image_index_list, swap_location_list, image_LUT_entries_read, lut_read)
     return image_LUT_entries_read, lut_read, image_index_list_recovered, swap_location_list, swap_location_list_read
 
-def proj_cam_acquire_images(cam, acquisition_index, savedir, cam_triggerType, image_index_list, proj_exposure_period, proj_frame_period):
+def proj_cam_acquire_images(cam, lcr, acquisition_index, savedir, cam_triggerType, image_index_list, proj_exposure_period, proj_frame_period, preview_image_index = 23, pprint_proj_status = True):
     """
     This function acquires and saves one image from a device. Note that camera 
     must be initialized before calling this function, i.e., cam.Init() must be 
@@ -849,14 +848,24 @@ def proj_cam_acquire_images(cam, acquisition_index, savedir, cam_triggerType, im
     result = True        
 
     # live view        
-    cam.BeginAcquisition()        
+    cam.BeginAcquisition()   
+    #set projector configuration
+    lcr.set_pattern_config(num_lut_entries= 1, do_repeat = True, num_pats_for_trig_out2 = 1, num_images = 1)
+    lcr.pattern_flash_index([preview_image_index],0)
+    lcr.send_pattern_lut(trig_type = 0, bit_depth = 8, led_select = 0b111,swap_location_list = [0] ,
+                         image_index_list = [preview_image_index], starting_address = 0,  do_insert_black = False)  
+    ans = lcr.start_pattern_lut_validate()
+    if not int(ans):
+        lcr.pattern_display('start')
     while True:                
         ret, frame = gspy.capture_image(cam)       
         img_show = cv2.resize(frame, None, fx=0.5, fy=0.5)
         cv2.imshow("press q to quit", img_show)    
         key = cv2.waitKey(1)        
         if key == ord("q"):
+            lcr.pattern_display('stop')
             break
+    
     cam.EndAcquisition()
     cv2.destroyAllWindows()
     
@@ -882,8 +891,24 @@ def proj_cam_acquire_images(cam, acquisition_index, savedir, cam_triggerType, im
     if cam_triggerType == "hardware":
         count = 0        
         total_dual_time_start = perf_counter_ns()
-        start = perf_counter_ns()   
-        pattern_LUT_design(image_index_list, exposure_period = proj_exposure_period , frame_period = proj_frame_period)                    
+        start = perf_counter_ns() 
+        #Configure projector
+        image_LUT_entries, swap_location_list = get_image_LUT_swap_location(image_index_list)
+        lcr.set_pattern_config(num_lut_entries= len(image_index_list),do_repeat = False,  num_pats_for_trig_out2 = len(image_index_list),
+                              num_images = len(image_LUT_entries))
+        lcr.set_exposure_frame_period(proj_exposure_period, proj_frame_period )
+        # To set new image LUT
+        lcr.pattern_flash_index(image_LUT_entries,0)
+        # To set pattern LUT table    
+        lcr.send_pattern_lut(trig_type = 0 , bit_depth = 8, led_select = 0b111,swap_location_list = swap_location_list, image_index_list = image_index_list, starting_address = 0)
+        if pprint_proj_status:# Print all projector current attributes set
+            lcr.pretty_print_status()
+        #pattern_LUT_design(image_index_list, exposure_period = proj_exposure_period , frame_period = proj_frame_period)  
+        ans = lcr.start_pattern_lut_validate()
+        #Check validation status
+        if not int(ans):   
+            lcr.pattern_display('start') 
+                 
         while count < len(image_index_list):
             try:
                 ret, image_array = gspy.capture_image(cam=cam)
@@ -918,7 +943,7 @@ def proj_cam_acquire_images(cam, acquisition_index, savedir, cam_triggerType, im
 
     return result
 
-def run_proj_single_camera(cam, savedir, acquisition_index, cam_triggerType, image_index_list, pat_number, proj_exposure_period, proj_frame_period ):
+def run_proj_single_camera(cam,savedir, acquisition_index, cam_triggerType, image_index_list, proj_exposure_period, proj_frame_period ):
     """
     Initialize and configurate a camera and take one image.
 
@@ -941,14 +966,23 @@ def run_proj_single_camera(cam, savedir, acquisition_index, cam_triggerType, ima
     """
     try:
         result = True
+        device = usb.core.find(idVendor=0x0451, idProduct=0x6401) #finding the projector usb port
+        device.set_configuration()
+
+        lcr = dlpc350(device)
+        lcr.pattern_display('stop')
+        
         # Initialize camera
         cam.Init()
         # config camera
         result &= gspy.cam_configuration(cam, cam_triggerType)        
         # Acquire images        
-        result &= proj_cam_acquire_images(cam, acquisition_index, savedir, cam_triggerType, image_index_list, proj_exposure_period, proj_frame_period)
+        result &= proj_cam_acquire_images(cam,lcr, acquisition_index, savedir, cam_triggerType, image_index_list, proj_exposure_period, proj_frame_period)
         # Deinitialize camera        
         cam.DeInit()
+        device.reset()
+        del lcr
+        del device
     except PySpin.SpinnakerException as ex:
         print('Error: %s' % ex)
         result = False
@@ -972,17 +1006,39 @@ def three_channel_image(single_channel_image_list, convertRGB = True):
             image_array = np.empty((single_channel_image_list[0].shape[0],single_channel_image_list[0].shape[1],3))
             
     return three_channel_list 
-        
+
+def single_img_load(image_index):
+  
+   with connect_usb() as lcr:
+       lcr.pattern_display('stop')
+       lcr.set_pattern_config(num_lut_entries= 1, do_repeat = True, num_pats_for_trig_out2 = 1, num_images = 1)
+       lcr.pattern_flash_index([image_index],0)
+       lcr.send_pattern_lut(trig_type = 0, bit_depth = 8, led_select = 0b111,swap_location_list = [0] ,
+                            image_index_list = [image_index], starting_address = 0,  do_insert_black = False)
+       lcr.pretty_print_status()
+       ans = lcr.start_pattern_lut_validate()
+       
+       if not int(ans):
+           lcr.pattern_display('start')
+       test_image = np.full((1140,912),255, dtype=np.uint8)
+       while True:
+           cv2.imshow("press q to quit", test_image)  
+           key = cv2.waitKey(1)    
+           if key == ord("q"):
+               lcr.pattern_display('stop')
+               break
+       cv2.destroyAllWindows()
+   return
 #%%
-# # current_setting()
+#current_setting()
 
 # # #%%
 # # image_index_list = [1,1,2,2,2,2,2]#,1,1,2,2,2]
 # #image_index_list = [3,3,3,1,0,1,1,1,1,2,2,2,4,4,4]
 # image_index_list = [0,0,0,1,1,1,2,2,2,3,3,3,4,4,4]
 # gamma_index = np.repeat(np.arange(5,22),3).tolist()
-# pat_number = [0,1,2]
-# image_LUT_entries_read, lut_read, image_index_list_recovered, swap_location_list, swap_location_list_read = pattern_LUT_design(gamma_index, pat_number)
+# test_image = [1]
+# image_LUT_entries_read, lut_read, image_index_list_recovered, swap_location_list, swap_location_list_read = pattern_LUT_design(test_image)
 # # #pattern_LUT_design(image_index_list)
 #   #%%
 
@@ -997,7 +1053,7 @@ def three_channel_image(single_channel_image_list, convertRGB = True):
 #     for i, cam in enumerate(cam_list):    
 #         print('Running example for camera %d...'%i)
 #         acquisition_index=0
-#         result &= run_proj_single_camera(cam, savedir, acquisition_index, cam_triggerType, gamma_index, proj_exposure_period, proj_frame_period )
+#         result &= run_proj_single_camera(cam, savedir, acquisition_index, cam_triggerType, image_index_list, proj_exposure_period, proj_frame_period )
 #         print('Camera %d example complete...'%i)
 
 #     # Release reference to camera
@@ -1015,6 +1071,5 @@ def three_channel_image(single_channel_image_list, convertRGB = True):
 # # Release system instance
 # system.ReleaseInstance() 
 
-#%%
-
-    
+# #%%
+# single_img_load(22)
