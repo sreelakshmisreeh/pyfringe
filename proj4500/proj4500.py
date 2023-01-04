@@ -15,9 +15,11 @@ import usb.util
 from usb.core import USBError
 from time import perf_counter_ns
 import sys
-sys.path.append(r'C:\Users\kl001\Documents\pyfringe_test\proj4500')
+sys.path.append(r'C:\Users\kl001\pyfringe\proj4500')
 sys.path.append(r'C:\Users\kl001\Documents\pyfringe_test')
+sys.path.append(r'C:\Users\kl001\pyfringe\functions')
 import FringeAcquisition as gspy 
+import nstep_fringe as nstep
 import cv2
 import PySpin
 
@@ -820,7 +822,7 @@ def pattern_LUT_design(image_index_list, exposure_period = 27084, frame_period =
     image_index_list_recovered, swap_location_list_read = new_LUT_validation(image_index_list, swap_location_list, image_LUT_entries_read, lut_read)
     return image_LUT_entries_read, lut_read, image_index_list_recovered, swap_location_list, swap_location_list_read
 
-def proj_cam_acquire_images(cam, lcr, acquisition_index, savedir, cam_triggerType, image_index_list, proj_exposure_period, proj_frame_period, preview_image_index = 23, pprint_proj_status = True):
+def proj_cam_acquire_images(cam, lcr, acquisition_index, savedir, cam_triggerType, image_index_list, proj_exposure_period, proj_frame_period, preview_image_index = 22, pprint_proj_status = True):
     """
     This function acquires and saves one image from a device. Note that camera 
     must be initialized before calling this function, i.e., cam.Init() must be 
@@ -851,6 +853,7 @@ def proj_cam_acquire_images(cam, lcr, acquisition_index, savedir, cam_triggerTyp
     cam.BeginAcquisition()   
     #set projector configuration
     lcr.set_pattern_config(num_lut_entries= 1, do_repeat = True, num_pats_for_trig_out2 = 1, num_images = 1)
+    lcr.set_exposure_frame_period(10000,10000) # to avoid screen fluctuation for preview
     lcr.pattern_flash_index([preview_image_index],0)
     lcr.send_pattern_lut(trig_type = 0, bit_depth = 8, led_select = 0b111,swap_location_list = [0] ,
                          image_index_list = [preview_image_index], starting_address = 0,  do_insert_black = False)  
@@ -988,24 +991,40 @@ def run_proj_single_camera(cam,savedir, acquisition_index, cam_triggerType, imag
         result = False
     return result
 
-def three_channel_image(single_channel_image_list, convertRGB = True):
+def three_channel_image(single_channel_image_list, savedir, convertRGB = True):
     '''
     Function to create list of 3 channel (24 bit) image from list of single channel (8 bit) images.
     :param single_channel_image_list : list of 8 bit images
     :param convertRGB: If set each image will be RGB otherwise BGR
     '''
-    
+        
     image_array = np.empty((single_channel_image_list[0].shape[0],single_channel_image_list[0].shape[1],3))
     three_channel_list = []
+    count = 0
     for j,i in enumerate(single_channel_image_list):
         image_array[:,:,(j%3)] = i
         if j%3 == 2: #0,1,2
             if  convertRGB:
                 image_array[:,:,[0,1,2]] = image_array[:,:,[2,0,1]] # changing channel for saving for projector (RGB)
+            cv2.imwrite(os.path.join(savedir,"image_%d.bmp"%count), image_array)
             three_channel_list.append(image_array)
             image_array = np.empty((single_channel_image_list[0].shape[0],single_channel_image_list[0].shape[1],3))
+            count+=1
+            
+    if len(single_channel_image_list)%3 != 0 :
+        print("Warning: Last image in the list is a %d channel image"%(len(single_channel_image_list)%3))
             
     return three_channel_list 
+
+def proj_fringe_images(savedir, pitch_list, N_list, type_unwrap, phase_st, inte_rang, direc = 'v', calib_fringes = False, proj_width = 912, proj_height = 1140):
+    
+    if calib_fringes:
+        fringe_array, delta_deck_list = nstep.calib_generate(proj_width, proj_height, type_unwrap, N_list, pitch_list, phase_st, inte_rang, savedir)
+    else:
+        fringe_array, delta_deck_list = nstep.recon_generate(proj_width, proj_height, type_unwrap, N_list, pitch_list, phase_st, inte_rang, direc, savedir)
+    
+    three_channel_list = three_channel_image(fringe_array, savedir, convertRGB = True)
+    return three_channel_list
 
 def single_img_load(image_index):
   
@@ -1073,3 +1092,11 @@ def single_img_load(image_index):
 
 # #%%
 # single_img_load(22)
+#%% Create fringe image 
+# savedir = r'C:\Users\kl001\Documents\proj_test\patterns_bmp\calib_patterns'
+# pitch_list = [1375, 275, 55, 11]
+# N_list = [3, 3, 3, 9]
+# phase_st = 0
+# inte_rang = [5,254]
+# type_unwrap = 'multifreq'
+# proj_fringe_images(savedir, pitch_list, N_list, type_unwrap, phase_st, inte_rang, calib_fringes = True)
