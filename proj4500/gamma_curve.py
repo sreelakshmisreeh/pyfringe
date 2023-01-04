@@ -9,9 +9,9 @@ import cv2
 import matplotlib.pyplot as plt
 import os
 import sys
-sys.path.append(r'C:\Users\kl001\Documents\pyfringe_test\proj4500')
+sys.path.append(r'C:\Users\kl001\pyfringe\proj4500')
 sys.path.append(r'C:\Users\kl001\Documents\pyfringe_test')
-import FringeAcquisition as fa
+import FringeAcquisition as gspy
 import proj4500
 os.environ["KMP_DUPLICATE_LIB_OK"] = "True"
 
@@ -22,10 +22,10 @@ def gamma_capture(savedir):
     proj_frame_period = 33334
     pat_number = [0,1,2]
     cam_triggerType = "hardware"
-    result, system, cam_list, num_cameras = fa.sysScan()
+    result, system, cam_list, num_cameras = gspy.sysScan()
     if result:
         # Run example on each camera
-        fa.clearDir(savedir)
+        gspy.clearDir(savedir)
         for i, cam in enumerate(cam_list):    
             print('Running example for camera %d...'%i)
             acquisition_index=0
