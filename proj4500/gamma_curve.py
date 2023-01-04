@@ -20,7 +20,6 @@ def gamma_capture(savedir):
     image_index_list = np.repeat(np.arange(5,22),3).tolist()
     proj_exposure_period = 27084
     proj_frame_period = 33334
-    pat_number = [0,1,2]
     cam_triggerType = "hardware"
     result, system, cam_list, num_cameras = gspy.sysScan()
     if result:
@@ -29,7 +28,7 @@ def gamma_capture(savedir):
         for i, cam in enumerate(cam_list):    
             print('Running example for camera %d...'%i)
             acquisition_index=0
-            result &= proj4500.run_proj_single_camera(cam, savedir, acquisition_index, cam_triggerType, image_index_list, pat_number, proj_exposure_period, proj_frame_period )
+            result &= proj4500.run_proj_single_camera(cam, savedir, acquisition_index, cam_triggerType, image_index_list, proj_exposure_period, proj_frame_period )
             print('Camera %d example complete...'%i)
     
         # Release reference to camera
