@@ -17,7 +17,7 @@ from time import perf_counter_ns
 import sys
 sys.path.append(r'C:\Users\kl001\Documents\pyfringe_test\proj4500')
 sys.path.append(r'C:\Users\kl001\Documents\pyfringe_test')
-import FringeAcquisition as fa
+import FringeAcquisition as gspy 
 import cv2
 import PySpin
 
@@ -97,17 +97,27 @@ class dlpc350(object):
     Class representing dmd controller. Can connect to different DLPCs by changing product ID. Check IDs in
     device manager.
     """
+    #TODO: Writing log file and modifying read functions
+    
     def __init__(self, device):
         """
         Connects the device.
 
         :param device: lcr4500 USB device.
         """
+        #Initialse device address
         self.dlpc = device
-        self.mode = 'pattern' 
-        self.source = 'flash'
-        self.exposure_period = None
-        self.frame_period = None
+        # Initialise properties of class (current status)
+        self.mirrorStatus, self.sequencer_status, self.frame_buffer_status, self.gamma_correction = self.get_main_status()
+        self.images_on_flash = self.retrieve_flashimages()
+        self.mode = self.read_mode()
+        self.source = self.read_pattern_input_source()
+        self.exposure_period, self.frame_period = self.read_exposure_frame_period()
+        self.num_lut_entries, self.do_pattern_repeat, self.num_pats_for_trig_out2, self.num_images = self.read_pattern_config()
+        self.trigger_mode = self.read_pattern_trigger_mode()
+        self.trigger_polarity, self.tigger_rising_edge_delay, self.trigger_falling_edge_delay = self.read_trig_out1_control()
+        self.image_LUT_entries, self.pattern_LUT_entries = self.read_mailbox_info()
+        
         
     def command(self,
                 rw_mode,
@@ -197,22 +207,55 @@ class dlpc350(object):
         """
         for i in self.ans:
             print(hex(i))
+    def pretty_print_status(self):
+        print('\n====================================Current status of projector attributes=============================\n')
+        print('\nMirror :{}'.format(self.mirrorStatus))
+        print('\nSequencer :{}'.format(self.sequencer_status))
+        print('\nBuffer:{}'.format(self.frame_buffer_status))
+        print('\nGamma correction:{}'.format(self.gamma_correction))
+        print('\nNo. of images in the flash:{}'.format(self.images_on_flash))
+        print('\nMode:{}'.format(self.mode))
+        print('\nSource:{} '.format(self.source))
+        print('\nExposure period:{}'.format(self.exposure_period))
+        print('\nFrame period:{}'.format(self.frame_period))
+        print('\nNumber of LUT entries:{}\n \nIs pattern repeated:{}\n \nNumber of patterns to display:{}\n \nNumber of images:{}'.format(self.num_lut_entries, self.do_pattern_repeat, 
+                                                                                                                                   self.num_pats_for_trig_out2, self.num_images))
+        print('\nTrigger mode:{}'.format(self.trigger_mode))
+        print('\nTrigger polarity:{}\n \nTrigger rising edge delay:{}\n \nTrigger falling edge delay:{}'.format( self.trigger_polarity, self.tigger_rising_edge_delay, 
+                                                                                                           self.trigger_falling_edge_delay))
+        print('\nImage LUT entries:{}'.format(self.image_LUT_entries))
+        print('\nPattern LUT entries:{}'.format(self.pattern_LUT_entries))
+        
+        
 
-    def get_main_status(self, pretty_print=False):
+    def get_main_status(self):
         """The Main Status command shows the status of DMD park and DLPC350 sequencer, frame buffer, and gamma
          correction.
 
          (USB: CMD2: 0x02, CMD3: 0x0C)
          """
         self.command('r', 0x00, 0x1a, 0x0c, [])  # rw_mode, sequence,com1,com2=0x0c for main status, data
-        if pretty_print:
-            # ans = str(bin(self.ans[4]))[2:]
-            ans = format(self.ans[4], '08b')
-            print(f'\nDMD micromirrors are {"parked" if int(ans[-1]) else "not parked"}')
-            print(f'Sequencer is {"running normally" if int(ans[-2]) else "stopped"}')
-            print(f'Frame buffer is {"frozen" if int(ans[-3]) else "not frozen"}')
-            print(f'Gamma correction is {"enabled" if int(ans[-4]) else "disabled"}')
-            
+        ans = format(self.ans[4], '08b')
+        
+        if int(ans[-1]):
+            self.mirrorStatus = 'parked'
+        else:
+            self.mirrorStatus = "not parked"
+        if int(ans[-2]):
+            self.sequencer_status = "running normally"
+        else:
+            self.sequencer_status = "stopped"
+        if int(ans[-3]):
+            self.frame_buffer_status = "frozen"
+        else:
+            self.frame_buffer_status = "not frozen"
+        if int(ans[-4]):
+            self.gamma_correction = "enabled"
+        else:
+            self.gamma_correction = "disabled"
+       
+        return self.mirrorStatus, self.sequencer_status, self.frame_buffer_status, self.gamma_correction
+    
     def retrieve_flashimages(self):
         """
         This command retrieves the information about the number of Images in the flash.
@@ -220,8 +263,8 @@ class dlpc350(object):
         """
         
         self.command('r', 0x00, 0x1a, 0x42,[])
-        ans = self.ans[4]
-        print(f'No. of images in the flash:{ans}')
+        self.images_on_flash = self.ans[4]
+        return self.images_on_flash
         
     def read_mode(self):  #default mode is 'pattern'
         """
@@ -231,7 +274,12 @@ class dlpc350(object):
         """
         self.command('r', 0x00, 0x1a, 0x1b, [])
         ans = bin(self.ans[4]) 
-        print(f'Current mode:{"pattern" if int(ans[-1]) else "video"}')
+        if int(ans[-1]):
+            self.mode = "pattern"
+        else:
+            self.mode = "video"
+        #print(f'Current mode:{"pattern" if int(ans[-1]) else "video"}')
+        return self.mode
     
     def set_display_mode(self, mode):  #default mode is 'pattern'
         """
@@ -243,7 +291,7 @@ class dlpc350(object):
             :0: "video" mode
             :1: "pattern" mode
         """
-        self. mode = mode
+        self.mode = mode
         modes = ['video', 'pattern'] #video = 0, pattern =1
         if mode in modes:
             mode = modes.index(mode)
@@ -255,10 +303,15 @@ class dlpc350(object):
         Read current input source.
         """
         self.command('r', 0x00, 0x1a, 0x22, [])
-        ans = bin(self.ans[4])
-        print(f'Current input source:{"video" if ans[-2:] == 11 else "flash"}')
+        ans = self.ans[4]
+        if ans == 3:
+            self.source = "flash"
+        else:
+            self.source = "video"
+        #print(f'Current input source:{ans}')
+        return self.source
         
-    def set_pattern_input_source(self, source='video'):  # pattern source default = 'video'
+    def set_pattern_input_source(self, source='flash'):  # pattern source default = 'video'
         """
         Selects the input type for pattern sequence.
 
@@ -282,8 +335,16 @@ class dlpc350(object):
         """
         self.command('r', 0x00, 0x1a, 0x31, [])
         ans = self.ans[4:8]
-        print(f'Current config:\n \t No. of LUT entries : {int(ans[-4]) + 1} \n \t Repeat sequence: {"yes" if int(ans[-3]) else "no"}')
-        print(f'\t No. Number of patterns to display:{ int(ans[-2])+1} \n \t No. of image index:{ int(ans[-1])+1} ')
+        self.num_lut_entries = int(ans[-4]) + 1
+        if int(ans[-3]):
+            self.do_pattern_repeat = "yes"
+        else:
+            self.do_pattern_repeat = "no"
+        self.num_pats_for_trig_out2 =  int(ans[-2])+1
+        self.num_images = int(ans[-1])+1
+        # print(f'Current config:\n \t No. of LUT entries : {int(ans[-4]) + 1} \n \t Repeat sequence: {"yes" if int(ans[-3]) else "no"}')
+        # print(f'\t No. Number of patterns to display:{ int(ans[-2])+1} \n \t No. of image index:{ int(ans[-1])+1} ')
+        return  self.num_lut_entries, self.do_pattern_repeat, self.num_pats_for_trig_out2,  self.num_images
        
         
     def set_pattern_config(self,
@@ -310,6 +371,11 @@ class dlpc350(object):
         :param int num_images: Number of Image Index LUT Entries(range 1 through 64). This Field is irrelevant for Pattern
             Display Data Input Source set to a value other than internal.
         """
+        self.num_lut_entries = num_lut_entries
+        self.do_pattern_repeat = do_repeat
+        self.num_pats_for_trig_out2 = num_pats_for_trig_out2
+        self.num_images = num_images
+        
         num_lut_entries = '0' + conv_len(num_lut_entries - 1, 7)
         do_repeat = '0000000' + str(int(do_repeat))
         num_pats_for_trig_out2 = conv_len(num_pats_for_trig_out2 - 1, 8)
@@ -326,9 +392,11 @@ class dlpc350(object):
         """
         self.command('r', 0x00, 0x1a, 0x23, [])
         ans = self.ans[4]
-        print('Current trigger mode:{}'.format(ans))
+        self.trigger_mode = ans
+        #print('Current trigger mode:{}'.format(ans))
+        return self.trigger_mode
         
-    def set_pattern_trigger_mode(self, mode='vsync'):
+    def set_pattern_trigger_mode(self, trigger_mode='vsync'):
         """
         Selects the trigger type for pattern sequence.
 
@@ -337,11 +405,12 @@ class dlpc350(object):
         :param int mode:
             :0: "vsync"
         """
-        modes = ['vsync','trig_mode1', 'trig_mode2', 'trig_mode3', 'trig_mode4']
-        if mode in modes:
-            mode = modes.index(mode)
+        self.trigger_mode = trigger_mode
+        trigger_modes = ['vsync','trig_mode1', 'trig_mode2', 'trig_mode3', 'trig_mode4']
+        if trigger_mode in trigger_modes:
+            trigger_mode = trigger_modes.index(trigger_mode)
 
-        self.command('w', 0x00, 0x1a, 0x23, [mode])
+        self.command('w', 0x00, 0x1a, 0x23, [trigger_mode])
     
     def read_trig_out1_control(self):
         """
@@ -349,13 +418,20 @@ class dlpc350(object):
         """
         self.command('r', 0x00, 0x1a, 0x1d, [])
         ans = self.ans[4:7]
-        print('Current trig_out1 setting:')
-        print(f'\t Polarity: {"active low signal" if int(ans[0]) else "active high signal"}')
-        print(f'\t Rising edge delay:{ans[1]}')
-        print(f'\t Falling edge delay:{ans[-1]}')
+        if int(ans[0]):
+            self.trigger_polarity = "active low signal"
+        else:
+            self.trigger_polarity = "active high signal"
+        self.tigger_rising_edge_delay = ans[1]
+        self.trigger_falling_edge_delay = ans[-1]
+        # print('Current trig_out1 setting:')
+        # print(f'\t Polarity: {"active low signal" if int(ans[0]) else "active high signal"}')
+        # print(f'\t Rising edge delay:{ans[1]}')
+        # print(f'\t Falling edge delay:{ans[-1]}')
+        return self.trigger_polarity,  self.tigger_rising_edge_delay, self.trigger_falling_edge_delay
        
         
-    def trig_out1_control(self,plarity_invert = True, trigedge_rise_delay = 187, trigedge_fall_delay = 187):
+    def trig_out1_control(self,polarity_invert = True, trigedge_rise_delay = 187, trigedge_fall_delay = 187):
          """
          The Trigger Out1 Control command sets the polarity, rising edge delay, 
          and falling edge delay of the TRIG_OUT_1 signal of the DLPC350. Before executing this command, stop the current pattern sequence. 
@@ -364,10 +440,15 @@ class dlpc350(object):
          param int trigedge_rise_delay: rising edge delay control ranging from –20.05 μs to 2.787 μs. Each bit adds 107.2 ns.
          param int trigedge_fall_delay: falling edge delay control with range -20.05 μs to +2.787 μs. Each bit adds 107.2 ns
          """
-         if plarity_invert:
+         if polarity_invert:
              polarity = '00000010'
+             self.trigger_polarity = "active low signal"
          else:
              polarity = '00000000'
+             self.trigger_polarity = "active high signal"
+             
+         self.tigger_rising_edge_delay = trigedge_rise_delay
+         self.trigger_falling_edge_delay = trigedge_fall_delay
          trigedge_rise_delay = conv_len(trigedge_rise_delay, 8)
          trigedge_fall_delay = conv_len(trigedge_fall_delay, 8)
          
@@ -382,11 +463,12 @@ class dlpc350(object):
         """
         self.command('r', 0x00, 0x1a, 0x29, [])
         ans = self.ans
-        exposure_time = ans[4] + ans[5]*256 + ans[6]*256**2 + ans[7]*256**3
-        frame_period = ans[8] + ans[9]*256 + ans[10]*256**2 + ans[11]*256**3
+        self.exposure_time = ans[4] + ans[5]*256 + ans[6]*256**2 + ans[7]*256**3
+        self.frame_period = ans[8] + ans[9]*256 + ans[10]*256**2 + ans[11]*256**3
         
-        print('Pattern exposure time:%f'%exposure_time)
-        print('Frame period:%f'%frame_period)
+        #print('Pattern exposure time:%f'%exposure_time)
+        #print('Frame period:%f'%frame_period)
+        return self.exposure_time, self.frame_period
     
     def set_exposure_frame_period(self, exposure_period, frame_period):
         """
@@ -419,21 +501,24 @@ class dlpc350(object):
          (USB: CMD2: 0x1A, CMD3: 0x1A)
          """
          self.command('w', 0x00, 0x1a, 0x1a, bits_to_bytes(conv_len(0x00, 8))) # Pattern Display Mode: Validate Data: CMD2: 0x1A, CMD3: 0x1A
-    
-    def read_lut_validate(self):
-        """
-        Read validation
-        """
-        self.command('r', 0x00, 0x1a, 0x1a,[])
-        ans = conv_len(self.ans[4],8) # STR        
-        print('Validation result\n')
-        print(f'Exposure and frame period setting: {"invalid" if int(ans[-1]) else "valid"}\n')
-        print(f'LUT: {"invalid" if int(ans[-2]) else "valid"}\n')
-        print(f'Trigger Out1: {"invalid" if int(ans[-3]) else "valid"}\n')
-        print(f'Post sector settings: {"invalid" if int(ans[-4]) else "valid"}\n')
-        print(f'DLPC350 is {"busy" if int(ans[-8]) else "valid"}\n')
-        
-        return ans
+         
+         ret = 1
+         start = perf_counter_ns()
+         while ret:
+             self.command('r', 0x00, 0x1a, 0x1a,[])
+             ans = conv_len(self.ans[4],8)
+             ret = int(ans[0])    
+             end = perf_counter_ns()
+             t = (end - start)/1e9    
+             if t > 10:
+                 break
+         print('\n================= Validation result ======================\n')
+         print(f'Exposure and frame period setting: {"invalid" if int(ans[-1]) else "valid"}\n')
+         print(f'LUT: {"invalid" if int(ans[-2]) else "valid"}\n')
+         print(f'Trigger Out1: {"invalid" if int(ans[-3]) else "valid"}\n')
+         print(f'Post sector settings: {"invalid" if int(ans[-4]) else "valid"}\n')
+         print(f'DLPC350 is {"busy" if int(ans[-8]) else "valid"}\n')
+         return ans
        
         
     def open_mailbox(self, mbox_num):
@@ -467,22 +552,59 @@ class dlpc350(object):
         self.command('r', 0x00, 0x1a, 0x32, [])
         return self.ans.tolist()
         
-    def pattern_flash_index(self, index):
+    def pattern_flash_index(self, index_list, address):
         """
         The following parameters: display mode, trigger mode, exposure, and frame rate must be set up before sending any mailbox data.
         If the mailbox is opened to define the flash image indexes, list the index numbers in the mailbox. 
         For example, if image indexes 0 through 3 are desired, write 0x0 0x1 0x2 0x3 to the mailbox. 
         
-        :param index: image index to be written
+        :param index_list: image index list to be written
         """
-        index = bits_to_bytes(conv_len(index, 8))        
-        self.command('w', 0x00, 0x1a, 0x34, index)
-    
+        self.open_mailbox(1)
+        self.mailbox_set_address(address = address)
+        #index = bits_to_bytes(conv_len(index, 8))        
+        self.command('w', 0x00, 0x1a, 0x34, index_list)
+        self.open_mailbox(0)
+        
+    def pattern_lut_payload_list(self,trig_type,
+                                    pat_num,
+                                    bit_depth,
+                                    led_select, swap_location_list, image_index_list,
+                                    do_invert_pat=False,
+                                    do_insert_black=True,
+                                    do_trig_out_prev=False):
+        payload_lst = []
+        trig_type = conv_len(trig_type, 2)
+        bit_depth = conv_len(bit_depth, 4)
+        led_select = conv_len(led_select, 4)
+        # byte 1
+        byte_1 = led_select + bit_depth
+        # byte 2
+        do_invert_pat = str(int(do_invert_pat))
+        do_insert_black = str(int(do_insert_black))
+        do_trig_out_prev = str(int(do_trig_out_prev))
+        
+        for i in range(len(image_index_list)):
+            if i in swap_location_list:
+                buffer_swap = True
+            else:
+                buffer_swap = False
+            pat_num = conv_len( i % 3, 6)
+            byte_0 = pat_num + trig_type
+            do_buf_swap = str(int(buffer_swap))
+            byte_2 = '0000' + do_trig_out_prev + do_buf_swap + do_insert_black + do_invert_pat
+            payload = byte_2 + byte_1 + byte_0
+            payload = bits_to_bytes(payload)
+            payload_lst.append(payload)
+        payload_flat_list = [item for sublist in payload_lst for item in sublist]
+        
+        return payload_flat_list
+            
     def send_pattern_lut(self,
                          trig_type,
                          pat_num,
                          bit_depth,
-                         led_select,do_buf_swap,
+                         led_select, swap_location_list, image_index_list, starting_address,
                          do_invert_pat=False,
                          do_insert_black=True,
                          do_trig_out_prev=False):
@@ -550,31 +672,15 @@ class dlpc350(object):
                pattern.
 
         """
-        # byte 0
-        trig_type = conv_len(trig_type, 2)
-        pat_num = conv_len(pat_num, 6)
-
-        byte_0 = pat_num + trig_type
-
-        # byte 1
-        bit_depth = conv_len(bit_depth, 4)
-        led_select = conv_len(led_select, 4)
-
-        byte_1 = led_select + bit_depth
-        
-
-        # byte 2
-        do_invert_pat = str(int(do_invert_pat))
-        do_insert_black = str(int(do_insert_black))
-        do_buf_swap = str(int(do_buf_swap))
-        do_trig_out_prev = str(int(do_trig_out_prev))
-
-        byte_2 = '0000' + do_trig_out_prev + do_buf_swap + do_insert_black + do_invert_pat
-
-        payload = byte_2 + byte_1 + byte_0
-        payload = bits_to_bytes(payload)
-
-        self.command('w', 0x00, 0x1a, 0x34, payload)
+        self.open_mailbox(2) 
+        payload_flat_list = self.pattern_lut_payload_list(trig_type,
+                                        pat_num,
+                                        bit_depth,
+                                        led_select, swap_location_list, image_index_list)
+        self.mailbox_set_address(address = starting_address)
+        self.command('w', 0x00, 0x1a, 0x34, payload_flat_list)
+        self.open_mailbox(0) 
+        self.read_mailbox_info() # to update the image and pattern LUT table
 
     def pattern_display(self, action='start'):
          """
@@ -597,10 +703,26 @@ class dlpc350(object):
          self.command('w', 0x00, 0x1a, 0x24, [action])
          
     def read_mailbox_info(self):
+        '''
+        This function reads image LUT table and pattern LUT contents
+        :param bool read_image_index: Read image table True or False
+        '''
+        #Read image table
+        self.open_mailbox(1)
+        self.mailbox_set_address(address = 0)
         self.command('r', 0x00, 0x1a, 0x34, [])
-        ans =self.ans[4:]
-        print('Image index:{}'.format(ans))
-        return ans
+        ans =self.ans[4:].tolist()
+        self.image_LUT_entries = ans
+        self.open_mailbox(0)
+        
+        #Read pattern LUT
+        self.open_mailbox(2)
+        self.mailbox_set_address(address = 0)
+        self.command('r', 0x00, 0x1a, 0x34, [])
+        ans =self.ans[4:].tolist()
+        self.pattern_LUT_entries = ans
+        self.open_mailbox(0)
+        return self.image_LUT_entries, self.pattern_LUT_entries
 
 
 def get_image_LUT_swap_location(image_index_list):
@@ -636,66 +758,22 @@ def new_LUT_validation(image_index_list, swap_location_list,  image_LUT_entries_
         image_index_list_recovered.extend([image_LUT_entries_temp[i]]*num)
         
     if image_index_list == image_index_list_recovered:
-        print("Recovery successfull")
+        print("\nRecovery successfull")
     else:
-        print("Recovery test failed")
+        print("\nRecovery test failed")
     
     return image_index_list_recovered, swap_location_list_read
 
 def current_setting():
     with connect_usb() as lcr:
-
-        # before proceeding to change params, need to stop pattern sequence mode
+        # to stop current pattern sequence mode
         lcr.pattern_display('stop')
-        
-        # Get current status 
-        lcr.get_main_status(pretty_print=True)
-        # Current mode
-        lcr.read_mode()
-        #number of flash images
-        lcr.retrieve_flashimages()
-        #pattern source
-        lcr.read_pattern_input_source()
-        #pattern config
-        lcr.read_pattern_config()
-        #pattern trigger mode
-        lcr.read_pattern_trigger_mode()
-        #trigger 1 parameters (polarity,delays)
-        lcr.read_trig_out1_control()
-        #exposure and frame period
-        lcr.read_exposure_frame_period()
-        # get current image index
-        lcr.open_mailbox(1)
-        lcr.mailbox_set_address(address = 0)
-        image_LUT_entries_read = lcr.read_mailbox_info().tolist()        
-        lcr.open_mailbox(0)
-        #get current LUT
-        lcr.open_mailbox(2)
-        lcr.mailbox_set_address(address = 0)
-        lut_read = lcr.read_mailbox_info().tolist()
-        # current_address = lcr.read_mailbox_address()
-        
-        lcr.open_mailbox(0)
-        
-        
-        #============================================================
-        # start validation
-        lcr.start_pattern_lut_validate()
-        #Check validation status
-        ret = 1
-        start = perf_counter_ns()
-        while ret:
-            ans = lcr.read_lut_validate()
-            ret = int(ans[0])    
-            end = perf_counter_ns()
-            t = (end - start)/1e9    
-            if t > 10:
-                break
-        
+        lcr.pretty_print_status()
+        # do validation and project current LUT patterns
+        ans = lcr.start_pattern_lut_validate()
         if not int(ans):
             lcr.pattern_display('start')
-    
-    return image_LUT_entries_read, lut_read
+    return 
 
 def pattern_LUT_design(image_index_list, pat_number, exposure_period = 27084, frame_period = 33334):
     '''
@@ -715,79 +793,34 @@ def pattern_LUT_design(image_index_list, pat_number, exposure_period = 27084, fr
         
         lcr.pattern_display('stop')
     
-        # Get current status 
-        lcr.get_main_status(pretty_print=True)
-        #mode
-        lcr.read_mode()
-        lcr.retrieve_flashimages()
-        lcr.read_pattern_input_source()
         lcr.set_pattern_config(num_lut_entries= len(image_index_list),
                               do_repeat = False,  
                               num_pats_for_trig_out2 = len(image_index_list),
                               num_images = len(image_LUT_entries))
-        lcr.read_pattern_config()
-        lcr.read_pattern_trigger_mode()
-        lcr.read_trig_out1_control()
-        lcr.set_exposure_frame_period(exposure_period  , frame_period )
-        lcr.read_exposure_frame_period()
+        lcr.set_exposure_frame_period(exposure_period, frame_period )
         # To set new image LUT
-        lcr.open_mailbox(1)
-        for i,j in enumerate(image_LUT_entries):
-            lcr.mailbox_set_address(address = i)
-            lcr.pattern_flash_index(j)
-    
-        lcr.mailbox_set_address(address = 0)
-        image_LUT_entries_read = lcr.read_mailbox_info().tolist()[0:len(image_LUT_entries)]
-        lcr.open_mailbox(0)
+        lcr.pattern_flash_index(image_LUT_entries,0)
         
         #internal trigger
         trig_type = 0
         bit_depth = 8
-        j = 0
-       
-        # To create new LUT
-        lcr.open_mailbox(2)        
-        for i in range(len(image_index_list)):
-            
-            lcr.mailbox_set_address(address = i)
-            
-            if i in swap_location_list:
-                buffer_swap = True
-            else:
-                buffer_swap = False
-            
-            lcr.send_pattern_lut(trig_type = trig_type, pat_num = i % 3, bit_depth = bit_depth , led_select = 0b111, do_buf_swap = buffer_swap)            
-
-        lcr.open_mailbox(0)
-        
-        # For reading newly created LUT table
-        lcr.open_mailbox(2)
-        lcr.mailbox_set_address(address = 0)
+       # TODO: Clean up 
+        # To set pattern LUT table    
+        lcr.send_pattern_lut(trig_type, pat_number, bit_depth, 0b111, swap_location_list, image_index_list, 0)
+        # Print all projector current attributes set
+        lcr.pretty_print_status()
+        image_LUT_entries_read = lcr.image_LUT_entries[0:len(image_LUT_entries)]
         temp = 3*len(image_index_list)
-        lut_read = lcr.read_mailbox_info().tolist()[0:temp]
-        lcr.open_mailbox(0)
+        lut_read = lcr.pattern_LUT_entries[0:temp]
         #start validation
-        
-        lcr.start_pattern_lut_validate()
+        ans = lcr.start_pattern_lut_validate()
         #Check validation status
-        ret = 1
-        start = perf_counter_ns()
-        while ret:
-            ans = lcr.read_lut_validate()
-            ret = int(ans[0])    
-            end = perf_counter_ns()
-            t = (end - start)/1e9   
-            if t > 10:
-                print(t)
-                break
-           
-        lcr.pattern_display('start')
+        if not int(ans):   
+            lcr.pattern_display('start')
     proj_timing_end = perf_counter_ns() 
     proj_timing = (proj_timing_end - proj_timing_start)/1e9    
     print('Projector Timing:%.3f sec'%proj_timing)
     image_index_list_recovered, swap_location_list_read = new_LUT_validation(image_index_list, swap_location_list, image_LUT_entries_read, lut_read)
-    
-    
     return image_LUT_entries_read, lut_read, image_index_list_recovered, swap_location_list, swap_location_list_read
 
 def proj_cam_acquire_images(cam, acquisition_index, savedir, cam_triggerType, image_index_list, pat_number, proj_exposure_period, proj_frame_period):
@@ -820,7 +853,7 @@ def proj_cam_acquire_images(cam, acquisition_index, savedir, cam_triggerType, im
     # live view        
     cam.BeginAcquisition()        
     while True:                
-        ret, frame = fa.capture_image(cam)       
+        ret, frame = gspy.capture_image(cam)       
         img_show = cv2.resize(frame, None, fx=0.5, fy=0.5)
         cv2.imshow("press q to quit", img_show)    
         key = cv2.waitKey(1)        
@@ -830,13 +863,13 @@ def proj_cam_acquire_images(cam, acquisition_index, savedir, cam_triggerType, im
     cv2.destroyAllWindows()
     
     # Retrieve, convert, and save image
-    fa.activate_trigger(cam)
+    gspy.activate_trigger(cam)
     cam.BeginAcquisition()        
     
     if cam_triggerType == "software":
         start = perf_counter_ns()            
         cam.TriggerSoftware.Execute()    
-        ret, image_array = fa.capture_image(cam=cam)                
+        ret, image_array = gspy.capture_image(cam=cam)                
         end = perf_counter_ns()
         t = (end - start)/1e9
         print('time spent: %2.3f s' % t)                
@@ -855,7 +888,7 @@ def proj_cam_acquire_images(cam, acquisition_index, savedir, cam_triggerType, im
         pattern_LUT_design(image_index_list, pat_number = pat_number , exposure_period = proj_exposure_period , frame_period = proj_frame_period )                    
         while count < len(image_index_list):
             try:
-                ret, image_array = fa.capture_image(cam=cam)
+                ret, image_array = gspy.capture_image(cam=cam)
             except PySpin.SpinnakerException as ex:
                 print('Error: %s' % ex)
                 ret = False
@@ -883,7 +916,7 @@ def proj_cam_acquire_images(cam, acquisition_index, savedir, cam_triggerType, im
         print('Total dual device time:%.3f'%total_dual_time)
     
     cam.EndAcquisition()
-    fa.deactivate_trigger(cam)        
+    gspy.deactivate_trigger(cam)        
 
     return result
 
@@ -913,7 +946,7 @@ def run_proj_single_camera(cam, savedir, acquisition_index, cam_triggerType, ima
         # Initialize camera
         cam.Init()
         # config camera
-        result &= fa.cam_configuration(cam, cam_triggerType)        
+        result &= gspy.cam_configuration(cam, cam_triggerType)        
         # Acquire images        
         result &= proj_cam_acquire_images(cam, acquisition_index, savedir, cam_triggerType, image_index_list, pat_number, proj_exposure_period, proj_frame_period)
         # Deinitialize camera        
@@ -922,29 +955,29 @@ def run_proj_single_camera(cam, savedir, acquisition_index, cam_triggerType, ima
         print('Error: %s' % ex)
         result = False
     return result
-
+#TODO: Write a general function to convert a list of 8 bit gray images(single channel) into 24 bit images (3 channel images)
 
 #%%
-# current_image_LUT_entries_read, current_lut_read = current_setting()
+# # current_setting()
 
-# #%%
+# # #%%
 # # image_index_list = [1,1,2,2,2,2,2]#,1,1,2,2,2]
 # #image_index_list = [3,3,3,1,0,1,1,1,1,2,2,2,4,4,4]
 # image_index_list = [0,0,0,1,1,1,2,2,2,3,3,3,4,4,4]
 # gamma_index = np.repeat(np.arange(5,22),3).tolist()
 # pat_number = [0,1,2]
-# image_LUT_entries_read, lut_read, image_index_list_recovered, swap_location_list, swap_location_list_read = pattern_LUT_design(image_index_list, pat_number)
-# #pattern_LUT_design(image_index_list)
-# #%%
+# image_LUT_entries_read, lut_read, image_index_list_recovered, swap_location_list, swap_location_list_read = pattern_LUT_design(gamma_index, pat_number)
+# # #pattern_LUT_design(image_index_list)
+#   #%%
 
 # proj_exposure_period = 27084
 # proj_frame_period = 33334
 # cam_triggerType = "hardware"
-# result, system, cam_list, num_cameras = fa.sysScan()
+# result, system, cam_list, num_cameras = gspy.sysScan()
 # if result:
 #     # Run example on each camera
 #     savedir = r'C:\Users\kl001\Documents\grasshopper3_python\images'
-#     fa.clearDir(savedir)
+#     gspy.clearDir(savedir)
 #     for i, cam in enumerate(cam_list):    
 #         print('Running example for camera %d...'%i)
 #         acquisition_index=0
@@ -968,11 +1001,4 @@ def run_proj_single_camera(cam, savedir, acquisition_index, cam_triggerType, ima
 
 #%%
 
-# with connect_usb() as lcr:
     
-#     lcr.command('w', 0x00, 0x1a, 0x3A,)
-#     lcr.pattern_display('start')
-
-
-
-
