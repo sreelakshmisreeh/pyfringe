@@ -15,11 +15,9 @@ import FringeAcquisition as gspy
 import proj4500
 os.environ["KMP_DUPLICATE_LIB_OK"] = "True"
 
-def gamma_capture(savedir):
+def gamma_capture(savedir, proj_exposure_period = 27084, proj_frame_period = 33334):
 
     image_index_list = np.repeat(np.arange(5,22),3).tolist()
-    proj_exposure_period = 27084
-    proj_frame_period = 33334
     cam_triggerType = "hardware"
     result, system, cam_list, num_cameras = gspy.sysScan()
     if result:
