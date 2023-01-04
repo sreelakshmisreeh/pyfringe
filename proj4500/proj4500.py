@@ -97,7 +97,7 @@ class dlpc350(object):
     Class representing dmd controller. Can connect to different DLPCs by changing product ID. Check IDs in
     device manager.
     """
-    #TODO: Writing log file and modifying read functions
+    #TODO: Writing log file 
     
     def __init__(self, device):
         """
@@ -567,12 +567,14 @@ class dlpc350(object):
         self.open_mailbox(0)
         
     def pattern_lut_payload_list(self,trig_type,
-                                    pat_num,
                                     bit_depth,
                                     led_select, swap_location_list, image_index_list,
                                     do_invert_pat=False,
                                     do_insert_black=True,
                                     do_trig_out_prev=False):
+        '''
+        Function to create payload for pattern LUT
+        '''
         payload_lst = []
         trig_type = conv_len(trig_type, 2)
         bit_depth = conv_len(bit_depth, 4)
@@ -602,7 +604,6 @@ class dlpc350(object):
             
     def send_pattern_lut(self,
                          trig_type,
-                         pat_num,
                          bit_depth,
                          led_select, swap_location_list, image_index_list, starting_address,
                          do_invert_pat=False,
@@ -674,7 +675,6 @@ class dlpc350(object):
         """
         self.open_mailbox(2) 
         payload_flat_list = self.pattern_lut_payload_list(trig_type,
-                                        pat_num,
                                         bit_depth,
                                         led_select, swap_location_list, image_index_list)
         self.mailbox_set_address(address = starting_address)
@@ -775,15 +775,15 @@ def current_setting():
             lcr.pattern_display('start')
     return 
 
-def pattern_LUT_design(image_index_list, pat_number, exposure_period = 27084, frame_period = 33334):
+def pattern_LUT_design(image_index_list, exposure_period = 27084, frame_period = 33334, pprint_proj_status = True ):
     '''
     This function is used to create look up table and project the sequence for the projector based on the image_index_list (sequence) given. 
 
     :param image_index_list : The sequence to be created.
-    :param pat_num : Pattern Number Mapping based on Table 2-70 in the programmer's guide.
     :param bit_depth : Desired bit-depth
     :param exposure_period: Exposure time in microseconds (4 bytes)
     :param frame_period: Frame period in microseconds (4 bytes).
+    :pprint_proj_status: If set will print projector's current status.
     '''
     
     image_LUT_entries, swap_location_list = get_image_LUT_swap_location(image_index_list)
@@ -800,15 +800,13 @@ def pattern_LUT_design(image_index_list, pat_number, exposure_period = 27084, fr
         lcr.set_exposure_frame_period(exposure_period, frame_period )
         # To set new image LUT
         lcr.pattern_flash_index(image_LUT_entries,0)
-        
         #internal trigger
         trig_type = 0
         bit_depth = 8
-       # TODO: Clean up 
         # To set pattern LUT table    
-        lcr.send_pattern_lut(trig_type, pat_number, bit_depth, 0b111, swap_location_list, image_index_list, 0)
-        # Print all projector current attributes set
-        lcr.pretty_print_status()
+        lcr.send_pattern_lut(trig_type, bit_depth, 0b111, swap_location_list, image_index_list, 0)
+        if pprint_proj_status:# Print all projector current attributes set
+            lcr.pretty_print_status()
         image_LUT_entries_read = lcr.image_LUT_entries[0:len(image_LUT_entries)]
         temp = 3*len(image_index_list)
         lut_read = lcr.pattern_LUT_entries[0:temp]
@@ -823,7 +821,7 @@ def pattern_LUT_design(image_index_list, pat_number, exposure_period = 27084, fr
     image_index_list_recovered, swap_location_list_read = new_LUT_validation(image_index_list, swap_location_list, image_LUT_entries_read, lut_read)
     return image_LUT_entries_read, lut_read, image_index_list_recovered, swap_location_list, swap_location_list_read
 
-def proj_cam_acquire_images(cam, acquisition_index, savedir, cam_triggerType, image_index_list, pat_number, proj_exposure_period, proj_frame_period):
+def proj_cam_acquire_images(cam, acquisition_index, savedir, cam_triggerType, image_index_list, proj_exposure_period, proj_frame_period):
     """
     This function acquires and saves one image from a device. Note that camera 
     must be initialized before calling this function, i.e., cam.Init() must be 
@@ -885,7 +883,7 @@ def proj_cam_acquire_images(cam, acquisition_index, savedir, cam_triggerType, im
         count = 0        
         total_dual_time_start = perf_counter_ns()
         start = perf_counter_ns()   
-        pattern_LUT_design(image_index_list, pat_number = pat_number , exposure_period = proj_exposure_period , frame_period = proj_frame_period )                    
+        pattern_LUT_design(image_index_list, exposure_period = proj_exposure_period , frame_period = proj_frame_period)                    
         while count < len(image_index_list):
             try:
                 ret, image_array = gspy.capture_image(cam=cam)
@@ -948,15 +946,33 @@ def run_proj_single_camera(cam, savedir, acquisition_index, cam_triggerType, ima
         # config camera
         result &= gspy.cam_configuration(cam, cam_triggerType)        
         # Acquire images        
-        result &= proj_cam_acquire_images(cam, acquisition_index, savedir, cam_triggerType, image_index_list, pat_number, proj_exposure_period, proj_frame_period)
+        result &= proj_cam_acquire_images(cam, acquisition_index, savedir, cam_triggerType, image_index_list, proj_exposure_period, proj_frame_period)
         # Deinitialize camera        
         cam.DeInit()
     except PySpin.SpinnakerException as ex:
         print('Error: %s' % ex)
         result = False
     return result
-#TODO: Write a general function to convert a list of 8 bit gray images(single channel) into 24 bit images (3 channel images)
 
+def three_channel_image(single_channel_image_list, convertRGB = True):
+    '''
+    Function to create list of 3 channel (24 bit) image from list of single channel (8 bit) images.
+    :param single_channel_image_list : list of 8 bit images
+    :param convertRGB: If set each image will be RGB otherwise BGR
+    '''
+    
+    image_array = np.empty((single_channel_image_list[0].shape[0],single_channel_image_list[0].shape[1],3))
+    three_channel_list = []
+    for j,i in enumerate(single_channel_image_list):
+        image_array[:,:,(j%3)] = i
+        if j%3 == 2: #0,1,2
+            if  convertRGB:
+                image_array[:,:,[0,1,2]] = image_array[:,:,[2,0,1]] # changing channel for saving for projector (RGB)
+            three_channel_list.append(image_array)
+            image_array = np.empty((single_channel_image_list[0].shape[0],single_channel_image_list[0].shape[1],3))
+            
+    return three_channel_list 
+        
 #%%
 # # current_setting()
 
@@ -981,7 +997,7 @@ def run_proj_single_camera(cam, savedir, acquisition_index, cam_triggerType, ima
 #     for i, cam in enumerate(cam_list):    
 #         print('Running example for camera %d...'%i)
 #         acquisition_index=0
-#         result &= run_proj_single_camera(cam, savedir, acquisition_index, cam_triggerType, gamma_index,pat_number, proj_exposure_period, proj_frame_period )
+#         result &= run_proj_single_camera(cam, savedir, acquisition_index, cam_triggerType, gamma_index, proj_exposure_period, proj_frame_period )
 #         print('Camera %d example complete...'%i)
 
 #     # Release reference to camera
