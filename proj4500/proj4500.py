@@ -18,11 +18,10 @@ import sys
 sys.path.append(r'C:\Users\kl001\pyfringe\proj4500')
 sys.path.append(r'C:\Users\kl001\Documents\pyfringe_test')
 sys.path.append(r'C:\Users\kl001\pyfringe\functions')
-import FringeAcquisition as gspy 
+import gspy
 import nstep_fringe as nstep
 import cv2
 import PySpin
-
 
 
 def conv_len(a, l):
@@ -38,7 +37,6 @@ def conv_len(a, l):
     padding = l - len(b)
     b = '0' * padding + b
     return b
-
 
 def bits_to_bytes(a, reverse=True): # default is reverse
     """
@@ -96,10 +94,11 @@ def connect_usb():
 
 class dlpc350(object):
     """
-    Class representing dmd controller. Can connect to different DLPCs by changing product ID. Check IDs in
-    device manager.
+    Class representing dmd controller. Can connect to different DLPCs by changing product ID. 
+    Check IDs in device manager.
     """
-    #TODO: Writing log file 
+    #TODO: Writing log file
+    
     
     def __init__(self, device):
         """
@@ -110,16 +109,15 @@ class dlpc350(object):
         #Initialse device address
         self.dlpc = device
         # Initialise properties of class (current status)
-        self.mirrorStatus, self.sequencer_status, self.frame_buffer_status, self.gamma_correction = self.get_main_status()
-        self.images_on_flash = self.retrieve_flashimages()
-        self.mode = self.read_mode()
-        self.source = self.read_pattern_input_source()
-        self.exposure_period, self.frame_period = self.read_exposure_frame_period()
-        self.num_lut_entries, self.do_pattern_repeat, self.num_pats_for_trig_out2, self.num_images = self.read_pattern_config()
-        self.trigger_mode = self.read_pattern_trigger_mode()
-        self.trigger_polarity, self.tigger_rising_edge_delay, self.trigger_falling_edge_delay = self.read_trig_out1_control()
-        self.image_LUT_entries, self.pattern_LUT_entries = self.read_mailbox_info()
-        
+        self.get_main_status()
+        self.retrieve_flashimages()
+        self.read_mode()
+        self.read_pattern_input_source()
+        self.read_exposure_frame_period()
+        self.read_pattern_config()
+        self.read_pattern_trigger_mode()
+        self.read_trig_out1_control()
+        self.read_mailbox_info()        
         
     def command(self,
                 rw_mode,
@@ -219,11 +217,12 @@ class dlpc350(object):
         print('\nSource:{} '.format(self.source))
         print('\nExposure period:{}'.format(self.exposure_period))
         print('\nFrame period:{}'.format(self.frame_period))
-        print('\nNumber of LUT entries:{}\n \nIs pattern repeated:{}\n \nNumber of patterns to display:{}\n \nNumber of images:{}'.format(self.num_lut_entries, self.do_pattern_repeat, 
-                                                                                                                                   self.num_pats_for_trig_out2, self.num_images))
+        print('\nNumber of LUT entries:{}\n \nIs pattern repeated:{}\n'.format(self.num_lut_entries,self.do_pattern_repeat,)) 
+        print('\nNumber of patterns to display:{}\n \nNumber of images:{}'.format(self.num_pats_for_trig_out2, self.num_images))
         print('\nTrigger mode:{}'.format(self.trigger_mode))
-        print('\nTrigger polarity:{}\n \nTrigger rising edge delay:{}\n \nTrigger falling edge delay:{}'.format( self.trigger_polarity, self.tigger_rising_edge_delay, 
-                                                                                                           self.trigger_falling_edge_delay))
+        print('\nTrigger polarity:{}\n'.format(self.trigger_polarity,)) 
+        print('\nTrigger rising edge delay:{}\n \nTrigger falling edge delay:{}'.format(self.tigger_rising_edge_delay,
+                                                                                        self.trigger_falling_edge_delay))
         print('\nImage LUT entries:{}'.format(self.image_LUT_entries))
         print('\nPattern LUT entries:{}'.format(self.pattern_LUT_entries))
         
@@ -253,9 +252,7 @@ class dlpc350(object):
         if int(ans[-4]):
             self.gamma_correction = "enabled"
         else:
-            self.gamma_correction = "disabled"
-       
-        return self.mirrorStatus, self.sequencer_status, self.frame_buffer_status, self.gamma_correction
+            self.gamma_correction = "disabled"        
     
     def retrieve_flashimages(self):
         """
@@ -265,8 +262,7 @@ class dlpc350(object):
         
         self.command('r', 0x00, 0x1a, 0x42,[])
         self.images_on_flash = self.ans[4]
-        return self.images_on_flash
-        
+       
     def read_mode(self):  #default mode is 'pattern'
         """
         Read the current  input mode for the projector.
@@ -279,9 +275,7 @@ class dlpc350(object):
             self.mode = "pattern"
         else:
             self.mode = "video"
-        #print(f'Current mode:{"pattern" if int(ans[-1]) else "video"}')
-        return self.mode
-    
+        
     def set_display_mode(self, mode):  #default mode is 'pattern'
         """
         Selects the input mode for the projector.
@@ -309,8 +303,6 @@ class dlpc350(object):
             self.source = "flash"
         else:
             self.source = "video"
-        #print(f'Current input source:{ans}')
-        return self.source
         
     def set_pattern_input_source(self, source='flash'):  # pattern source default = 'video'
         """
@@ -343,10 +335,6 @@ class dlpc350(object):
             self.do_pattern_repeat = "no"
         self.num_pats_for_trig_out2 =  int(ans[-2])+1
         self.num_images = int(ans[-1])+1
-        # print(f'Current config:\n \t No. of LUT entries : {int(ans[-4]) + 1} \n \t Repeat sequence: {"yes" if int(ans[-3]) else "no"}')
-        # print(f'\t No. Number of patterns to display:{ int(ans[-2])+1} \n \t No. of image index:{ int(ans[-1])+1} ')
-        return  self.num_lut_entries, self.do_pattern_repeat, self.num_pats_for_trig_out2,  self.num_images
-       
         
     def set_pattern_config(self,
                            num_lut_entries=15,
@@ -394,8 +382,6 @@ class dlpc350(object):
         self.command('r', 0x00, 0x1a, 0x23, [])
         ans = self.ans[4]
         self.trigger_mode = ans
-        #print('Current trigger mode:{}'.format(ans))
-        return self.trigger_mode
         
     def set_pattern_trigger_mode(self, trigger_mode='vsync'):
         """
@@ -425,22 +411,19 @@ class dlpc350(object):
             self.trigger_polarity = "active high signal"
         self.tigger_rising_edge_delay = ans[1]
         self.trigger_falling_edge_delay = ans[-1]
-        # print('Current trig_out1 setting:')
-        # print(f'\t Polarity: {"active low signal" if int(ans[0]) else "active high signal"}')
-        # print(f'\t Rising edge delay:{ans[1]}')
-        # print(f'\t Falling edge delay:{ans[-1]}')
-        return self.trigger_polarity,  self.tigger_rising_edge_delay, self.trigger_falling_edge_delay
-       
         
     def trig_out1_control(self,polarity_invert = True, trigedge_rise_delay = 187, trigedge_fall_delay = 187):
          """
          The Trigger Out1 Control command sets the polarity, rising edge delay, 
-         and falling edge delay of the TRIG_OUT_1 signal of the DLPC350. Before executing this command, stop the current pattern sequence. 
-         After executing this command, send the Validation command (I2C: 0x7D or USB: 0x1A1A) once before starting the pattern sequence.
+         and falling edge delay of the TRIG_OUT_1 signal of the DLPC350. 
+         Before executing this command, stop the current pattern sequence. After executing this command, 
+         send the Validation command (I2C: 0x7D or USB: 0x1A1A) once before starting the pattern sequence.
+         
          param bool plarity_invert: True for active low signal
          param int trigedge_rise_delay: rising edge delay control ranging from –20.05 μs to 2.787 μs. Each bit adds 107.2 ns.
          param int trigedge_fall_delay: falling edge delay control with range -20.05 μs to +2.787 μs. Each bit adds 107.2 ns
          """
+         
          if polarity_invert:
              polarity = '00000010'
              self.trigger_polarity = "active low signal"
@@ -464,12 +447,8 @@ class dlpc350(object):
         """
         self.command('r', 0x00, 0x1a, 0x29, [])
         ans = self.ans
-        self.exposure_time = ans[4] + ans[5]*256 + ans[6]*256**2 + ans[7]*256**3
+        self.exposure_period = ans[4] + ans[5]*256 + ans[6]*256**2 + ans[7]*256**3
         self.frame_period = ans[8] + ans[9]*256 + ans[10]*256**2 + ans[11]*256**3
-        
-        #print('Pattern exposure time:%f'%exposure_time)
-        #print('Frame period:%f'%frame_period)
-        return self.exposure_time, self.frame_period
     
     def set_exposure_frame_period(self, exposure_period, frame_period):
         """
@@ -493,7 +472,6 @@ class dlpc350(object):
 
         self.command('w', 0x00, 0x1a, 0x29, payload)
   
-        
     def start_pattern_lut_validate(self):
          """
          This API checks the programmed pattern display modes and indicates any invalid settings. This command needs to
@@ -520,7 +498,6 @@ class dlpc350(object):
          print(f'Post sector settings: {"invalid" if int(ans[-4]) else "valid"}\n')
          print(f'DLPC350 is {"busy" if int(ans[-8]) else "valid"}\n')
          return ans
-       
         
     def open_mailbox(self, mbox_num):
         """
@@ -551,32 +528,33 @@ class dlpc350(object):
         
     def read_mailbox_address(self):
         self.command('r', 0x00, 0x1a, 0x32, [])
-        return self.ans.tolist()
         
-    def pattern_flash_index(self, index_list, address):
+    def image_flash_index(self, index_list, address):
         """
-        The following parameters: display mode, trigger mode, exposure, and frame rate must be set up before sending any mailbox data.
+        The following parameters: display mode, trigger mode, exposure, 
+        and frame rate must be set up before sending any mailbox data.
         If the mailbox is opened to define the flash image indexes, list the index numbers in the mailbox. 
         For example, if image indexes 0 through 3 are desired, write 0x0 0x1 0x2 0x3 to the mailbox. 
         
         :param index_list: image index list to be written
         """
         self.open_mailbox(1)
-        self.mailbox_set_address(address = address)
-        #index = bits_to_bytes(conv_len(index, 8))        
+        self.mailbox_set_address(address = address)      
         self.command('w', 0x00, 0x1a, 0x34, index_list)
         self.open_mailbox(0)
         
     def pattern_lut_payload_list(self,trig_type,
                                     bit_depth,
-                                    led_select, swap_location_list, image_index_list,
+                                    led_select, swap_location_list, 
+                                    image_index_list,
+                                    pattern_num_list,
                                     do_invert_pat=False,
                                     do_insert_black=True,
                                     do_trig_out_prev=False):
         '''
         Function to create payload for pattern LUT
         '''
-        payload_lst = []
+        payload_list = []
         trig_type = conv_len(trig_type, 2)
         bit_depth = conv_len(bit_depth, 4)
         led_select = conv_len(led_select, 4)
@@ -587,26 +565,31 @@ class dlpc350(object):
         do_insert_black = str(int(do_insert_black))
         do_trig_out_prev = str(int(do_trig_out_prev))
         
+        if len(image_index_list) != len(pattern_num_list):
+            print('ERROR: length of image list is not compatible with that of pattern number list')
+            return None
         for i in range(len(image_index_list)):
             if i in swap_location_list:
                 buffer_swap = True
             else:
                 buffer_swap = False
-            pat_num = conv_len( i % 3, 6)
-            byte_0 = pat_num + trig_type
+            # pat_num = conv_len( i % 3, 6)
+            byte_0 = conv_len(pattern_num_list[i],6) + trig_type
             do_buf_swap = str(int(buffer_swap))
             byte_2 = '0000' + do_trig_out_prev + do_buf_swap + do_insert_black + do_invert_pat
             payload = byte_2 + byte_1 + byte_0
             payload = bits_to_bytes(payload)
-            payload_lst.append(payload)
-        payload_flat_list = [item for sublist in payload_lst for item in sublist]
-        
-        return payload_flat_list
+            payload_list.extend(payload)
+        return payload_list
             
     def send_pattern_lut(self,
                          trig_type,
                          bit_depth,
-                         led_select, swap_location_list, image_index_list, starting_address,
+                         led_select, 
+                         swap_location_list, 
+                         image_index_list, 
+                         pattern_num_list, 
+                         starting_address,
                          do_invert_pat=False,
                          do_insert_black=True,
                          do_trig_out_prev=False):
@@ -676,13 +659,20 @@ class dlpc350(object):
         """
         self.open_mailbox(2) 
         payload_flat_list = self.pattern_lut_payload_list(trig_type,
-                                        bit_depth,
-                                        led_select, swap_location_list, image_index_list)
+                                                          bit_depth,
+                                                          led_select, 
+                                                          swap_location_list, 
+                                                          image_index_list, 
+                                                          pattern_num_list, 
+                                                          do_invert_pat,
+                                                          do_insert_black,
+                                                          do_trig_out_prev)
+        
         self.mailbox_set_address(address = starting_address)
         self.command('w', 0x00, 0x1a, 0x34, payload_flat_list)
         self.open_mailbox(0) 
         self.read_mailbox_info() # to update the image and pattern LUT table
-
+        
     def pattern_display(self, action='start'):
          """
          This API starts or stops the programmed patterns sequence.
@@ -723,7 +713,6 @@ class dlpc350(object):
         ans =self.ans[4:].tolist()
         self.pattern_LUT_entries = ans
         self.open_mailbox(0)
-        return self.image_LUT_entries, self.pattern_LUT_entries
         
 
 def get_image_LUT_swap_location(image_index_list):
@@ -753,7 +742,7 @@ def new_LUT_validation(image_index_list, swap_location_list,  image_LUT_entries_
     else:
         image_LUT_entries_temp = image_LUT_entries_read
 
-    num_repeats = [swap_location_list_read[i] - swap_location_list_read[i-1] for i in range(1,len(swap_location_list_read))] + [num_of_patterns - swap_location_list_read[-1]]
+    num_repeats =  [swap_location_list_read[i] - swap_location_list_read[i-1] for i in range(1,len(swap_location_list_read))] + [num_of_patterns - swap_location_list_read[-1]]
     image_index_list_recovered = []
     for i,num in enumerate(num_repeats):
         image_index_list_recovered.extend([image_LUT_entries_temp[i]]*num)
@@ -776,9 +765,14 @@ def current_setting():
             lcr.pattern_display('start')
     return 
 
-def pattern_LUT_design(image_index_list, exposure_period = 27084, frame_period = 33334, pprint_proj_status = True ):
+def pattern_LUT_design(image_index_list, 
+                       pattern_num_list, 
+                       exposure_period = 27084, 
+                       frame_period = 33334, 
+                       pprint_proj_status = True ):
     '''
-    This function is used to create look up table and project the sequence for the projector based on the image_index_list (sequence) given. 
+    This function is used to create look up table and project the sequence for the projector based on the 
+    image_index_list (sequence) given. 
 
     :param image_index_list : The sequence to be created.
     :param bit_depth : Desired bit-depth
@@ -800,12 +794,18 @@ def pattern_LUT_design(image_index_list, exposure_period = 27084, frame_period =
                               num_images = len(image_LUT_entries))
         lcr.set_exposure_frame_period(exposure_period, frame_period )
         # To set new image LUT
-        lcr.pattern_flash_index(image_LUT_entries,0)
+        lcr.image_flash_index(image_LUT_entries,0)
         #internal trigger
         trig_type = 0
         bit_depth = 8
         # To set pattern LUT table    
-        lcr.send_pattern_lut(trig_type, bit_depth, 0b111, swap_location_list, image_index_list, 0)
+        lcr.send_pattern_lut(trig_type, 
+                             bit_depth, 
+                             0b111, 
+                             swap_location_list, 
+                             image_index_list, 
+                             pattern_num_list, 
+                             0)
         if pprint_proj_status:# Print all projector current attributes set
             lcr.pretty_print_status()
         image_LUT_entries_read = lcr.image_LUT_entries[0:len(image_LUT_entries)]
@@ -819,10 +819,17 @@ def pattern_LUT_design(image_index_list, exposure_period = 27084, frame_period =
     proj_timing_end = perf_counter_ns() 
     proj_timing = (proj_timing_end - proj_timing_start)/1e9    
     print('Projector Timing:%.3f sec'%proj_timing)
-    image_index_list_recovered, swap_location_list_read = new_LUT_validation(image_index_list, swap_location_list, image_LUT_entries_read, lut_read)
+    image_index_list_recovered, swap_location_list_read = new_LUT_validation(image_index_list, 
+                                                                             swap_location_list, 
+                                                                             image_LUT_entries_read, 
+                                                                             lut_read)
     return image_LUT_entries_read, lut_read, image_index_list_recovered, swap_location_list, swap_location_list_read
 
-def proj_cam_acquire_images(cam, lcr, acquisition_index, savedir, cam_triggerType, image_index_list, proj_exposure_period, proj_frame_period, preview_image_index = 22, pprint_proj_status = True):
+def proj_cam_acquire_images(cam, lcr, acquisition_index, savedir, 
+                            cam_triggerType, image_index_list, pattern_num_list, 
+                            proj_exposure_period, proj_frame_period, do_insert_black,
+                            preview_image_index,
+                            pprint_proj_status):
     """
     This function acquires and saves one image from a device. Note that camera 
     must be initialized before calling this function, i.e., cam.Init() must be 
@@ -854,9 +861,15 @@ def proj_cam_acquire_images(cam, lcr, acquisition_index, savedir, cam_triggerTyp
     #set projector configuration
     lcr.set_pattern_config(num_lut_entries= 1, do_repeat = True, num_pats_for_trig_out2 = 1, num_images = 1)
     lcr.set_exposure_frame_period(10000,10000) # to avoid screen fluctuation for preview
-    lcr.pattern_flash_index([preview_image_index],0)
-    lcr.send_pattern_lut(trig_type = 0, bit_depth = 8, led_select = 0b111,swap_location_list = [0] ,
-                         image_index_list = [preview_image_index], starting_address = 0,  do_insert_black = False)  
+    lcr.image_flash_index([preview_image_index],0)
+    lcr.send_pattern_lut(trig_type = 0, 
+                         bit_depth = 8, 
+                         led_select = 0b111,
+                         swap_location_list = [0],
+                         image_index_list = [preview_image_index], 
+                         pattern_num_list = [0], 
+                         starting_address = 0,  
+                         do_insert_black = do_insert_black)  
     ans = lcr.start_pattern_lut_validate()
     if not int(ans):
         lcr.pattern_display('start')
@@ -897,16 +910,24 @@ def proj_cam_acquire_images(cam, lcr, acquisition_index, savedir, cam_triggerTyp
         start = perf_counter_ns() 
         #Configure projector
         image_LUT_entries, swap_location_list = get_image_LUT_swap_location(image_index_list)
-        lcr.set_pattern_config(num_lut_entries= len(image_index_list),do_repeat = False,  num_pats_for_trig_out2 = len(image_index_list),
-                              num_images = len(image_LUT_entries))
+        lcr.set_pattern_config(num_lut_entries= len(image_index_list),
+                               do_repeat = False,  
+                               num_pats_for_trig_out2 = len(image_index_list),
+                               num_images = len(image_LUT_entries))
         lcr.set_exposure_frame_period(proj_exposure_period, proj_frame_period )
         # To set new image LUT
-        lcr.pattern_flash_index(image_LUT_entries,0)
+        lcr.image_flash_index(image_LUT_entries,0)
         # To set pattern LUT table    
-        lcr.send_pattern_lut(trig_type = 0 , bit_depth = 8, led_select = 0b111,swap_location_list = swap_location_list, image_index_list = image_index_list, starting_address = 0)
+        lcr.send_pattern_lut(trig_type = 0 , 
+                             bit_depth = 8, 
+                             led_select = 0b111,
+                             swap_location_list = swap_location_list, 
+                             image_index_list = image_index_list, 
+                             pattern_num_list = pattern_num_list, 
+                             starting_address = 0,
+                             do_insert_black = do_insert_black)
         if pprint_proj_status:# Print all projector current attributes set
             lcr.pretty_print_status()
-        #pattern_LUT_design(image_index_list, exposure_period = proj_exposure_period , frame_period = proj_frame_period)  
         ans = lcr.start_pattern_lut_validate()
         #Check validation status
         if not int(ans):   
@@ -946,7 +967,16 @@ def proj_cam_acquire_images(cam, lcr, acquisition_index, savedir, cam_triggerTyp
 
     return result
 
-def run_proj_single_camera(cam,savedir, acquisition_index, cam_triggerType, image_index_list, proj_exposure_period, proj_frame_period ):
+def run_proj_single_camera(cam,savedir, 
+                           acquisition_index, 
+                           cam_triggerType, 
+                           image_index_list,
+                           pattern_num_list, 
+                           proj_exposure_period, 
+                           proj_frame_period,
+                           do_insert_black,
+                           preview_image_index,
+                           pprint_proj_status):
     """
     Initialize and configurate a camera and take one image.
 
@@ -980,7 +1010,17 @@ def run_proj_single_camera(cam,savedir, acquisition_index, cam_triggerType, imag
         # config camera
         result &= gspy.cam_configuration(cam, cam_triggerType)        
         # Acquire images        
-        result &= proj_cam_acquire_images(cam,lcr, acquisition_index, savedir, cam_triggerType, image_index_list, proj_exposure_period, proj_frame_period)
+        result &= proj_cam_acquire_images(cam,lcr, 
+                                          acquisition_index, 
+                                          savedir, 
+                                          cam_triggerType, 
+                                          image_index_list,
+                                          pattern_num_list, 
+                                          proj_exposure_period, 
+                                          proj_frame_period,
+                                          do_insert_black,
+                                          preview_image_index,
+                                          pprint_proj_status )
         # Deinitialize camera        
         cam.DeInit()
         device.reset()
@@ -1016,14 +1056,38 @@ def three_channel_image(single_channel_image_list, savedir, convertRGB = True):
             
     return three_channel_list 
 
-def proj_fringe_images(savedir, pitch_list, N_list, type_unwrap, phase_st, inte_rang, direc = 'v', calib_fringes = False, proj_width = 912, proj_height = 1140):
+def proj_fringe_images(savedir, 
+                       pitch_list, 
+                       N_list, 
+                       type_unwrap, 
+                       phase_st, 
+                       inte_rang, direc = 'v', 
+                       calib_fringes = False, 
+                       proj_width = 912, 
+                       proj_height = 1140):
     
     if calib_fringes:
-        fringe_array, delta_deck_list = nstep.calib_generate(proj_width, proj_height, type_unwrap, N_list, pitch_list, phase_st, inte_rang, savedir)
+        fringe_array, delta_deck_list = nstep.calib_generate(proj_width, 
+                                                             proj_height, 
+                                                             type_unwrap, 
+                                                             N_list, 
+                                                             pitch_list, 
+                                                             phase_st, 
+                                                             inte_rang, 
+                                                             savedir)
     else:
-        fringe_array, delta_deck_list = nstep.recon_generate(proj_width, proj_height, type_unwrap, N_list, pitch_list, phase_st, inte_rang, direc, savedir)
+        fringe_array, delta_deck_list = nstep.recon_generate(proj_width, 
+                                                             proj_height, 
+                                                             type_unwrap, 
+                                                             N_list, 
+                                                             pitch_list, 
+                                                             phase_st, 
+                                                             inte_rang, 
+                                                             direc, 
+                                                             savedir)
     
     three_channel_list = three_channel_image(fringe_array, savedir, convertRGB = True)
+    
     return three_channel_list
 
 def single_img_load(image_index):
@@ -1032,8 +1096,13 @@ def single_img_load(image_index):
        lcr.pattern_display('stop')
        lcr.set_pattern_config(num_lut_entries= 1, do_repeat = True, num_pats_for_trig_out2 = 1, num_images = 1)
        lcr.pattern_flash_index([image_index],0)
-       lcr.send_pattern_lut(trig_type = 0, bit_depth = 8, led_select = 0b111,swap_location_list = [0] ,
-                            image_index_list = [image_index], starting_address = 0,  do_insert_black = False)
+       lcr.send_pattern_lut(trig_type = 0, 
+                            bit_depth = 8, 
+                            led_select = 0b111,
+                            swap_location_list = [0],
+                            image_index_list = [image_index], 
+                            starting_address = 0,  
+                            do_insert_black = False)
        lcr.pretty_print_status()
        ans = lcr.start_pattern_lut_validate()
        
@@ -1048,23 +1117,32 @@ def single_img_load(image_index):
                break
        cv2.destroyAllWindows()
    return
-#%%
-#current_setting()
+# #%% Test Codes 
+# # Checking current projector setting
+# current_setting()
 
-# # #%%
+# #%%
 # # image_index_list = [1,1,2,2,2,2,2]#,1,1,2,2,2]
 # #image_index_list = [3,3,3,1,0,1,1,1,1,2,2,2,4,4,4]
 # image_index_list = [0,0,0,1,1,1,2,2,2,3,3,3,4,4,4]
-# gamma_index = np.repeat(np.arange(5,22),3).tolist()
+# pattern_num_list = [0,1,2] * len(set(image_index_list))
+
+# gamma_image_index_list = np.repeat(np.arange(5,22),3).tolist()
+# gamma_pattern_num_list = [0,1,2] * len(set(gamma_image_index_list))
+
+# test_index_list = np.repeat(np.arange(5,28),3).tolist()
 # test_image = [1]
-# image_LUT_entries_read, lut_read, image_index_list_recovered, swap_location_list, swap_location_list_read = pattern_LUT_design(test_image)
-# # #pattern_LUT_design(image_index_list)
+# image_LUT_entries_read, lut_read, image_index_list_recovered, swap_location_list, swap_location_list_read = pattern_LUT_design(gamma_image_index_list, 
+#                                                                                                                                gamma_pattern_num_list,
+#                                                                                                                                )
+# #pattern_LUT_design(image_index_list)
 #   #%%
 
 # proj_exposure_period = 27084
 # proj_frame_period = 33334
 # cam_triggerType = "hardware"
 # result, system, cam_list, num_cameras = gspy.sysScan()
+
 # if result:
 #     # Run example on each camera
 #     savedir = r'C:\Users\kl001\Documents\grasshopper3_python\images'
@@ -1072,7 +1150,17 @@ def single_img_load(image_index):
 #     for i, cam in enumerate(cam_list):    
 #         print('Running example for camera %d...'%i)
 #         acquisition_index=0
-#         result &= run_proj_single_camera(cam, savedir, acquisition_index, cam_triggerType, image_index_list, proj_exposure_period, proj_frame_period )
+#         result &= run_proj_single_camera(cam, 
+#                                          savedir, 
+#                                          acquisition_index, 
+#                                          cam_triggerType,
+#                                          gamma_image_index_list,
+#                                          gamma_pattern_num_list, 
+#                                          proj_exposure_period, 
+#                                          proj_frame_period,
+#                                          do_insert_black=True,
+#                                          preview_image_index = 22,
+#                                          pprint_proj_status = True)
 #         print('Camera %d example complete...'%i)
 
 #     # Release reference to camera
