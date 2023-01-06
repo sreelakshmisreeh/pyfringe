@@ -26,7 +26,16 @@ class calibration:
     Calibration class is used to calibrate camera and projector setting. User can choose between phase coded , multifrequency and multiwavelength temporal unwrapping.
     After calibration the camera and projector parameters are saved as npz file at the given calibration image path.
     '''
-    def __init__(self,proj_width, proj_height, mask_limit, type_unwrap, N_list, pitch_list, board_gridrows, board_gridcolumns, dist_betw_circle, path):
+    def __init__(self,proj_width, 
+                 proj_height, 
+                 mask_limit, 
+                 type_unwrap, 
+                 N_list, 
+                 pitch_list, 
+                 board_gridrows, 
+                 board_gridcolumns, 
+                 dist_betw_circle, 
+                 path):
         '''
 
         Parameters
@@ -38,7 +47,9 @@ class calibration:
                       'phase' = phase coded unwrapping method, 
                       'multifreq' = multifrequency unwrapping method
                       'multiwave' = multiwavelength unwrapping method.
-        N_list = type: float array. The number of steps in phase shifting algorithm. If phase coded unwrapping method is used this is a single element array. For other methods corresponding to each pitch one element in the list.
+        N_list = type: float array. The number of steps in phase shifting algorithm. 
+                                    If phase coded unwrapping method is used this is a single element array. 
+                                    For other methods corresponding to each pitch one element in the list.
         pitch_list = type: float array. Array of number of pixels per fringe period.
         board_gridrows = type: int. Number of rows in the assymetric circle pattern.
         board_gridcolumns = type: int. Number of columns in the asymmetric circle pattern.
@@ -61,7 +72,8 @@ class calibration:
         
     def calib(self, no_pose,  bobdetect_areamin, bobdetect_convexity,  kernel_v = 1, kernel_h=1):
         '''
-        Function to calibrate camera and projector and save npz file of calibration parameter based on user choice of temporal phase unwrapping. 
+        Function to calibrate camera and projector and save npz file of calibration parameter based on user choice 
+        of temporal phase unwrapping. 
         
         Parameters
         ----------
@@ -74,7 +86,8 @@ class calibration:
         unwrapv_lst = type:list of float. List of unwrapped phase maps obtained from horizontally varying intensity patterns.
         unwraph_lst type:list of float. List of unwrapped phase maps obtained from vertically varying intensity patterns..
         white_lst = type:list of float. List of true images for each calibration pose..
-        mod_lst = type: list of float. List of modulation intensity images for each calibration pose for intensity varying both horizontally and vertically.
+        mod_lst = type: list of float. List of modulation intensity images for each calibration pose for intensity 
+                                        varying both horizontally and vertically.
         cam_objpts = type: list of float. List of world cordintaes used for camera calibration for each pose.
         cam_imgpts = type: list of float. List of circle centers grid for each calibration pose.
         proj_imgpts = type: float. List of circle center grid coordinates for each pose of projector calibration.
@@ -91,13 +104,22 @@ class calibration:
         objp = self.world_points(self.dist_betw_circle, self.board_gridrows, self.board_gridcolumns)
         if self.type_unwrap == 'phase':
             phase_st = -np.pi
-            unwrapv_lst, unwraph_lst, white_lst, avg_lst, mod_lst, gamma_lst, wrapped_phase_lst = self.projcam_calib_img_phase(no_pose,self.limit, self.N[0], self.pitch[-1], self.width, self.height, kernel_v, kernel_h, self.path)
+            unwrapv_lst, unwraph_lst, white_lst, avg_lst, mod_lst, gamma_lst, wrapped_phase_lst = self.projcam_calib_img_phase(no_pose,self.limit, 
+                                                                                                                               self.N[0], self.pitch[-1], 
+                                                                                                                               self.width, self.height,
+                                                                                                                               kernel_v, kernel_h, self.path)
         elif self.type_unwrap == 'multifreq':
             phase_st = 0
-            unwrapv_lst, unwraph_lst, white_lst, avg_lst, mod_lst, gamma_lst, wrapped_phase_lst = self.projcam_calib_img_multifreq(no_pose, self.limit, self.N, self.pitch, self.width, self.height, kernel_v, kernel_h, self.path)
+            unwrapv_lst, unwraph_lst, white_lst, avg_lst, mod_lst, gamma_lst, wrapped_phase_lst = self.projcam_calib_img_multifreq(no_pose, self.limit, 
+                                                                                                                                   self.N, self.pitch, 
+                                                                                                                                   self.width, self.height, 
+                                                                                                                                   kernel_v, kernel_h, self.path)
         elif self.type_unwrap == 'multiwave':
             phase_st = 0
-            unwrapv_lst, unwraph_lst, white_lst, avg_lst, mod_lst, gamma_lst, wrapped_phase_lst = self.projcam_calib_img_multiwave(no_pose,self.limit, self.N, self.pitch, self.width, self.height, kernel_v, kernel_h, self.path)
+            unwrapv_lst, unwraph_lst, white_lst, avg_lst, mod_lst, gamma_lst, wrapped_phase_lst = self.projcam_calib_img_multiwave(no_pose,self.limit, 
+                                                                                                                                   self.N, self.pitch, 
+                                                                                                                                   self.width, self.height, 
+                                                                                                                                   kernel_v, kernel_h, self.path)
             
         #Projector images
         proj_img_lst=self.projector_img(unwrapv_lst, unwraph_lst, white_lst, self.width, self.height, self.pitch[-1], phase_st)
@@ -109,11 +131,29 @@ class calibration:
                                                                                              self.board_gridrows, self.board_gridcolumns)
         
         #Projector calibration
-        proj_ret, proj_imgpts,proj_mtx, proj_dist, proj_rvecs, proj_tvecs = self.proj_calib(cam_objpts, cam_imgpts, unwrapv_lst, unwraph_lst, proj_img_lst, self.pitch[-1], phase_st, self.board_gridrows, self.board_gridcolumns) 
+        proj_ret, proj_imgpts,proj_mtx, proj_dist, proj_rvecs, proj_tvecs = self.proj_calib(cam_objpts, 
+                                                                                            cam_imgpts, 
+                                                                                            unwrapv_lst, 
+                                                                                            unwraph_lst, 
+                                                                                            proj_img_lst, 
+                                                                                            self.pitch[-1], 
+                                                                                            phase_st, 
+                                                                                            self.board_gridrows, 
+                                                                                            self.board_gridcolumns) 
         # Camera calibration error analysis
-        cam_mean_error, cam_delta, cam_df1 = self.intrinsic_error_analysis(cam_objpts, cam_imgpts, cam_mtx, cam_dist, cam_rvecs, cam_tvecs)
+        cam_mean_error, cam_delta, cam_df1 = self.intrinsic_error_analysis(cam_objpts, 
+                                                                           cam_imgpts, 
+                                                                           cam_mtx, 
+                                                                           cam_dist, 
+                                                                           cam_rvecs, 
+                                                                           cam_tvecs)
         #Projector calibration error analysis
-        proj_mean_error, proj_delta, proj_df1 = self.intrinsic_error_analysis(cam_objpts,proj_imgpts,proj_mtx,proj_dist,proj_rvecs,proj_tvecs)
+        proj_mean_error, proj_delta, proj_df1 = self.intrinsic_error_analysis(cam_objpts,
+                                                                              proj_imgpts,
+                                                                              proj_mtx,
+                                                                              proj_dist,
+                                                                              proj_rvecs,
+                                                                              proj_tvecs)
         #Stereo calibration
         criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 40, 0.0001)
         stereocalibration_flags = cv2.CALIB_FIX_INTRINSIC+cv2.CALIB_ZERO_TANGENT_DIST+cv2.CALIB_FIX_K3+cv2.CALIB_FIX_K4+cv2.CALIB_FIX_K5+cv2.CALIB_FIX_K6
@@ -141,7 +181,8 @@ class calibration:
         unwrapv_lst = type:list of float. List of unwrapped phase maps obtained from horizontally varying intensity patterns.
         unwraph_lst type:list of float. List of unwrapped phase maps obtained from vertically varying intensity patterns.
         white_lst = type:list of float. List of true images for each calibration pose.
-        mod_lst = type: list of float. List of modulation intensity images for each calibration pose for intensity varying both horizontally and vertically.
+        mod_lst = type: list of float. List of modulation intensity images for each calibration pose for intensity 
+                                    varying both horizontally and vertically.
         proj_img_lst = type: float. List of circle center grid coordinates for each pose of projector calibration.
         bobdetect_areamin = type: float. Minimum area of area for bob detector. 
         bobdetect_convexity = type: float. Circle convexity for bob detector.
@@ -149,21 +190,27 @@ class calibration:
 
         Returns
         -------
-        up_unwrapv_lst = type:list of float. Updated list of unwrapped phase maps obtained from horizontally varying intensity patterns.
-        up_unwraph_lst type:list of float. Updated list of unwrapped phase maps obtained from vertically varying intensity patterns.
+        up_unwrapv_lst = type:list of float. Updated list of unwrapped phase maps obtained from horizontally 
+                                                varying intensity patterns.
+        up_unwraph_lst type:list of float. Updated list of unwrapped phase maps obtained from vertically 
+                                            varying intensity patterns.
         up_white_lst = type:list of float. Updated list of true images for each calibration pose.
-        up_mod_lst = type:list of float. Updated list of modulation intensity images for each calibration pose for intensity varying both horizontally and vertically.
-        up_proj_img_lst = type:list of float. Updated list of modulation intensity images for each calibration pose for intensity varying both horizontally and vertically.
+        up_mod_lst = type:list of float. Updated list of modulation intensity images for each 
+                                        calibration pose for intensity varying both horizontally and vertically.
+        up_proj_img_lst = type:list of float. Updated list of modulation intensity images for each 
+                                            calibration pose for intensity varying both horizontally and vertically.
         cam_objpts = type:list of float. Updated list of world cordintaes used for camera calibration for each pose.
         cam_imgpts = type: list of float. Updated list of circle centers grid for each calibration pose.
         proj_imgpts = type: float. Updated list of circle center grid coordinates for each pose of projector calibration.
         euler_angles = type:float. Array of roll,pitch and yaw angles between camera and projector in degrees
         cam_mean_error = type: list of floats. List of camera mean error per calibration pose.
         cam_delta = type: list of float. List of camera reprojection error.
-        cam_df1 = type: pandas dataframe of floats. Dataframe of camera absolute error in x and y directions of updated list of poses.
+        cam_df1 = type: pandas dataframe of floats. Dataframe of camera absolute error in x and y directions 
+                                                    of updated list of poses.
         proj_mean_error := type: list of floats. List of projector mean error per calibration pose.
         proj_delta = type: list of float. List of projector reprojection error.
-        proj_df1 = type: pandas dataframe of floats. Dataframe of projector absolute error in x and y directions of updated list of poses.
+        proj_df1 = type: pandas dataframe of floats. Dataframe of projector absolute error in x and y directions
+                                                    of updated list of poses.
 
         '''
         up_lst = list(set(proj_df1[proj_df1['absdelta_x']>(reproj_criteria)]['image'].to_list() + proj_df1[proj_df1['absdelta_y']>(reproj_criteria)]['image'].to_list()))
@@ -184,7 +231,8 @@ class calibration:
                                                                                              up_white_lst,
                                                                                              bobdetect_areamin,
                                                                                              bobdetect_convexity, 
-                                                                                             self.board_gridrows, self.board_gridcolumns)
+                                                                                             self.board_gridrows, 
+                                                                                             self.board_gridcolumns)
         
         #Projector calibration
         proj_ret, proj_imgpts,proj_mtx, proj_dist, proj_rvecs, proj_tvecs = self.proj_calib(cam_objpts, cam_imgpts, up_unwrapv_lst, up_unwraph_lst, up_proj_img_lst, self.pitch[-1], phase_st, self.board_gridrows, self.board_gridcolumns) 
@@ -196,11 +244,14 @@ class calibration:
         criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 40, 0.0001)
         stereocalibration_flags = cv2.CALIB_FIX_INTRINSIC+cv2.CALIB_ZERO_TANGENT_DIST+cv2.CALIB_FIX_K3+cv2.CALIB_FIX_K4+cv2.CALIB_FIX_K5+cv2.CALIB_FIX_K6
 
-        st_retu,st_cam_mtx,st_cam_dist,st_proj_mtx,st_proj_dist,st_cam_proj_rmat,st_cam_proj_tvec,E,F=cv2.stereoCalibrate(cam_objpts,cam_imgpts,proj_imgpts,
-                                                                                                        cam_mtx,cam_dist,proj_mtx,proj_dist,
-                                                                                                        white_lst[0].shape[::-1],
-                                                                                                        flags=stereocalibration_flags,
-                                                                                                        criteria=criteria)
+        st_retu,st_cam_mtx,st_cam_dist,st_proj_mtx,st_proj_dist,st_cam_proj_rmat,st_cam_proj_tvec,E,F=cv2.stereoCalibrate(cam_objpts,
+                                                                                                                          cam_imgpts,
+                                                                                                                          proj_imgpts,
+                                                                                                                          cam_mtx,cam_dist,
+                                                                                                                          proj_mtx,proj_dist,
+                                                                                                                          white_lst[0].shape[::-1],
+                                                                                                                          flags=stereocalibration_flags,
+                                                                                                                          criteria=criteria)
         project_mat=np.hstack((st_cam_proj_rmat,st_cam_proj_tvec))
         _,_,_,_,_,_,euler_angles=cv2.decomposeProjectionMatrix(project_mat)
         
@@ -211,7 +262,8 @@ class calibration:
     
     def calib_center_reconstruction(self, cam_imgpts, unwrap_phase):
         '''
-        This function is a wrapper function to reconstruct circle centers for each camera pose and compute error with computed world projective coordinates in camera coordinate system.
+        This function is a wrapper function to reconstruct circle centers for each camera pose and compute error 
+        with computed world projective coordinates in camera coordinate system.
 
         Parameters
         ----------
@@ -283,7 +335,9 @@ class calibration:
 
     def projcam_calib_img_phase(self,no_pose, limit, N, pitch, width, height, kernel_v, kernel_h, path):
         '''
-        Function is used to generate absolute phase maps and true (single channel gray) images (object image without fringe patterns) from fringe image for camera and projector calibration from raw captured images using phase coded temporal unwrapping method.
+        Function is used to generate absolute phase maps and true (single channel gray) images 
+        (object image without fringe patterns) from fringe image for camera and projector calibration 
+        from raw captured images using phase coded temporal unwrapping method.
         'no_pose' is the total number of poses used for calibration. 
         Hence the function generates 'no_pose' number of absolute phase maps and true images. 
     
@@ -309,10 +363,14 @@ class calibration:
         gamma_lst = type: list of float. List of data modulation (relative modulation) images for each calibration pose.
         kv_lst = type: list of int. List of fringe order for horizontally varying intensity for each calibration pose.
         kh_lst = type: list of int. List of fringe order for vertically varying intensity for each calibration pose.
-        coswrapv_lst = type: list of float. List of wrapped phase map for cosine variation of intensity in the horizontal direction.
-        coswraph_lst = type: list of float. List of wrapped phase map for cosine variation of intensity in the vertical direction.
-        stepwrapv_lst = type: list of float. List of wrapped phase map for stair  phase coded pattern varying in the horizontal direction.
-        stepwraph_lst = type: list of float. List of wrapped phase map for stair  phase coded pattern varying in the vertical direction.
+        coswrapv_lst = type: list of float. List of wrapped phase map for cosine variation of intensity in the 
+                                            horizontal direction.
+        coswraph_lst = type: list of float. List of wrapped phase map for cosine variation of intensity in the 
+                                            vertical direction.
+        stepwrapv_lst = type: list of float. List of wrapped phase map for stair  phase coded pattern 
+                                            varying in the horizontal direction.
+        stepwraph_lst = type: list of float. List of wrapped phase map for stair  phase coded pattern 
+                                            varying in the vertical direction.
     
         '''
         unwrap_v_lst=[]
@@ -366,7 +424,9 @@ class calibration:
 
     def projcam_calib_img_multifreq(self, no_pose, limit, N_list, pitch_list, width, height, kernel_v, kernel_h, path):
         '''
-        Function is used to generate absolute phase map and true (single channel gray) images (object image without fringe patterns) from fringe image for camera and projector calibration from raw captured images using multifrequency temporal unwrapping method.
+        Function is used to generate absolute phase map and true (single channel gray) images 
+        (object image without fringe patterns)from fringe image for camera and projector calibration from raw captured images 
+        using multifrequency temporal unwrapping method.
     
         Parameters
         ----------
@@ -383,12 +443,18 @@ class calibration:
         unwrapv_lst = type:list of float. List of unwrapped phase maps obtained from horizontally varying intensity patterns.
         unwraph_lst = type:list of float. List of unwrapped phase maps obtained from vertically varying intensity patterns.
         white_lst = type:list of float. List of true images for each calibration pose. 
-        avg_vlst = type: list of float. List of average intensity images for each calibration pose for horizontally varying intensity.
-        avg_hlst = type: list of float. List of average intensity images for each calibration pose for vertically varying intensity.
-        mod_vlst = type: list of float. List of modulation intensity images for each calibration pose for horizontally varying intensity.
-        mod_hlst = type: list of float. List of modulation intensity images for each calibration pose for vertically varying intensity.
-        gamma_vlst = type: list of float. List of data modulation (relative modulation) images for each calibration pose for horizontally varying intensity.
-        gamma_hlst = type: list of float. List of data modulation (relative modulation) images for each calibration pose for vertically varying intensity.
+        avg_vlst = type: list of float. List of average intensity images for each calibration pose for horizontally 
+                                        varying intensity.
+        avg_hlst = type: list of float. List of average intensity images for each calibration pose for vertically 
+                                        varying intensity.
+        mod_vlst = type: list of float. List of modulation intensity images for each calibration pose for horizontally 
+                                        varying intensity.
+        mod_hlst = type: list of float. List of modulation intensity images for each calibration pose for vertically 
+                                        varying intensity.
+        gamma_vlst = type: list of float. List of data modulation (relative modulation) images for each calibration pose 
+                                        for horizontally varying intensity.
+        gamma_hlst = type: list of float. List of data modulation (relative modulation) images for each calibration pose 
+                                        for vertically varying intensity.
         wrapv_lst = type: list of float. List of wrapped phase maps for each calibration pose for horizontally varying intensity.
         wraph_lst = type: list of float. List of wrapped phase maps for each calibration pose for vertically varying intensity.
         kv_lst = type: list of int. List of fringe order for each calibration pose for horizontally varying intensity. 
@@ -467,7 +533,9 @@ class calibration:
 
     def projcam_calib_img_multiwave(self,no_pose, limit, N_arr, pitch_arr, width, height, kernel_v, kernel_h, path):
         '''
-        Function is used to generate absolute phase map and true (single channel gray) images (object image without fringe patterns) from fringe image for camera and projector calibration from raw captured images using multiwave temporal unwrapping method.
+        Function is used to generate absolute phase map and true (single channel gray) images (object image without 
+        fringe patterns) from fringe image for camera and projector calibration from raw captured images using 
+        multiwave temporal unwrapping method.
     
         Parameters
         ----------
@@ -486,13 +554,20 @@ class calibration:
         unwrapv_lst = type:list of float. List of unwrapped phase maps obtained from horizontally varying intensity patterns.
         unwraph_lst = type:list of float. List of unwrapped phase maps obtained from vertically varying intensity patterns.
         white_lst = type:list of float. List of true images for each calibration pose. 
-        avg_vlst = type: list of float. List of average intensity images for each calibration pose for horizontally varying intensity.
-        avg_hlst = type: list of float. List of average intensity images for each calibration pose for vertically varying intensity.
-        mod_vlst = type: list of float. List of modulation intensity images for each calibration pose for horizontally varying intensity.
-        mod_hlst = type: list of float. List of modulation intensity images for each calibration pose for vertically varying intensity.
-        gamma_vlst = type: list of float. List of data modulation (relative modulation) images for each calibration pose for horizontally varying intensity.
-        gamma_hlst = type: list of float. List of data modulation (relative modulation) images for each calibration pose for vertically varying intensity.
-        wrapv_lst = type: list of float. List of wrapped phase maps for each calibration pose for horizontally varying intensity.
+        avg_vlst = type: list of float. List of average intensity images for each calibration pose for horizontally 
+                                        varying intensity.
+        avg_hlst = type: list of float. List of average intensity images for each calibration pose for vertically 
+                                        varying intensity.
+        mod_vlst = type: list of float. List of modulation intensity images for each calibration pose for horizontally 
+                                        varying intensity.
+        mod_hlst = type: list of float. List of modulation intensity images for each calibration pose for vertically 
+                                        varying intensity.
+        gamma_vlst = type: list of float. List of data modulation (relative modulation) images for each calibration pose 
+                                        for horizontally varying intensity.
+        gamma_hlst = type: list of float. List of data modulation (relative modulation) images for each calibration pose 
+                                        for vertically varying intensity.
+        wrapv_lst = type: list of float. List of wrapped phase maps for each calibration pose for horizontally 
+                                        varying intensity.
         wraph_lst = type: list of float. List of wrapped phase maps for each calibration pose for vertically varying intensity.
         kv_lst = type: list of int. List of fringe order for each calibration pose for horizontally varying intensity. 
         kh_lst = type: list of int. List of fringe order for each calibration pose for vertically varying intensity. 
@@ -591,7 +666,9 @@ class calibration:
         width = type: float. Width of projector image.
         height = type: float. Height of projector image.
         pitch = type: float. Number of pixels per fringe period. 
-        phase_st = type: float. Starting phase. To apply multifrequency and multiwavelength temporal unwraping starting phase should be zero. Whereas for phase coding trmporal unwrapping starting phase should be -π.
+        phase_st = type: float. Starting phase. To apply multifrequency and multiwavelength temporal unwraping 
+                                starting phase should be zero. Whereas for phase coding trmporal 
+                                nwrapping starting phase should be -π.
     
         Returns
         -------
@@ -735,7 +812,10 @@ class calibration:
     
     
     
-    def proj_calib(self, cam_objpts, cam_imgpts, unwrap_v_lst, unwrap_h_lst, proj_img_lst, pitch, phase_st, grid_row, grid_column):
+    def proj_calib(self, cam_objpts, cam_imgpts, 
+                   unwrap_v_lst, unwrap_h_lst, 
+                   proj_img_lst, pitch, phase_st, 
+                   grid_row, grid_column):
         '''
         Function to calibrate projector by using absolute phase maps. 
         Circle centers detected using OpenCV is mapped to the absolute phase maps and the corresponding projector image coordinate for the centers are calculated.
@@ -744,8 +824,10 @@ class calibration:
         ----------
         cam_objpts = type: list of float. List of world cordintaes used for camera calibration for each pose.
         cam_imgpts = type: list of float. List of circle centers grid for each calibration pose.
-        unwrap_v_lst = type: list of float. List of absolute phase maps for horizontally varying patterns for each calibration pose.
-        unwrap_h_lst = type: list of float. List of absolute phase maps for vertically varying patterns for each calibration pose.
+        unwrap_v_lst = type: list of float. List of absolute phase maps for horizontally varying patterns for 
+                                            each calibration pose.
+        unwrap_h_lst = type: list of float. List of absolute phase maps for vertically varying patterns for 
+                                            each calibration pose.
         proj_img_lst = type: list of float. List of computed projector image for each calibration pose.
         pitch = type: float. Number of pixels per fringe period. 
         phase_st = type:float. Initial phase to be subtracted for phase to coordinate conversion.
@@ -798,7 +880,8 @@ class calibration:
 
     def image_analysis(self, unwrap):
         '''
-        Function to plot list of images for calibration diagonastic purpose. Eg: To plot list of unwrapped phase maps of all calibration poses.
+        Function to plot list of images for calibration diagonastic purpose. Eg: To plot list of 
+        unwrapped phase maps of all calibration poses.
     
         Parameters
         ----------
@@ -817,11 +900,13 @@ class calibration:
 
     def wrap_profile_analysis(self, wrapped_phase_lst, direc):
         '''
-        Function to plot cross-section of calculated wrapped phase map of cosine and stair patterns in phase coded temporal unwrapping method for verification.
+        Function to plot cross-section of calculated wrapped phase map of cosine and stair patterns in 
+        phase coded temporal unwrapping method for verification.
     
         Parameters
         ----------
-        wrapped_phase_lst = type: dictionary of wrapped phase maps of cosine varying intensity pattern for all calibration poses.
+        wrapped_phase_lst = type: dictionary of wrapped phase maps of cosine varying intensity pattern 
+        for all calibration poses.
         direc = type: string. vertical (v) or horizontal(h) patterns.
     
         Returns
@@ -869,7 +954,8 @@ class calibration:
 
     def intrinsic_error_analysis(self, objpts, imgpts, mtx , dist , rvecs , tvecs ):
         '''
-        Function to calculate mean error per calibration pose,reprojection errors and absolute reprojection error in the x and y directions.
+        Function to calculate mean error per calibration pose,reprojection errors and absolute 
+        reprojection error in the x and y directions.
         
     
         Parameters
@@ -909,7 +995,8 @@ class calibration:
 
     def intrinsic_errors_plts(self, mean_error, delta, df, dev):
         '''
-        Function to plot mean error per calibration pose, reprojection error and absolute reprojection errors in x and y directions.
+        Function to plot mean error per calibration pose, reprojection error and absolute 
+        reprojection errors in x and y directions.
     
         Parameters
         ----------
@@ -972,7 +1059,9 @@ class calibration:
         p_mtx = type: float array. Projector matrix.
         cp_rot_mtx = type: float array. Camera projector rotation matrix.
         cp_trans_mtx = type: float array. Camera projector translational matrix.
-        phase_st = type: float. Starting phase. To apply multifrequency and multiwavelength temporal unwraping starting phase should be zero. Whereas for phase coding trmporal unwrapping starting phase should be -π.
+        phase_st = type: float. Starting phase. To apply multifrequency and multiwavelength temporal 
+                                unwraping starting phase should be zero. Whereas for phase coding 
+                                temporal unwrapping starting phase should be -π.
         pitch = type:float. Number of pixels per fringe period.
         Returns
         -------
@@ -982,7 +1071,12 @@ class calibration:
         center_cordi_lst = []
         for i in tqdm(range (0,len(center_pts)),desc='building camera centers 3d coordinates'):  
             # undistort points
-            x, y, z = rc.reconstruction_pts(center_pts[i], unwrap_phase[i], c_mtx, c_dist, p_mtx, cp_rot_mtx, cp_trans_mtx, phase_st, pitch)
+            x, y, z = rc.reconstruction_pts(center_pts[i], 
+                                            unwrap_phase[i], 
+                                            c_mtx, c_dist, 
+                                            p_mtx, 
+                                            cp_rot_mtx, cp_trans_mtx, 
+                                            phase_st, pitch)
             cordi = np.hstack((x,y,z))
             center_cordi_lst.append(cordi)
         return np.array(center_cordi_lst)
@@ -990,7 +1084,8 @@ class calibration:
     # Projective coordinates based on camera - projector extrinsics
     def project_validation(self,rvec, tvec, true_cordinates):
         '''
-        Function to generate world projective coordinates in camera coordinate system for each calibration pose using pose extrinsics. 
+        Function to generate world projective coordinates in camera coordinate system for each 
+        calibration pose using pose extrinsics. 
 
         Parameters
         ----------
@@ -1020,7 +1115,8 @@ class calibration:
     # Calculate error = center reconstruction - projectivr coordinates
     def center_err_analysis(self,cordi_arr, proj_xyz_arr):
         '''
-        Function to compute error of 3d coordinates of detected circle centers from projective coordinates in camera coordinate.
+        Function to compute error of 3d coordinates of detected circle centers from projective coordinates 
+        in camera coordinate.
 
         Parameters
         ----------
@@ -1102,7 +1198,14 @@ class calibration:
         
         return delta_df, abs_delta_df
     
-    def recon_xyz(self,unwrap_phase, distance, delta_distance, white_imgs, mask_cond, modulation= None, int_limit = None, resid_outlier_limit = None):
+    def recon_xyz(self,unwrap_phase, 
+                  distance, 
+                  delta_distance, 
+                  white_imgs, 
+                  mask_cond, 
+                  modulation= None, 
+                  int_limit = None, 
+                  resid_outlier_limit = None):
         '''
         Function to reconstruct 3d coordinates of calibration board and save as point cloud for each calibration pose. 
 
@@ -1114,7 +1217,8 @@ class calibration:
         white_imgs = type: float. True intensity image for texture mapping.
         mask_cond = type: string. Mask condition for reconstruction based on 'intensity' or 'modulation' . 
                                   Intensity based mask is applied for reconstructing selected regions based on surface texture. 
-                                  Eg: if appropriate int_limit is set and mask_condition =  'intensity' the white region of the calibration board can be reconstructed. 
+                                  Eg: if appropriate int_limit is set and mask_condition =  'intensity' the white 
+                                  region of the calibration board can be reconstructed. 
         modulation = type: float. Modulation image for each calibration pose for applying mask to build the calibration board.
                                   Default value is None and used if 'intensity' is used as 'mask_cond'.
         int_limit  = type: float. Minimum intensity value to extract white region. 
@@ -1189,7 +1293,8 @@ class calibration:
     
     def white_center_planefit(self, cordi_lst, resid_outlier_limit):
         '''
-        Function to fit plane to extracted white region of calibration board. The function computes the plane and calculates distance of points to the plane (residue) for each calibration pose.
+        Function to fit plane to extracted white region of calibration board. The function computes the plane and 
+        calculates distance of points to the plane (residue) for each calibration pose.
         The function then plots the histogram residue of all calibration poses.
 
         Parameters
@@ -1222,7 +1327,8 @@ class calibration:
     
     def pp_distance_analysis(self, center_cordi_lst, val_label):
         '''
-        Function to compute given point to point distance on the calibration board over all calibration poses and plot error plot.
+        Function to compute given point to point distance on the calibration board over all calibration poses and 
+        plot error plot.
 
         Parameters
         ----------
