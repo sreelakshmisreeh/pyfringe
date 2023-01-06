@@ -6,6 +6,8 @@ Created on Tue May 24 13:00:19 2022
 @author: Sreelakshmi
 """
 import numpy as np
+import sys
+sys.path.append(r'C:\Users\kl001\pyfringe\functions')
 import nstep_fringe as nstep
 import pandas as pd
 import seaborn as sns
@@ -36,7 +38,7 @@ def B_cutoff_limit(sigma_path, quantile_limit, N_list, pitch_list):
     '''
     sigma = np.load(sigma_path)
     sigma_sq_delta_phi = (np.pi / quantile_limit)**2
-    modulation_limit_sq = ((pitch_list[-1] / pitch_list[-2]) + 1) * (2 * sigma**2) / (N_list[-1]* sigma_sq_delta_phi)
+    modulation_limit_sq = ((pitch_list[-1]**2 / pitch_list[-2]**2) + 1) * (2 * sigma**2) / (N_list[-1]* sigma_sq_delta_phi)
     
     return np.sqrt(modulation_limit_sq)
 
@@ -401,41 +403,48 @@ def complete_recon(unwrap, inte_rgb, modulation, limit, calib_path, sigma_path, 
     cp_rot_mtx = calibration["arr_8"]
     cp_trans_mtx = calibration["arr_10"]
     
-    obj_x, obj_y,obj_z = reconstruction_obj(unwrap, c_mtx, c_dist, p_mtx, cp_rot_mtx, cp_trans_mtx, phase_st, pitch)
     roi_mask = np.full(unwrap.shape, False)
     roi_mask[modulation > limit] = True
     mod = deepcopy(modulation)
     mod[~roi_mask] = np.nan
     mod_vect = np.array(mod.ravel(), dtype=[('modulation', 'f4')])
-    #u_copy = deepcopy(unwrap)
+    u_copy = deepcopy(unwrap)
     w_copy = deepcopy(inte_rgb)
-    #u_copy[~roi_mask] = np.nan
+    u_copy[~roi_mask] = np.nan
+    obj_x, obj_y,obj_z = reconstruction_obj(u_copy, c_mtx, c_dist, p_mtx, cp_rot_mtx, cp_trans_mtx, phase_st, pitch)
+   
     w_copy[~roi_mask] = False
     obj_x[~roi_mask] = np.nan
     obj_y[~roi_mask] = np.nan
     obj_z[~roi_mask] = np.nan
     cordi = np.vstack((obj_x.ravel(), obj_y.ravel(), obj_z.ravel())).T
-    xyz = list(map(tuple, cordi)) 
+    nan_mask = np.isnan(cordi)
+    up_cordi = cordi[~nan_mask.all(axis =1)]
+    xyz = list(map(tuple, up_cordi)) 
     inte_rgb = inte_rgb / np.nanmax(inte_rgb)
     rgb_intensity_vect = np.vstack((inte_rgb[:,:,0].ravel(), inte_rgb[:,:,1].ravel(),inte_rgb[:,:,2].ravel())).T
-    color = list(map(tuple, rgb_intensity_vect))
+    up_rgb_intensity_vect = rgb_intensity_vect[~nan_mask.all(axis =1)]
+    color = list(map(tuple, up_rgb_intensity_vect))
     
     sigmasq_x, sigmasq_y, sigmasq_z, derv_x, derv_y, derv_z =  sigma_random(modulation, limit,  pitch, N, phase_st, unwrap, sigma_path, calib_path)
     sigma_x = np.sqrt(sigmasq_x)
     sigma_y = np.sqrt(sigmasq_y)
     sigma_z = np.sqrt(sigmasq_z)
     cordi_sigma = np.vstack((sigma_x.ravel(), sigma_y.ravel(), sigma_z.ravel())).T
-    xyz_sigma = list(map(tuple, cordi_sigma))
+    up_cordi_sigma = cordi_sigma[~nan_mask.all(axis =1)]
+    up_mod_vect = mod_vect[~nan_mask.all(axis =1)]
+    xyz_sigma = list(map(tuple, up_cordi_sigma))
     if temp:
         #t_vect = np.array(temperature[flag], dtype=[('temperature', 'f4')])
         t_vect = np.array(temperature.ravel(), dtype=[('temperature', 'f4')])
+        up_t_vect = t_vect[~nan_mask.all(axis =1)]
         PlyData(
             [
                 PlyElement.describe(np.array(xyz, dtype=[('x', 'f4'), ('y', 'f4'), ('z', 'f4')]), 'points'),
                 PlyElement.describe(np.array(color, dtype=[('r', 'f4'), ('g', 'f4'), ('b', 'f4')]), 'color'),
                 PlyElement.describe(np.array(xyz_sigma, dtype=[('dx', 'f4'), ('dy', 'f4'), ('dz', 'f4')]), 'std'),
-                PlyElement.describe(np.array(t_vect, dtype=[('temperature', 'f4')]), 'temperature'),
-                PlyElement.describe(np.array(mod_vect, dtype=[('modulation', 'f4')]), 'modulation')
+                PlyElement.describe(np.array(up_t_vect, dtype=[('temperature', 'f4')]), 'temperature'),
+                PlyElement.describe(np.array(up_mod_vect, dtype=[('modulation', 'f4')]), 'modulation')
                 
             ]).write(os.path.join(obj_path,'obj.ply'))
     
@@ -446,11 +455,11 @@ def complete_recon(unwrap, inte_rgb, modulation, limit, calib_path, sigma_path, 
                 PlyElement.describe(np.array(xyz, dtype=[('x', 'f4'), ('y', 'f4'), ('z', 'f4')]), 'points'),
                 PlyElement.describe(np.array(color, dtype=[('r', 'f4'), ('g', 'f4'), ('b', 'f4')]), 'color'),
                 PlyElement.describe(np.array(xyz_sigma, dtype=[('dx', 'f4'), ('dy', 'f4'), ('dz', 'f4')]), 'std'),
-                PlyElement.describe(np.array(mod_vect, dtype=[('modulation', 'f4')]), 'modulation')
+                PlyElement.describe(np.array(up_mod_vect, dtype=[('modulation', 'f4')]), 'modulation')
                 
             ]).write(os.path.join(obj_path,'obj.ply'))
       
-    return cordi, rgb_intensity_vect, t_vect, cordi_sigma
+    return cordi, rgb_intensity_vect, t_vect, cordi_sigma, mod_vect
 
 def obj_reconst_wrapper(width, height, pitch_list, N_list, limit,  phase_st, direc, type_unwrap, calib_path, obj_path, sigma_path, temp, kernel = 1):
    '''
@@ -503,7 +512,7 @@ def obj_reconst_wrapper(width, height, pitch_list, N_list, limit,  phase_st, dir
        inte_rgb = inte_img[...,::-1].copy()
        np.save(os.path.join(obj_path,'{}_obj_mod.npy'.format(type_unwrap)),obj_cos_mod) 
        np.savez(os.path.join(obj_path,'{}_unwrap.npz'.format(type_unwrap)),data = unwrap.data, mask = unwrap.mask)
-       obj_cordi, obj_color, obj_t, cordi_sigma = complete_recon(unwrap, inte_rgb, obj_cos_mod, limit, calib_path, sigma_path, phase_st, pitch_list[-1], N_list[-1], obj_path, temp, temperature)
+       obj_cordi, obj_color, obj_t, cordi_sigma, mod_vect = complete_recon(unwrap, inte_rgb, obj_cos_mod, limit, calib_path, sigma_path, phase_st, pitch_list[-1], N_list[-1], obj_path, temp, temperature)
        
    elif type_unwrap == 'multifreq':
        object_freq1, mod_freq1, avg_freq1, gamma_freq1, delta_deck_freq1  = nstep.mask_img(np.array([cv2.imread(os.path.join(obj_path,'capt_%d.jpg'%i),0) for i in range(0, N_list[0])]), limit)
@@ -529,7 +538,7 @@ def obj_reconst_wrapper(width, height, pitch_list, N_list, limit,  phase_st, dir
        inte_rgb = inte_img[...,::-1].copy()
        np.save(os.path.join(obj_path,'{}_obj_mod.npy'.format(type_unwrap)),mod_freq4) 
        np.savez(os.path.join(obj_path,'{}_unwrap.npz'.format(type_unwrap)),data = unwrap.data, mask = unwrap.mask) 
-       obj_cordi, obj_color, obj_t, cordi_sigma = complete_recon(unwrap, inte_rgb, mod_freq4, limit, calib_path, sigma_path, phase_st, pitch_list[-1], N_list[-1], obj_path, temp, temperature)
+       obj_cordi, obj_color, obj_t, cordi_sigma, mod_vect = complete_recon(unwrap, inte_rgb, mod_freq4, limit, calib_path, sigma_path, phase_st, pitch_list[-1], N_list[-1], obj_path, temp, temperature)
        
    elif type_unwrap == 'multiwave':
        eq_wav12 = (pitch_list[-1] * pitch_list[1]) / (pitch_list[1]-pitch_list[-1])
@@ -561,7 +570,116 @@ def obj_reconst_wrapper(width, height, pitch_list, N_list, limit,  phase_st, dir
        inte_rgb = inte_img[...,::-1].copy()
        np.save(os.path.join(obj_path,'{}_obj_mod.npy'.format(type_unwrap)),mod_freq4) 
        np.savez(os.path.join(obj_path,'{}_unwrap.npz'.format(type_unwrap)),data = unwrap.data, mask = unwrap.mask)
-       obj_cordi, obj_color, obj_t, cordi_sigma = complete_recon(unwrap, inte_rgb, mod_wav3, limit,  calib_path, sigma_path, phase_st, pitch_list[-1], N_list[-1], obj_path, temp, temperature)   
-   return obj_cordi, obj_color, obj_t, cordi_sigma
+       obj_cordi, obj_color, obj_t, cordi_sigma, mod_vect = complete_recon(unwrap, inte_rgb, mod_wav3, limit,  calib_path, sigma_path, phase_st, pitch_list[-1], N_list[-1], obj_path, temp, temperature)   
+   return obj_cordi, obj_color, obj_t, cordi_sigma, mod_vect
        
+def obj_reconst_wrapper_3level(width, height, pitch_list, N_list, limit,  phase_st, direc, type_unwrap, calib_path, obj_path, sigma_path, temp, kernel = 1):
+   '''
+    Function for 3D reconstruction of object based on different unwrapping method.
 
+    Parameters
+    ----------
+    width =type: float. Width of projector.
+    height = type: float. Height of projector.
+    pitch_list : TYPE
+        DESCRIPTION.
+    N_list = type: float array. The number of steps in phase shifting algorithm. If phase coded unwrapping method is used this is a single element array. For other methods corresponding to each pitch one element in the list.
+    limit = type: float array. Array of number of pixels per fringe period.
+    
+    phase_st = type: float. Initial phase to be subtracted for phase to coordinate conversion.
+    direc = type: string. Visually vertical (v) or horizontal(h) pattern.
+    type_unwrap = type: string. Type of temporal unwrapping to be applied. 
+                  'phase' = phase coded unwrapping method, 
+                  'multifreq' = multifrequency unwrapping method
+                  'multiwave' = multiwavelength unwrapping method.
+    calib_path = type: string. Path to read mean calibration paraneters. 
+    obj_path = type: string. Path to read captured images
+    kernel = type: int. Kernel size for median filter. The default is 1.
+
+    Returns
+    -------
+    obj_cordi = type : float array. Array of reconstructed x,y,z coordinates of each points on the object
+    obj_color = type: float array. Color (texture/ intensity) at each point.
+
+    '''
+   
+  # calibration = np.load(os.path.join(calib_path,'{}_calibration_param.npz'.format(type_unwrap)))
+  
+   if type_unwrap == 'phase':
+       object_cos, obj_cos_mod, obj_cos_avg, obj_cos_gamma, delta_deck_cos  = nstep.mask_img(np.array([cv2.imread(os.path.join(obj_path,'capt_%d.jpg'%i),0) for i in range(0, N_list[0])]), limit)
+       object_step, obj_step_mod, obj_step_avg, obj_step_gamma, delta_deck_step = nstep.mask_img(np.array([cv2.imread(os.path.join(obj_path,'capt_%d.jpg'%i),0) for i in range(N_list[0],2 * N_list[0])]), limit)
+
+       #wrapped phase
+       phase_cos = nstep.phase_cal(object_cos, N_list, delta_deck_cos )
+       phase_step = nstep.phase_cal(object_step, N_list, delta_deck_step )
+       phase_step = nstep.step_rectification(phase_step,direc)
+       #unwrapped phase
+       unwrap0, k0 = nstep.unwrap_cal(phase_step, phase_cos, pitch_list[0], width, height, direc)
+       unwrap, k = nstep.filt(unwrap0, kernel, direc)
+       inte_img = cv2.imread(os.path.join(obj_path,'white.jpg'))   
+       if temp:
+           temperature = np.load(os.path.join(obj_path,'temperature.npy'))
+       else:
+           temperature = 0
+       inte_rgb = inte_img[...,::-1].copy()
+       np.save(os.path.join(obj_path,'{}_obj_mod.npy'.format(type_unwrap)),obj_cos_mod) 
+       np.savez(os.path.join(obj_path,'{}_unwrap.npz'.format(type_unwrap)),data = unwrap.data, mask = unwrap.mask)
+       obj_cordi, obj_color, obj_t, cordi_sigma, mod_vect = complete_recon(unwrap, inte_rgb, obj_cos_mod, limit, calib_path, sigma_path, phase_st, pitch_list[-1], N_list[-1], obj_path, temp, temperature)
+       
+   elif type_unwrap == 'multifreq':
+       object_freq1, mod_freq1, avg_freq1, gamma_freq1, delta_deck_freq1  = nstep.mask_img(np.array([cv2.imread(os.path.join(obj_path,'capt_%d.jpg'%i),0) for i in range(0, N_list[0])]), limit)
+       object_freq2, mod_freq2, avg_freq2, gamma_freq2, delta_deck_freq2 = nstep.mask_img(np.array([cv2.imread(os.path.join(obj_path,'capt_%d.jpg'%i),0) for i in range(N_list[0], N_list[0] + N_list[1])]), limit)
+       object_freq3, mod_freq3, avg_freq3, gamma_freq3, delta_deck_freq3 = nstep.mask_img(np.array([cv2.imread(os.path.join(obj_path,'capt_%d.jpg'%i),0) for i in range( N_list[0] + N_list[1], N_list[0]+ N_list[1]+ N_list[2])]), limit)
+
+       #wrapped phase
+       phase_freq1 = nstep.phase_cal(object_freq1, N_list[0], delta_deck_freq1 )
+       phase_freq2 = nstep.phase_cal(object_freq2, N_list[1], delta_deck_freq2 )
+       phase_freq3 = nstep.phase_cal(object_freq3, N_list[2], delta_deck_freq3 )
+       phase_freq1[phase_freq1 < EPSILON] = phase_freq1[phase_freq1 < EPSILON] + 2 * np.pi
+
+       #unwrapped phase
+       phase_arr = np.stack([phase_freq1, phase_freq2, phase_freq3])
+       unwrap, k = nstep.multifreq_unwrap(pitch_list, phase_arr, kernel, direc)
+       inte_img = cv2.imread(os.path.join(obj_path,'white.jpg'))
+       if temp:
+           temperature = np.load(os.path.join(obj_path,'temperature.npy'))
+       else:
+           temperature = 0
+       inte_rgb = inte_img[...,::-1].copy()
+       np.save(os.path.join(obj_path,'{}_obj_mod.npy'.format(type_unwrap)),mod_freq3) 
+       np.savez(os.path.join(obj_path,'{}_unwrap.npz'.format(type_unwrap)),data = unwrap.data, mask = unwrap.mask) 
+       obj_cordi, obj_color, obj_t, cordi_sigma, mod_vect = complete_recon(unwrap, inte_rgb, mod_freq3, limit, calib_path, sigma_path, phase_st, pitch_list[-1], N_list[-1], obj_path, temp, temperature)
+       
+   elif type_unwrap == 'multiwave':
+       eq_wav12 = (pitch_list[-1] * pitch_list[1]) / (pitch_list[1]-pitch_list[-1])
+       eq_wav123 = pitch_list[0] * eq_wav12 / (pitch_list[0] - eq_wav12)
+
+       pitch_list = np.insert(pitch_list, 0, eq_wav123)
+       pitch_list = np.insert(pitch_list, 2, eq_wav12)
+       
+       object_wav3, mod_wav3, avg_wav3, gamma_wav1, delta_deck_wav3 = nstep.mask_img(np.array([cv2.imread(os.path.join(obj_path,'capt_%d.jpg'%i),0) for i in range(0, N_list[0])]), limit)
+       object_wav2, mod_wav2, avg_wav2, gamma_wav2, delta_deck_wav2 = nstep.mask_img(np.array([cv2.imread(os.path.join(obj_path,'capt_%d.jpg'%i),0) for i in range(N_list[0], N_list[0] + N_list[1])]), limit)
+       object_wav1, mod_wav1, avg_wav1, gamma_wav3, delta_deck_wav1 = nstep.mask_img(np.array([cv2.imread(os.path.join(obj_path,'capt_%d.jpg'%i),0) for i in range(N_list[0] + N_list[1], N_list[0]+ N_list[1]+ N_list[2])]), limit)
+
+       #wrapped phase
+       phase_wav1 = nstep.phase_cal(object_wav1, N_list[2], delta_deck_wav1 )
+       phase_wav2 = nstep.phase_cal(object_wav2, N_list[1], delta_deck_wav2 )
+       phase_wav3 = nstep.phase_cal(object_wav3, N_list[0], delta_deck_wav3 )
+       phase_wav12 = np.mod(phase_wav1 - phase_wav2, 2 * np.pi)
+       phase_wav123 = np.mod(phase_wav12 - phase_wav3, 2 * np.pi)       
+       phase_wav123[phase_wav123 > TAU] = phase_wav123[phase_wav123 > TAU] - 2 * np.pi
+
+       #unwrapped phase
+       phase_arr = np.stack([phase_wav123, phase_wav3, phase_wav12, phase_wav2, phase_wav1])
+       unwrap, k = nstep.multiwave_unwrap(pitch_list, phase_arr, kernel, direc)
+       inte_img = cv2.imread(os.path.join(obj_path,'white.jpg'))    
+       if temp:
+           temperature = np.load(os.path.join(obj_path,'temperature.npy'))
+       else:
+           temperature = 0
+       inte_rgb = inte_img[...,::-1].copy()
+       np.save(os.path.join(obj_path,'{}_obj_mod.npy'.format(type_unwrap)),mod_wav3) 
+       np.savez(os.path.join(obj_path,'{}_unwrap.npz'.format(type_unwrap)),data = unwrap.data, mask = unwrap.mask)
+       obj_cordi, obj_color, obj_t, cordi_sigma, mod_vect = complete_recon(unwrap, inte_rgb, mod_wav3, limit,  calib_path, sigma_path, phase_st, pitch_list[-1], N_list[-1], obj_path, temp, temperature)   
+   return obj_cordi, obj_color, obj_t, cordi_sigma, mod_vect
+       
