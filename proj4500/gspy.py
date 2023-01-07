@@ -29,17 +29,22 @@ def capture_image(cam):
     """    
     image_result = cam.GetNextImage(1000)  
         
-    #  Ensure image completion
+    # Ensure image completion
     if image_result.IsIncomplete():
         print('Image incomplete with image status %d ...' % image_result.GetImageStatus(), end="\r")
         return False, None
     else:        
         image_array = image_result.GetNDArray()          
-        #  Release image
+        # Release image
         image_result.Release()       
         return True, image_array
 
-def cam_configuration(cam, triggerType):
+def cam_configuration(cam, 
+                      triggerType,
+                      frameRate=30,
+                      exposureTime=27084,
+                      gain=0,
+                      bufferCount=15):
     """
     Configurate the camera. Note that the camera must be initialized before calling
     this function, i.e., cam.Init() must be called before calling this function.
@@ -85,20 +90,17 @@ def cam_configuration(cam, triggerType):
     print('\n=================== Config camera ==============================================\n')
     result = True    
     result &= setAcqusitionMode(nodemap, AcqusitionModeName='Continuous')    
+    result &= setFrameRate(nodemap, frameRate=frameRate)
+    result &= setExposureTime(nodemap, exposureTime=exposureTime)
+    result &= setGain(nodemap, gain=gain)
     result &= configure_trigger(nodemap, triggerType=triggerType)
-    result &= enableFrameRateSetting(nodemap)
-    result &= setFrameRate(nodemap, frameRate=30)    
-    result &= disableGainAuto(nodemap)
-    result &= setGain(nodemap, gain_val=0)
     
     if triggerType == 'software':
-        result &= setStreamBufferHandlingMode(s_node_map, StreamBufferHandlingModeName='NewestOnly')
-        result &= setExposureTime(nodemap, exposureTimeToSet=None) # exposureTimeToSet=None means using maximum exposure time!
+        result &= setStreamBufferHandlingMode(s_node_map, StreamBufferHandlingModeName='NewestOnly')        
     
     if triggerType == 'hardware':
         result &= setStreamBufferHandlingMode(s_node_map, StreamBufferHandlingModeName='OldestFirst')
-        # result &= setExposureTime(nodemap, exposureTimeToSet=49770)
-        result &= setBufferCount(s_node_map, 15)
+        result &= setBufferCount(s_node_map, bufferCount=bufferCount)
     
     print('\n=================== Camera status after configuration ==========================\n')    
     get_IEnumeration_node_current_entry_name(nodemap, 'AcquisitionMode')    
@@ -401,11 +403,14 @@ def enableFrameRateSetting(nodemap):
     return True
 
 def setFrameRate(nodemap, frameRate):
-    # frame rate should be a float number.    
+    # First enable framerate setting
+    enableFrameRateSetting(nodemap)
+    # frame rate should be a float number. Get the node and check availability   
     ptrAcquisitionFramerate = PySpin.CFloatPtr(nodemap.GetNode("AcquisitionFrameRate"))
     if not PySpin.IsAvailable(ptrAcquisitionFramerate) and not PySpin.IsReadable(ptrAcquisitionFramerate):
         print('Unable to retrieve AcquisitionFrameRate. Aborting...')
         return False
+    # Set framerate value
     ptrAcquisitionFramerate.SetValue(frameRate)
     print('AcquisitionFrameRate set to %3.3f Hz' % frameRate)      
     return True
@@ -630,7 +635,7 @@ def setTriggerSource(nodemap, TriggerSourceToSet):
     print('TriggerSource is set to %s...'%TriggerSourceToSet)   
     return True
 
-def setExposureTime(nodemap, exposureTimeToSet=None):
+def setExposureTime(nodemap, exposureTime=None):
     # First disable the ExposureAuto
     disableExposureAuto(nodemap)
     # Get the node "ExposureTime" and check if it is available and writable
@@ -640,14 +645,14 @@ def setExposureTime(nodemap, exposureTimeToSet=None):
         return False
     # Ensure desired exposure time does not exceed the maximum
     exposureTimeMax = ptrExposureTime.GetMax()
-    if exposureTimeToSet is None:
-        exposureTimeToSet = exposureTimeMax
+    if exposureTime is None:
+        exposureTime = exposureTimeMax
     else:
-        if exposureTimeToSet > exposureTimeMax:
-            exposureTimeToSet = exposureTimeMax
+        if exposureTime > exposureTimeMax:
+            exposureTime = exposureTimeMax
     # Set the exposure time
-    ptrExposureTime.SetValue(exposureTimeToSet)
-    print('Exposure Time set to %5.6f microseconds'%exposureTimeToSet)      
+    ptrExposureTime.SetValue(exposureTime)
+    print('Exposure Time set to %5.6f microseconds'%exposureTime)      
     return True
 
 def setAcqusitionMode(nodemap, AcqusitionModeName):
@@ -723,8 +728,7 @@ def setBufferCount(s_node_map, bufferCount):
     print('Buffer count now set to: %d'%buffer_count.GetValue())
     return True
     
-def disableGainAuto(nodemap):
-    # Turn off "AcquisitionFrameRateAuto"    
+def disableGainAuto(nodemap):    
     gainAuto = PySpin.CEnumerationPtr(nodemap.GetNode("GainAuto"))
     if (not PySpin.IsAvailable(gainAuto)) or (not PySpin.IsWritable(gainAuto)): 
         print('Unable to retrieve GainAuto. Aborting...')
@@ -733,18 +737,22 @@ def disableGainAuto(nodemap):
     if not PySpin.IsAvailable(gainAutoOff) or not PySpin.IsReadable(gainAutoOff):
         print('Unable to set GainAuto to off (Value retrieval). Aborting...')
         return False
-    # setting up a value for the Gain auto ( 0 = Off, 1 = Once, 2= Continous, now we need "0 -- off")
+    # setting "Off" for the Gain auto
     gainAuto.SetIntValue(gainAutoOff.GetValue()) # setting to Off
     print('Set GainAuto to off')
     return True
 
-def setGain(nodemap, gain_val):
+def setGain(nodemap, gain):
+    # First disable gainAuto
+    disableGainAuto(nodemap)
+    # Get the node "Gain" and check the availability
     gainValue = PySpin.CFloatPtr(nodemap.GetNode("Gain"))
     if (not PySpin.IsAvailable(gainValue)) or (not PySpin.IsWritable(gainValue)): 
         print('Unable to retrieve Gain. Aborting...')
         return False
-    gainValue.SetValue(gain_val)
-    print('Set Gain to %2.3f'%gain_val)
+    # Set the gain value
+    gainValue.SetValue(gain)
+    print('Set Gain to %2.3f'%gain)
     return True
 
 def configure_trigger(nodemap, triggerType):
