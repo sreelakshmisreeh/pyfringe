@@ -138,9 +138,10 @@ def acquire_images(cam,
                    savedir,                   
                    timeout=10):
     """
-    This function acquires and saves one image from a device. Note that camera 
-    must be initialized before calling this function, i.e., cam.Init() must be 
-    called before calling this function.
+    This function acquires and saves images from a device. Note that camera 
+    must be initialized and configurated before calling this function, i.e., 
+    cam.Init() and cam_configuration(cam,triggerType, ...,) must be called 
+    before calling this function.
 
     :param cam: Camera to acquire images from.
     :param acquisition_index: the index number of the current acquisition.
@@ -157,7 +158,7 @@ def acquire_images(cam,
     """
     
     nodemap = cam.GetNodeMap()
-    triggerSource = get_IEnumeration_node_current_entry_name(nodemap, 'TriggerSource')
+    triggerSourceSymbolic = get_IEnumeration_node_current_entry_name(nodemap, 'TriggerSource', verbose=False)
 
     print('*** IMAGE ACQUISITION ***\n')
     result = True
@@ -179,7 +180,7 @@ def acquire_images(cam,
     activate_trigger(cam)
     cam.BeginAcquisition()        
     
-    if triggerSource == "Software":
+    if triggerSourceSymbolic == "Software":
         start = perf_counter_ns()            
         cam.TriggerSoftware.Execute()               
         ret, image_array = capture_image(cam=cam)                
@@ -195,7 +196,7 @@ def acquire_images(cam,
             print('Capture failed')
             result = False
     
-    if triggerSource == "Line0":
+    if triggerSourceSymbolic == "Line0":
         count = 0        
         start = perf_counter_ns()                        
         while count < num_images:
@@ -272,7 +273,8 @@ def run_single_camera(cam,
                       bufferCount=15,
                       timeout=10):
     """
-    Initialize and configurate a camera and take one image.
+    Initialize and configurate a camera and take images. This is a wrapper
+    function.
 
     :param cam: Camera to acquire images from.
     :param savedir: directory to save images.
@@ -381,62 +383,67 @@ def clearDir(targetDir):
     else:
         print('The target directory is empty! No image file needs to be removed')    
 
-def get_IEnumeration_node_current_entry_name(nodemap, nodename):
+def get_IEnumeration_node_current_entry_name(nodemap, nodename, verbose=True):
     node = PySpin.CEnumerationPtr(nodemap.GetNode(nodename))
     node_int_val = node.GetIntValue()
     node_entry = node.GetEntry(node_int_val)
     node_entry_name = node_entry.GetSymbolic()
-    node_description = node.GetDescription()
-    node_entries = node.GetEntries() # node_entries is a list of INode instances    
-    print('%s: %s' % (nodename, node_entry_name))    
-    print(node_description)    
-    print('All entries are listed below:')
-    for i, entry in enumerate(node_entries):        
-        entry_name = PySpin.CEnumEntryPtr(entry).GetSymbolic()        
-        print('%d: %s' % (i, entry_name))    
-    print('\n')
+    if verbose:
+        node_description = node.GetDescription()
+        node_entries = node.GetEntries() # node_entries is a list of INode instances    
+        print('%s: %s' % (nodename, node_entry_name))    
+        print(node_description)    
+        print('All entries are listed below:')
+        for i, entry in enumerate(node_entries):        
+            entry_name = PySpin.CEnumEntryPtr(entry).GetSymbolic()        
+            print('%d: %s' % (i, entry_name))    
+        print('\n')
     return node_entry_name
 
-def get_IInteger_node_current_val(nodemap, nodename):
+def get_IInteger_node_current_val(nodemap, nodename, verbose=True):
     node = PySpin.CIntegerPtr(nodemap.GetNode(nodename))
     node_val = node.GetValue()
-    node_val_max = node.GetMax()
-    node_val_min = node.GetMin()
-    node_description = node.GetDescription()    
-    print('%s: %d' % (nodename, node_val))
-    print(node_description)
-    print('Max = %d' % node_val_max)
-    print('Min = %d' % node_val_min)
-    print('\n')    
+    if verbose:
+        node_val_max = node.GetMax()
+        node_val_min = node.GetMin()
+        node_description = node.GetDescription()    
+        print('%s: %d' % (nodename, node_val))
+        print(node_description)
+        print('Max = %d' % node_val_max)
+        print('Min = %d' % node_val_min)
+        print('\n')    
     return node_val
 
-def get_IFloat_node_current_val(nodemap, nodename):
+def get_IFloat_node_current_val(nodemap, nodename, verbose=True):
     node = PySpin.CFloatPtr(nodemap.GetNode(nodename))
     node_val = node.GetValue()
-    node_val_max = node.GetMax()
-    node_val_min = node.GetMin()
-    node_unit = node.GetUnit()
-    print('%s: %f' % (nodename, node_val))    
-    print('Max = %f' % node_val_max)
-    print('Min = %f' % node_val_min)
-    print('Unit: ', node_unit)
-    print('\n')
+    if verbose:
+        node_val_max = node.GetMax()
+        node_val_min = node.GetMin()
+        node_unit = node.GetUnit()
+        print('%s: %f' % (nodename, node_val))    
+        print('Max = %f' % node_val_max)
+        print('Min = %f' % node_val_min)
+        print('Unit: ', node_unit)
+        print('\n')
     return node_val
 
-def get_IString_node_current_str(nodemap, nodename):
+def get_IString_node_current_str(nodemap, nodename, verbose=True):
     node = PySpin.CStringPtr(nodemap.GetNode(nodename))
     node_str = node.GetValue()
-    node_description = node.GetDescription()
-    print('%s: %s' % (nodename, node_str))
-    print(node_description, '\n')
+    if verbose:
+        node_description = node.GetDescription()
+        print('%s: %s' % (nodename, node_str))
+        print(node_description, '\n')
     return node_str
 
-def get_IBoolean_node_current_val(nodemap, nodename):
+def get_IBoolean_node_current_val(nodemap, nodename, verbose=True):
     node = PySpin.CBooleanPtr(nodemap.GetNode(nodename))
     node_val = node.GetValue()
-    node_description = node.GetDescription()
-    print('%s: %s' % (nodename, node_val))
-    print(node_description, '\n')
+    if verbose:
+        node_description = node.GetDescription()
+        print('%s: %s' % (nodename, node_val))
+        print(node_description, '\n')
     return node_val
 
 def enableFrameRateSetting(nodemap):
@@ -878,9 +885,10 @@ def deactivate_trigger(cam):
     result = setTriggerMode(nodemap, "Off")
     return result    
 
-def main():
-    triggerType = "hardware"
+def main():    
+    acquisition_index=0
     num_images = 15
+    triggerType = "hardware"
     result, system, cam_list, num_cameras = sysScan()
     
     if result:
@@ -888,8 +896,7 @@ def main():
         savedir = r'C:\Users\kl001\Documents\grasshopper3_python\images'
         clearDir(savedir)
         for i, cam in enumerate(cam_list):    
-            print('Running example for camera %d...'%i)
-            acquisition_index=0
+            print('Running example for camera %d...'%i)            
             result &= run_single_camera(cam=cam, 
                                         savedir=savedir, 
                                         acquisition_index=acquisition_index,
