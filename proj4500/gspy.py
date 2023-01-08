@@ -6,7 +6,7 @@ import sys
 import cv2
 from time import perf_counter_ns
 
-def capture_image(cam):
+def capture_image(cam, timeout=1000):
     """
     Once the camera engine has been activated, this function is used to Extract 
     one image from the buffering memery and save it into a numpy array.
@@ -17,6 +17,8 @@ def capture_image(cam):
     ----------
     cam : camera object from PySpin
         camera object to be used
+    timeout : int
+        timeout for capturing a frame in milliseconds
         
     Returns
     -------
@@ -27,7 +29,7 @@ def capture_image(cam):
         output image (numpy ndarray).
 
     """    
-    image_result = cam.GetNextImage(1000)  
+    image_result = cam.GetNextImage(timeout)
         
     # Ensure image completion
     if image_result.IsIncomplete():
@@ -55,7 +57,14 @@ def cam_configuration(cam,
         The camera to be configureated.
     triggerType : str
         Must be one of {"software", "hardware"}.
-
+    frameRate : float
+        Framerate
+    exposureTime : int
+        Exposure time in microseconds
+    gain : float
+        Gain
+    bufferCount : int
+        Buffer count.
     Returns
     -------
     result : bool
@@ -123,20 +132,29 @@ def cam_configuration(cam,
     get_IFloat_node_current_val(nodemap, 'TriggerDelay')
     return result
 
-def acquire_images(cam, acquisition_index, savedir, triggerType):
+def acquire_images(cam, 
+                   acquisition_index,
+                   num_images,
+                   savedir, 
+                   triggerType,
+                   timeout=10):
     """
     This function acquires and saves one image from a device. Note that camera 
     must be initialized before calling this function, i.e., cam.Init() must be 
     called before calling this function.
 
     :param cam: Camera to acquire images from.
-    :param savedir: directory to save images
     :param acquisition_index: the index number of the current acquisition.
+    :param num_images: the total number of images to be taken.
+    :param savedir: directory to save images.
     :param triggerType: trigger type, must be one of {"software", "hardware"}
+    :param timeout: the maximum waiting time in seconds before termination.
     :type cam: CameraPtr
-    :tyoe savedir: str
     :type acquisition_index: int
+    :type num_images: int
+    :tyoe savedir: str
     :type triggerType: str
+    :type timeout: float
     :return: True if successful, False otherwise.
     :rtype: bool
     """
@@ -144,7 +162,9 @@ def acquire_images(cam, acquisition_index, savedir, triggerType):
 
     result = True        
 
-    # live view        
+    # live view
+    # First, deactivate the trigger!
+    deactivate_trigger(cam)        
     cam.BeginAcquisition()        
     while True:                
         ret, frame = capture_image(cam)       
@@ -174,11 +194,12 @@ def acquire_images(cam, acquisition_index, savedir, triggerType):
             print('Image saved at %s' % save_path)
         else:
             print('Capture failed')
+            result = False
     
     if triggerType == "hardware":
         count = 0        
         start = perf_counter_ns()                        
-        while count < 15:
+        while count < num_images:
             try:
                 ret, image_array = capture_image(cam=cam)
             except PySpin.SpinnakerException as ex:
@@ -199,10 +220,12 @@ def acquire_images(cam, acquisition_index, savedir, triggerType):
             else:
                 end = perf_counter_ns()
                 waiting_time = (end - start)/1e9
-                print('Capture failed, time spent %2.3f s before 10s timeout'%waiting_time)
-                if waiting_time > 10:
+                print('Capture failed. Time spent %2.3f s before %2.3f s timeout'%(waiting_time,timeout))
+                if waiting_time > timeout:
                     print('timeout is reached, stop capturing image ...')
                     break
+        if count == 0:
+            result = False
     
     cam.EndAcquisition()
     deactivate_trigger(cam)        
@@ -240,16 +263,39 @@ def print_device_info(nodemap_tldevice):
         return False
     return result
 
-def run_single_camera(cam, savedir, acquisition_index, triggerType):
+def run_single_camera(cam, 
+                      savedir, 
+                      acquisition_index, 
+                      num_images, 
+                      triggerType,
+                      frameRate=30,
+                      exposureTime=27084,
+                      gain=0,
+                      bufferCount=15,
+                      timeout=10):
     """
     Initialize and configurate a camera and take one image.
 
-    :param cam: Camera to run on.
+    :param cam: Camera to acquire images from.
+    :param savedir: directory to save images.
+    :param acquisition_index: the index number of the current acquisition.
+    :param num_images: the total number of images to be taken.    
+    :param triggerType: trigger type, must be one of {"software", "hardware"}
+    :param frameRate: framerate.
+    :param exposureTime: exposure time in microseconds.
+    :param gain: gain
+    :param bufferCount: buffer count number on RAM
+    :param timeout: the waiting time in seconds before termination
     :type cam: CameraPtr
-    :param savedir: directory to save images
-    :param acquisition_index: the index of acquisition
-    :type savedir: str
+    :tyoe savedir: str
     :type acquisition_index: int
+    :type num_images: int    
+    :type triggerType: str
+    :type frameRate: float
+    :type exposureTime: int
+    :type gain: float
+    :type bufferCount: int
+    :type timeout: float
     :return: True if successful, False otherwise.
     :rtype: bool
     """
@@ -258,9 +304,19 @@ def run_single_camera(cam, savedir, acquisition_index, triggerType):
         # Initialize camera
         cam.Init()
         # config camera
-        result &= cam_configuration(cam, triggerType)        
+        result &= cam_configuration(cam=cam, 
+                                    triggerType=triggerType,
+                                    frameRate=frameRate,
+                                    exposureTime=exposureTime,
+                                    gain=gain,
+                                    bufferCount=bufferCount)
         # Acquire images        
-        result &= acquire_images(cam, acquisition_index, savedir, triggerType)
+        result &= acquire_images(cam=cam, 
+                                 acquisition_index=acquisition_index, 
+                                 num_images=num_images,
+                                 savedir=savedir, 
+                                 triggerType=triggerType,
+                                 timeout=timeout)
         # Deinitialize camera        
         cam.DeInit()
     except PySpin.SpinnakerException as ex:
@@ -280,7 +336,7 @@ def sysScan():
         Camera system object
     cam_list : list
         Camera list.
-    num_cameras : TYPE
+    num_cameras : int
         Number of cameras.
 
     """
@@ -297,8 +353,13 @@ def sysScan():
     cam_list = system.GetCameras()
     
     # Get the total number of cameras
-    num_cameras = cam_list.GetSize()
-    print('Number of cameras detected: %d' % num_cameras)
+    num_cameras = cam_list.GetSize()    
+    
+    if not cam_list:
+        result = False
+        print('No camera is detected...')
+    else:
+        print('Number of cameras detected: %d' % num_cameras) 
     
     return result, system, cam_list, num_cameras
 
@@ -403,8 +464,9 @@ def enableFrameRateSetting(nodemap):
     return True
 
 def setFrameRate(nodemap, frameRate):
-    # First enable framerate setting
-    enableFrameRateSetting(nodemap)
+    # First enable framerate setting    
+    if not enableFrameRateSetting(nodemap):
+        return False
     # frame rate should be a float number. Get the node and check availability   
     ptrAcquisitionFramerate = PySpin.CFloatPtr(nodemap.GetNode("AcquisitionFrameRate"))
     if not PySpin.IsAvailable(ptrAcquisitionFramerate) and not PySpin.IsReadable(ptrAcquisitionFramerate):
@@ -456,7 +518,7 @@ def setExposureMode(nodemap, exposureModeToSet):
     ----------
     nodemap : INodeMap
         Camara nodemap.
-    exposureModeToSet : Str
+    exposureModeToSet : str
         ExposureModeEnums, must be one of {"Timed", "TriggerWidth"}
 
     Returns
@@ -637,7 +699,8 @@ def setTriggerSource(nodemap, TriggerSourceToSet):
 
 def setExposureTime(nodemap, exposureTime=None):
     # First disable the ExposureAuto
-    disableExposureAuto(nodemap)
+    if not disableExposureAuto(nodemap):
+        return False
     # Get the node "ExposureTime" and check if it is available and writable
     ptrExposureTime = PySpin.CFloatPtr(nodemap.GetNode("ExposureTime"))
     if not PySpin.IsAvailable(ptrExposureTime) and not PySpin.IsReadable(ptrExposureTime):
@@ -744,7 +807,8 @@ def disableGainAuto(nodemap):
 
 def setGain(nodemap, gain):
     # First disable gainAuto
-    disableGainAuto(nodemap)
+    if not disableGainAuto(nodemap):
+        return False
     # Get the node "Gain" and check the availability
     gainValue = PySpin.CFloatPtr(nodemap.GetNode("Gain"))
     if (not PySpin.IsAvailable(gainValue)) or (not PySpin.IsWritable(gainValue)): 
@@ -784,22 +848,22 @@ def configure_trigger(nodemap, triggerType):
         # Ensure trigger mode off
         # The trigger must be disabled in order to configure whether the source
         # is software or hardware.
-        setTriggerMode(nodemap, "Off")
+        result &= setTriggerMode(nodemap, "Off")
                 
         if  triggerType == 'off':            
-            return True
+            return result
         
         if triggerType == 'software':
-            setTriggerSource(nodemap, "Software")            
-            setExposureMode(nodemap, "Timed")
-            setTriggerSelector(nodemap, "FrameStart")
-            setTriggerActivation(nodemap, "FallingEdge")           
+            result &= setTriggerSource(nodemap, "Software")            
+            result &= setExposureMode(nodemap, "Timed")
+            result &= setTriggerSelector(nodemap, "FrameStart")
+            result &= setTriggerActivation(nodemap, "FallingEdge")           
             
         if triggerType == 'hardware':
-            setTriggerSource(nodemap, "Line0")                       
-            setExposureMode(nodemap, "TriggerWidth")
-            setTriggerSelector(nodemap, "ExposureActive")
-            setTriggerActivation(nodemap, "FallingEdge")
+            result &= setTriggerSource(nodemap, "Line0")                       
+            result &= setExposureMode(nodemap, "TriggerWidth")
+            result &= setTriggerSelector(nodemap, "ExposureActive")
+            result &= setTriggerActivation(nodemap, "FallingEdge")
             
     except PySpin.SpinnakerException as ex:
         print('Error: %s'%ex)
@@ -808,17 +872,18 @@ def configure_trigger(nodemap, triggerType):
 
 def activate_trigger(cam):
     nodemap = cam.GetNodeMap()
-    setTriggerMode(nodemap, "On")    
+    result = setTriggerMode(nodemap, "On")    
     # setTriggerOverlap(nodemap, "ReadOut")    
-    return True
+    return result
 
 def deactivate_trigger(cam):
     nodemap = cam.GetNodeMap()
-    setTriggerMode(nodemap, "Off")
-    return True    
+    result = setTriggerMode(nodemap, "Off")
+    return result    
 
 def main():
     triggerType = "hardware"
+    num_images = 15
     result, system, cam_list, num_cameras = sysScan()
     
     if result:
@@ -828,7 +893,11 @@ def main():
         for i, cam in enumerate(cam_list):    
             print('Running example for camera %d...'%i)
             acquisition_index=0
-            result &= run_single_camera(cam, savedir, acquisition_index, triggerType=triggerType) # only one acquisition            
+            result &= run_single_camera(cam=cam, 
+                                        savedir=savedir, 
+                                        acquisition_index=acquisition_index,
+                                        num_images=num_images,
+                                        triggerType=triggerType) 
             print('Camera %d example complete...'%i)
     
         # Release reference to camera
