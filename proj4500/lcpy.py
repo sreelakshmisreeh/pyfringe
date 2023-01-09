@@ -4,7 +4,6 @@ Created on Sat Dec 24 13:27:49 2022
 
 @author: kl001
 """
-from __future__ import print_function
 import numpy as np
 import os
 import time
@@ -12,10 +11,9 @@ from contextlib import contextmanager
 import usb.core
 from usb.core import USBError
 from time import perf_counter_ns
-import gspy
 from functions import nstep_fringe as nstep
 import cv2
-import PySpin
+
 
 
 def conv_len(a, l):
@@ -215,8 +213,8 @@ class dlpc350(object):
         print('\nNumber of patterns to display:{}\n \nNumber of images:{}'.format(self.num_pats_for_trig_out2, self.num_images))
         print('\nTrigger mode:{}'.format(self.trigger_mode))
         print('\nTrigger polarity:{}\n'.format(self.trigger_polarity,)) 
-        print('\nTrigger rising edge delay:{}\n \nTrigger falling edge delay:{}'.format(self.tigger_rising_edge_delay,
-                                                                                        self.trigger_falling_edge_delay))
+        print('\nTrigger rising edge delay:{} μs\n \nTrigger falling edge delay:{} μs'.format(self.trigedge_rise_delay_microsec,
+                                                                                        self.trigedge_fall_delay_microsec))
         print('\nImage LUT entries:{}'.format(self.image_LUT_entries))
         print('\nPattern LUT entries:{}'.format(self.pattern_LUT_entries))
         
@@ -400,10 +398,14 @@ class dlpc350(object):
             self.trigger_polarity = "active low signal"
         else:
             self.trigger_polarity = "active high signal"
-        self.tigger_rising_edge_delay = ans[1]
-        self.trigger_falling_edge_delay = ans[-1]
-        #TODO: convert time to microseconds
-    def trig_out1_control(self,polarity_invert = True, trigedge_rise_delay = 187, trigedge_fall_delay = 187):
+            
+        tigger_rising_edge_delay = ans[1]
+        trigger_falling_edge_delay = ans[-1]
+        #convert to μs
+        self.trigedge_rise_delay_microsec = -20.05 + 0.1072 * tigger_rising_edge_delay
+        self.trigedge_fall_delay_microsec = -20.05 + 0.1072 * trigger_falling_edge_delay
+        
+    def trig_out1_control(self,polarity_invert = True, trigedge_rise_delay_microsec = 0, trigedge_fall_delay_microsec = 0):
          """
          The Trigger Out1 Control command sets the polarity, rising edge delay, 
          and falling edge delay of the TRIG_OUT_1 signal of the DLPC350. 
@@ -414,7 +416,9 @@ class dlpc350(object):
          param int trigedge_rise_delay: rising edge delay control ranging from –20.05 μs to 2.787 μs. Each bit adds 107.2 ns.
          param int trigedge_fall_delay: falling edge delay control with range -20.05 μs to +2.787 μs. Each bit adds 107.2 ns
          """
-         
+         #convert μs to number equivalent
+         trigedge_rise_delay = int(trigedge_rise_delay_microsec - (-20.05))/0.1072
+         trigedge_fall_delay = int(trigedge_fall_delay_microsec - (-20.05))/0.1072
          if polarity_invert:
              polarity = '00000010'
              self.trigger_polarity = "active low signal"
@@ -422,8 +426,8 @@ class dlpc350(object):
              polarity = '00000000'
              self.trigger_polarity = "active high signal"
              
-         self.tigger_rising_edge_delay = trigedge_rise_delay
-         self.trigger_falling_edge_delay = trigedge_fall_delay
+         self.trigedge_rise_delay_microsec = trigedge_rise_delay_microsec
+         self.trigedge_fall_delay_microsec = trigedge_fall_delay_microsec
          trigedge_rise_delay = conv_len(trigedge_rise_delay, 8)
          trigedge_fall_delay = conv_len(trigedge_fall_delay, 8)
          payload =   trigedge_fall_delay + trigedge_rise_delay + polarity
@@ -813,218 +817,7 @@ def pattern_LUT_design(image_index_list,
                                                                              lut_read)
     return image_LUT_entries_read, lut_read, image_index_list_recovered, swap_location_list, swap_location_list_read
 
-def proj_cam_acquire_images(cam, lcr, acquisition_index, savedir, 
-                            cam_triggerType, image_index_list, pattern_num_list, 
-                            proj_exposure_period, proj_frame_period, do_insert_black,
-                            preview_image_index,
-                            pprint_proj_status):
-    """
-    This function acquires and saves one image from a device. Note that camera 
-    must be initialized before calling this function, i.e., cam.Init() must be 
-    called before calling this function.
 
-    :param cam: Camera to acquire images from.
-    :param savedir: directory to save images
-    :param acquisition_index: the index number of the current acquisition.
-    :param cam_triggerType: camera trigger type, must be one of {"software", "hardware"}
-    :param image_index_list: projector pattern sequence to create and project
-    :param proj_exposure_period : projector exposure period in microseconds 
-    :param proj_frame_period : projector frame period in microseconds 
-    :type cam: CameraPtr
-    :type savedir: str
-    :type acquisition_index: int
-    :type triggerType: str
-    :type: image_index_list: projector pattern sequence list
-    :type: proj_exposure_period: float
-    type: proj_frame_period: float
-    :return: True if successful, False otherwise.
-    :rtype: bool
-    """
-    print('*** IMAGE ACQUISITION ***\n')
-
-    result = True  
-    delta = 100      
-
-    # live view        
-    cam.BeginAcquisition()   
-    #set projector configuration
-    lcr.set_pattern_config(num_lut_entries= 1, do_repeat = True, num_pats_for_trig_out2 = 1, num_images = 1)
-    lcr.set_exposure_frame_period(10000,10000) # to avoid screen fluctuation for preview
-    lcr.image_flash_index([preview_image_index],0)
-    lcr.send_pattern_lut(trig_type = 0, 
-                         bit_depth = 8, 
-                         led_select = 0b111,
-                         swap_location_list = [0],
-                         image_index_list = [preview_image_index], 
-                         pattern_num_list = [0], 
-                         starting_address = 0,  
-                         do_insert_black = do_insert_black)  
-    ans = lcr.start_pattern_lut_validate()
-    if not int(ans):
-        lcr.pattern_display('start')
-    
-    while True:                
-        ret, frame = gspy.capture_image(cam)       
-        img_show = cv2.resize(frame, None, fx=0.5, fy=0.5)
-        center_y = int(img_show.shape[0]/2)
-        center_x = int(img_show.shape[1]/2)
-        cv2.line(img_show,(center_x,center_y-delta),(center_x,center_y+delta),(0,0,255),5)
-        cv2.line(img_show,(center_x-delta,center_y),(center_x+delta,center_y),(0,0,255),5)
-        cv2.imshow("press q to quit", img_show)    
-        key = cv2.waitKey(1)        
-        if key == ord("q"):
-            lcr.pattern_display('stop')
-            break
-    
-    cam.EndAcquisition()
-    cv2.destroyAllWindows()
-    
-    # Retrieve, convert, and save image
-    gspy.activate_trigger(cam)
-    cam.BeginAcquisition()        
-    
-    if cam_triggerType == "software":
-        start = perf_counter_ns()            
-        cam.TriggerSoftware.Execute()    
-        ret, image_array = gspy.capture_image(cam=cam)                
-        end = perf_counter_ns()
-        t = (end - start)/1e9
-        print('time spent: %2.3f s' % t)                
-        if ret:
-            filename = 'Acquisition-%02d.jpg' %acquisition_index
-            save_path = os.path.join(savedir, filename)                    
-            cv2.imwrite(save_path, image_array)
-            print('Image saved at %s' % save_path)
-        else:
-            print('Capture failed')
-    
-    if cam_triggerType == "hardware":
-        count = 0        
-        total_dual_time_start = perf_counter_ns()
-        start = perf_counter_ns() 
-        #Configure projector
-        image_LUT_entries, swap_location_list = get_image_LUT_swap_location(image_index_list)
-        lcr.set_pattern_config(num_lut_entries= len(image_index_list),
-                               do_repeat = False,  
-                               num_pats_for_trig_out2 = len(image_index_list),
-                               num_images = len(image_LUT_entries))
-        lcr.set_exposure_frame_period(proj_exposure_period, proj_frame_period )
-        # To set new image LUT
-        lcr.image_flash_index(image_LUT_entries,0)
-        # To set pattern LUT table    
-        lcr.send_pattern_lut(trig_type = 0 , 
-                             bit_depth = 8, 
-                             led_select = 0b111,
-                             swap_location_list = swap_location_list, 
-                             image_index_list = image_index_list, 
-                             pattern_num_list = pattern_num_list, 
-                             starting_address = 0,
-                             do_insert_black = do_insert_black)
-        if pprint_proj_status:# Print all projector current attributes set
-            lcr.pretty_print_status()
-        ans = lcr.start_pattern_lut_validate()
-        #Check validation status
-        if not int(ans):   
-            lcr.pattern_display('start') 
-                 
-        while count < len(image_index_list):
-            try:
-                ret, image_array = gspy.capture_image(cam=cam)
-            except PySpin.SpinnakerException as ex:
-                print('Error: %s' % ex)
-                ret = False
-                image_array = None
-                pass
-                                
-            if ret:
-                print("extract successfully")
-                #filename = 'Acquisition-%02d-%02d.jpg' %(acquisition_index,count)
-                filename = 'capt%d_%d.jpg' %(acquisition_index,count)
-                save_path = os.path.join(savedir, filename)
-                cv2.imwrite(save_path, image_array)
-                print('Image saved at %s' % save_path)
-                count += 1
-                start = perf_counter_ns()
-                print('waiting clock is reset')
-            else:
-                end = perf_counter_ns()
-                waiting_time = (end - start)/1e9
-                print('Capture failed, time spent %2.3f s before 10s timeout'%waiting_time)
-                if waiting_time > 10:
-                    print('timeout is reached, stop capturing image ...')
-                    break
-        total_dual_time_end = perf_counter_ns()
-        total_dual_time = (total_dual_time_end - total_dual_time_start)/1e9
-        print('Total dual device time:%.3f'%total_dual_time)
-    
-    cam.EndAcquisition()
-    gspy.deactivate_trigger(cam)        
-
-    return result
-
-def run_proj_single_camera(cam,savedir, 
-                           acquisition_index, 
-                           cam_triggerType, 
-                           image_index_list,
-                           pattern_num_list, 
-                           proj_exposure_period, 
-                           proj_frame_period,
-                           do_insert_black,
-                           preview_image_index,
-                           pprint_proj_status):
-    """
-    Initialize and configurate a camera and take one image.
-
-    :param cam: Camera to run on.
-    :type cam: CameraPtr
-    :param savedir: directory to save images
-    :param acquisition_index: the index of acquisition
-    :param cam_triggerType: camera trigger type, must be one of {"software", "hardware"}
-    :param image_index_list: projector pattern sequence to create and project
-    :param proj_exposure_period : projector exposure period in microseconds 
-    :param proj_frame_period : projector frame period in microseconds 
-    :type savedir: str
-    :type acquisition_index: int
-    :type triggerType: str
-    :type: image_index_list: projector pattern sequence list
-    :type: proj_exposure_period: float
-    type: proj_frame_period: float
-    :return: True if successful, False otherwise.
-    :rtype: bool
-    """
-    try:
-        result = True
-        device = usb.core.find(idVendor=0x0451, idProduct=0x6401) #finding the projector usb port
-        device.set_configuration()
-
-        lcr = dlpc350(device)
-        lcr.pattern_display('stop')
-        
-        # Initialize camera
-        cam.Init()
-        # config camera
-        result &= gspy.cam_configuration(cam, cam_triggerType)        
-        # Acquire images        
-        result &= proj_cam_acquire_images(cam,lcr, 
-                                          acquisition_index, 
-                                          savedir, 
-                                          cam_triggerType, 
-                                          image_index_list,
-                                          pattern_num_list, 
-                                          proj_exposure_period, 
-                                          proj_frame_period,
-                                          do_insert_black,
-                                          preview_image_index,
-                                          pprint_proj_status )
-        # Deinitialize camera        
-        cam.DeInit()
-        device.reset()
-        del lcr
-        del device
-    except PySpin.SpinnakerException as ex:
-        print('Error: %s' % ex)
-        result = False
-    return result
 
 def three_channel_image(single_channel_image_list, savedir, convertRGB = True):
     '''
@@ -1127,10 +920,10 @@ def single_img_load(image_index):
 
 # test_index_list = np.repeat(np.arange(5,28),3).tolist()
 # test_image = [1]
-# #image_LUT_entries_read, lut_read, image_index_list_recovered, swap_location_list, swap_location_list_read = pattern_LUT_design(gamma_image_index_list, 
-# #                                                                                                                                gamma_pattern_num_list,
-# #                                                                                                                                )
-# #pattern_LUT_design(image_index_list)
+# image_LUT_entries_read, lut_read, image_index_list_recovered, swap_location_list, swap_location_list_read = pattern_LUT_design(gamma_image_index_list, 
+#                                                                                                                                 gamma_pattern_num_list,
+#                                                                                                                                 )
+# # #pattern_LUT_design(image_index_list)
 #   #%%
 
 # proj_exposure_period = 27084
