@@ -9,7 +9,6 @@ import numpy as np
 import os
 import sys
 sys.path.append(r'C:\Users\kl001\pyfringe\proj4500')
-sys.path.append(r'C:\Users\kl001\Documents\pyfringe_test')
 import gspy
 import proj4500
 os.environ["KMP_DUPLICATE_LIB_OK"] = "True"
@@ -21,7 +20,7 @@ def calibration_capture(savedir,
                         proj_exposure_period, 
                         proj_frame_period,
                         do_insert_black=True,
-                        preview_image_index = 22,
+                        preview_image_index = 21,
                         pprint_proj_status = True):
     
     cam_triggerType = "hardware"
@@ -59,13 +58,14 @@ def calibration_capture(savedir,
     return result
 #%%
 savedir = r'C:\Users\kl001\Documents\pyfringe_test\multifreq_calib_images'
-image_index_list =  np.repeat(np.arange(23,35),3).tolist()
+image_index_list =  np.repeat(np.arange(22,34),3).tolist()
 pattern_num_list = [0,1,2] * len(set(image_index_list))
 proj_exposure_period = 27084; proj_frame_period = 33334
-no_calib_images = 2
+no_calib_images = 20
 result = calibration_capture(savedir, 
                              image_index_list, 
                              pattern_num_list, 
                              no_calib_images,
                              proj_exposure_period, 
-                             proj_frame_period)
+                             proj_frame_period,
+                             preview_image_index = 21) #34
