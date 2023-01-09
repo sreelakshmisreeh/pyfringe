@@ -8,12 +8,9 @@ import numpy as np
 import cv2
 import matplotlib.pyplot as plt
 import os
-import sys
-sys.path.append(r'C:\Users\kl001\pyfringe\proj4500')
-sys.path.append(r'C:\Users\kl001\Documents\pyfringe_test')
 import gspy
 import proj4500
-os.environ["KMP_DUPLICATE_LIB_OK"] = "True"
+os.environ["KMP_DUPLICATE_LIB_OK"] = "True" # needed when openCV and matplotlib used at the same time
 
 def gamma_capture(savedir,
                   gamma_image_index_list, 
@@ -21,7 +18,7 @@ def gamma_capture(savedir,
                   proj_exposure_period, 
                   proj_frame_period, 
                   do_insert_black=True,
-                  preview_image_index = 22,
+                  preview_image_index = 34,
                   pprint_proj_status = True):
 
     cam_triggerType = "hardware"
@@ -61,30 +58,41 @@ def gamma_capture(savedir,
     system.ReleaseInstance() 
     return result
 
-def gamma_calculation(savedir):
+def plot_gamma_curve(savedir):
     
     cam_width, cam_height = 1920, 1200
     
     camx, camy = int(cam_width/2), int(cam_height/2)
     half_cross_length = 100
     
-    img_cam = np.array([cv2.imread(r'C:\Users\kl001\Documents\grasshopper3_python\images\Acquisition-00-%02d.jpg'%i,0) for i in range(0,51)])
+    img_cam = np.array([cv2.imread(os.path.join(savedir,'capt0_%d.jpg'%i),0) for i in range(0,51)])
     camera_captured = img_cam[:,camy - half_cross_length : camy + half_cross_length, camx - half_cross_length : camx + half_cross_length]
-    max_raw_per_frame = np.max(camera_captured.reshape((camera_captured.shape[0],-1)),axis=1)
+    mean_intensity = np.mean(camera_captured.reshape((camera_captured.shape[0],-1)),axis=1)
     x_axis = np.arange(5,256,5)
-    plt.figure()
-    plt.scatter(x_axis, max_raw_per_frame, label = 'captured max per frame')
+    a,b = np.polyfit(x_axis,mean_intensity,1)
+    plt.figure(figsize=(16,9))
+    plt.scatter(x_axis, mean_intensity, label = 'captured mean per frame')
+    plt.plot(x_axis,a*x_axis+b, label = 'linear fit', color = 'r')
     plt.xlabel("Input Intensity",fontsize = 20)
     plt.ylabel("Output Intensity",fontsize = 20)
-    plt.legend()
-    return img_cam
+    plt.title("Projector gamma curve", fontsize = 20)
+    plt.xticks(fontsize = 15)
+    plt.yticks(fontsize = 15)
+    plt.legend(fontsize = 15)
+    plt.savefig(os.path.join(savedir, 'gamma_curve.png'))
+    plt.show()
+    plt.tight_layout()
+    np.save(os.path.join(savedir, 'gamma_curve.npy'),mean_intensity)
+    return 
 #%%
-savedir = r'C:\Users\kl001\Documents\grasshopper3_python\images'
-gamma_image_index_list = np.repeat(np.arange(5,22),3).tolist()
-gamma_pattern_num_list = [0,1,2] * len(set(gamma_image_index_list))
-proj_exposure_period = 27084; proj_frame_period = 33334
-gamma_capture(savedir, gamma_image_index_list, gamma_pattern_num_list,proj_exposure_period, proj_frame_period)
-img_cam = gamma_calculation(savedir)
+def main():
+    savedir = r'C:\Users\kl001\Documents\pyfringe_test\gamma_images'
+    gamma_image_index_list = np.repeat(np.arange(5,22),3).tolist()
+    gamma_pattern_num_list = [0,1,2] * len(set(gamma_image_index_list))
+    proj_exposure_period = 27084; proj_frame_period = 33334
+    gamma_capture(savedir, gamma_image_index_list, gamma_pattern_num_list,proj_exposure_period, proj_frame_period)
+    plot_gamma_curve(savedir)
 
-#%%
-    
+if __name__ == '__main__':
+    main()
+
