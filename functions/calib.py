@@ -37,7 +37,6 @@ class calibration:
                  dist_betw_circle, 
                  path):
         '''
-
         Parameters
         ----------
         proj_width = type: float. Width of projector.
@@ -55,8 +54,6 @@ class calibration:
         board_gridcolumns = type: int. Number of columns in the asymmetric circle pattern.
         dist_betw_circle = type: float. Distance between circle centers.
         path = type: string. Path to read captured calibration images and save calibration results.
-
-       
 
         '''
         self.width = proj_width
@@ -100,7 +97,6 @@ class calibration:
         proj_df1 = type: pandas dataframe of floats. Dataframe of projector absolute error in x and y directions of all poses.
 
         '''
-        
         objp = self.world_points(self.dist_betw_circle, self.board_gridrows, self.board_gridcolumns)
         if self.type_unwrap == 'phase':
             phase_st = -np.pi
@@ -518,10 +514,9 @@ class calibration:
                 wrapv_lst.append(phase_arr_v)
                 wraph_lst.append(phase_arr_h)
                 
-                wrapped_phase_lst = {
-                    "wrapv":wrapv_lst,
-                    "wraph":wraph_lst
-                    }
+                wrapped_phase_lst = {"wrapv":wrapv_lst,
+                                    "wraph":wraph_lst
+                                    }
                 
                 kv_lst.append(k_arr_v)
                 kh_lst.append(k_arr_h)
