@@ -9,17 +9,11 @@ import numpy as np
 import os
 import time
 from contextlib import contextmanager
-from math import floor
 import usb.core
-import usb.util
 from usb.core import USBError
 from time import perf_counter_ns
-import sys
-sys.path.append(r'C:\Users\kl001\pyfringe\proj4500')
-sys.path.append(r'C:\Users\kl001\Documents\pyfringe_test')
-sys.path.append(r'C:\Users\kl001\pyfringe\functions')
 import gspy
-import nstep_fringe as nstep
+from functions import nstep_fringe as nstep
 import cv2
 import PySpin
 
@@ -62,7 +56,6 @@ def bits_to_bytes(a, reverse=True): # default is reverse
         bytelist.reverse()
     return bytelist
 
-
 def fps_to_period(fps):
     """
     Calculates desired period (us) from given fps.
@@ -71,7 +64,7 @@ def fps_to_period(fps):
 
     :return: Period (us).
     """
-    period = int(floor(1.0 / fps * 10**6))
+    period = int(np.floor(1.0 / fps * 10**6))
     return period
 
 @contextmanager
@@ -206,6 +199,7 @@ class dlpc350(object):
         """
         for i in self.ans:
             print(hex(i))
+            
     def pretty_print_status(self):
         print('\n====================================Current status of projector attributes=============================\n')
         print('\nMirror :{}'.format(self.mirrorStatus))
@@ -226,8 +220,6 @@ class dlpc350(object):
         print('\nImage LUT entries:{}'.format(self.image_LUT_entries))
         print('\nPattern LUT entries:{}'.format(self.pattern_LUT_entries))
         
-        
-
     def get_main_status(self):
         """The Main Status command shows the status of DMD park and DLPC350 sequencer, frame buffer, and gamma
          correction.
@@ -320,7 +312,6 @@ class dlpc350(object):
             source = sources.index(source)
 
         self.command('w', 0x00, 0x1a, 0x22, [source])
-        
     
     def read_pattern_config(self):
         """
@@ -411,7 +402,7 @@ class dlpc350(object):
             self.trigger_polarity = "active high signal"
         self.tigger_rising_edge_delay = ans[1]
         self.trigger_falling_edge_delay = ans[-1]
-        
+        #TODO: convert time to microseconds
     def trig_out1_control(self,polarity_invert = True, trigedge_rise_delay = 187, trigedge_fall_delay = 187):
          """
          The Trigger Out1 Control command sets the polarity, rising edge delay, 
@@ -435,10 +426,8 @@ class dlpc350(object):
          self.trigger_falling_edge_delay = trigedge_fall_delay
          trigedge_rise_delay = conv_len(trigedge_rise_delay, 8)
          trigedge_fall_delay = conv_len(trigedge_fall_delay, 8)
-         
          payload =   trigedge_fall_delay + trigedge_rise_delay + polarity
          payload = bits_to_bytes(payload)
-         
          self.command('w', 0x00, 0x1a, 0x1d, payload)
          
     def read_exposure_frame_period(self):
@@ -714,7 +703,6 @@ class dlpc350(object):
         self.pattern_LUT_entries = ans
         self.open_mailbox(0)
         
-
 def get_image_LUT_swap_location(image_index_list):
     swap_location_list = [0] + [i for i in range(1,len(image_index_list)) if image_index_list[i]!=image_index_list[i-1]]
     image_LUT_entries = [image_index_list[i] for i in swap_location_list]
@@ -854,7 +842,8 @@ def proj_cam_acquire_images(cam, lcr, acquisition_index, savedir,
     """
     print('*** IMAGE ACQUISITION ***\n')
 
-    result = True        
+    result = True  
+    delta = 100      
 
     # live view        
     cam.BeginAcquisition()   
@@ -873,9 +862,14 @@ def proj_cam_acquire_images(cam, lcr, acquisition_index, savedir,
     ans = lcr.start_pattern_lut_validate()
     if not int(ans):
         lcr.pattern_display('start')
+    
     while True:                
         ret, frame = gspy.capture_image(cam)       
         img_show = cv2.resize(frame, None, fx=0.5, fy=0.5)
+        center_y = int(img_show.shape[0]/2)
+        center_x = int(img_show.shape[1]/2)
+        cv2.line(img_show,(center_x,center_y-delta),(center_x,center_y+delta),(0,0,255),5)
+        cv2.line(img_show,(center_x-delta,center_y),(center_x+delta,center_y),(0,0,255),5)
         cv2.imshow("press q to quit", img_show)    
         key = cv2.waitKey(1)        
         if key == ord("q"):
@@ -944,7 +938,8 @@ def proj_cam_acquire_images(cam, lcr, acquisition_index, savedir,
                                 
             if ret:
                 print("extract successfully")
-                filename = 'Acquisition-%02d-%02d.jpg' %(acquisition_index,count)
+                #filename = 'Acquisition-%02d-%02d.jpg' %(acquisition_index,count)
+                filename = 'capt%d_%d.jpg' %(acquisition_index,count)
                 save_path = os.path.join(savedir, filename)
                 cv2.imwrite(save_path, image_array)
                 print('Image saved at %s' % save_path)
@@ -1117,12 +1112,12 @@ def single_img_load(image_index):
                break
        cv2.destroyAllWindows()
    return
-# #%% Test Codes 
-# # Checking current projector setting
-# current_setting()
+#%% Test Codes 
+# Checking current projector setting
+#current_setting()
 
-# #%%
-# # image_index_list = [1,1,2,2,2,2,2]#,1,1,2,2,2]
+#%%
+# image_index_list = [1,1,2,2,2,2,2]#,1,1,2,2,2]
 # #image_index_list = [3,3,3,1,0,1,1,1,1,2,2,2,4,4,4]
 # image_index_list = [0,0,0,1,1,1,2,2,2,3,3,3,4,4,4]
 # pattern_num_list = [0,1,2] * len(set(image_index_list))
@@ -1132,9 +1127,9 @@ def single_img_load(image_index):
 
 # test_index_list = np.repeat(np.arange(5,28),3).tolist()
 # test_image = [1]
-# image_LUT_entries_read, lut_read, image_index_list_recovered, swap_location_list, swap_location_list_read = pattern_LUT_design(gamma_image_index_list, 
-#                                                                                                                                gamma_pattern_num_list,
-#                                                                                                                                )
+# #image_LUT_entries_read, lut_read, image_index_list_recovered, swap_location_list, swap_location_list_read = pattern_LUT_design(gamma_image_index_list, 
+# #                                                                                                                                gamma_pattern_num_list,
+# #                                                                                                                                )
 # #pattern_LUT_design(image_index_list)
 #   #%%
 
@@ -1151,16 +1146,16 @@ def single_img_load(image_index):
 #         print('Running example for camera %d...'%i)
 #         acquisition_index=0
 #         result &= run_proj_single_camera(cam, 
-#                                          savedir, 
-#                                          acquisition_index, 
-#                                          cam_triggerType,
-#                                          gamma_image_index_list,
-#                                          gamma_pattern_num_list, 
-#                                          proj_exposure_period, 
-#                                          proj_frame_period,
-#                                          do_insert_black=True,
-#                                          preview_image_index = 22,
-#                                          pprint_proj_status = True)
+#                                           savedir, 
+#                                           acquisition_index, 
+#                                           cam_triggerType,
+#                                           gamma_image_index_list,
+#                                           gamma_pattern_num_list, 
+#                                           proj_exposure_period, 
+#                                           proj_frame_period,
+#                                           do_insert_black=True,
+#                                           preview_image_index = 34,
+#                                           pprint_proj_status = True)
 #         print('Camera %d example complete...'%i)
 
 #     # Release reference to camera
@@ -1179,12 +1174,41 @@ def single_img_load(image_index):
 # system.ReleaseInstance() 
 
 # #%%
-# single_img_load(22)
-#%% Create fringe image 
+# single_img_load(34)
+#%% Create fringe image for calibration
 # savedir = r'C:\Users\kl001\Documents\proj_test\patterns_bmp\calib_patterns'
 # pitch_list = [1375, 275, 55, 11]
+# #pitch_list = [1250,250,50,10]
 # N_list = [3, 3, 3, 9]
 # phase_st = 0
 # inte_rang = [5,254]
 # type_unwrap = 'multifreq'
 # proj_fringe_images(savedir, pitch_list, N_list, type_unwrap, phase_st, inte_rang, calib_fringes = True)
+# #%%3 level reconstruction fringes
+# savedir = r'C:\Users\kl001\Documents\proj_test\patterns_bmp'
+# pitch_list = [1000, 110, 16]
+# N_list = [3, 3, 9]
+# phase_st = 0
+# inte_rang = [5,254]
+# type_unwrap = 'multifreq'
+# proj_fringe_images(savedir, pitch_list, N_list, type_unwrap, phase_st, inte_rang, calib_fringes = False)
+ #%% Modulation test fringes
+
+# savedir = r'C:\Users\kl001\Documents\proj_test\patterns_bmp\modulation_exp_fringes'
+# gt_pitch_list =[1000, 110, 16] 
+# gt_N_list = [16, 16, 16]
+# phase_st = 0
+# inte_rang = [5,254]
+# type_unwrap = 'multifreq'
+# proj_fringe_images(savedir, gt_pitch_list, gt_N_list, type_unwrap, phase_st, inte_rang, calib_fringes = False)
+# #%%
+# savedir = r'C:\Users\kl001\Documents\proj_test\patterns_bmp\modulation_exp_fringes'
+# phase_st = 0
+# inte_rang = [5,254]
+# type_unwrap = 'multifreq'
+# proj_width = 912
+# freq_list = np.append(proj_width/gt_pitch_list[0],np.arange(1,59,3))
+# pitch_list = np.ceil(proj_width / freq_list)
+# N_ini = 3
+# N_list = np.array([N_ini]*len(pitch_list))
+# proj_fringe_images(savedir, pitch_list, N_list, type_unwrap, phase_st, inte_rang, calib_fringes = False)
