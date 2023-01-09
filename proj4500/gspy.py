@@ -6,7 +6,7 @@ import sys
 import cv2
 from time import perf_counter_ns
 
-def capture_image(cam):
+def capture_image(cam, timeout=1000):
     """
     Once the camera engine has been activated, this function is used to Extract 
     one image from the buffering memery and save it into a numpy array.
@@ -17,6 +17,8 @@ def capture_image(cam):
     ----------
     cam : camera object from PySpin
         camera object to be used
+    timeout : int
+        timeout for capturing a frame in milliseconds
         
     Returns
     -------
@@ -27,19 +29,24 @@ def capture_image(cam):
         output image (numpy ndarray).
 
     """    
-    image_result = cam.GetNextImage(1000)  
+    image_result = cam.GetNextImage(timeout)
         
-    #  Ensure image completion
+    # Ensure image completion
     if image_result.IsIncomplete():
         print('Image incomplete with image status %d ...' % image_result.GetImageStatus(), end="\r")
         return False, None
     else:        
         image_array = image_result.GetNDArray()          
-        #  Release image
+        # Release image
         image_result.Release()       
         return True, image_array
 
-def cam_configuration(cam, triggerType):
+def cam_configuration(cam, 
+                      triggerType,
+                      frameRate=30,
+                      exposureTime=27084,
+                      gain=0,
+                      bufferCount=15):
     """
     Configurate the camera. Note that the camera must be initialized before calling
     this function, i.e., cam.Init() must be called before calling this function.
@@ -50,7 +57,14 @@ def cam_configuration(cam, triggerType):
         The camera to be configureated.
     triggerType : str
         Must be one of {"software", "hardware"}.
-
+    frameRate : float
+        Framerate
+    exposureTime : int
+        Exposure time in microseconds
+    gain : float
+        Gain
+    bufferCount : int
+        Buffer count.
     Returns
     -------
     result : bool
@@ -85,20 +99,17 @@ def cam_configuration(cam, triggerType):
     print('\n=================== Config camera ==============================================\n')
     result = True    
     result &= setAcqusitionMode(nodemap, AcqusitionModeName='Continuous')    
+    result &= setFrameRate(nodemap, frameRate=frameRate)
+    result &= setExposureTime(nodemap, exposureTime=exposureTime)
+    result &= setGain(nodemap, gain=gain)
     result &= configure_trigger(nodemap, triggerType=triggerType)
-    result &= enableFrameRateSetting(nodemap)
-    result &= setFrameRate(nodemap, frameRate=30)    
-    result &= disableGainAuto(nodemap)
-    result &= setGain(nodemap, gain_val=0)
     
     if triggerType == 'software':
-        result &= setStreamBufferHandlingMode(s_node_map, StreamBufferHandlingModeName='NewestOnly')
-        result &= setExposureTime(nodemap, exposureTimeToSet=None) # exposureTimeToSet=None means using maximum exposure time!
+        result &= setStreamBufferHandlingMode(s_node_map, StreamBufferHandlingModeName='NewestOnly')        
     
     if triggerType == 'hardware':
         result &= setStreamBufferHandlingMode(s_node_map, StreamBufferHandlingModeName='OldestFirst')
-        # result &= setExposureTime(nodemap, exposureTimeToSet=49770)
-        result &= setBufferCount(s_node_map, 15)
+        result &= setBufferCount(s_node_map, bufferCount=bufferCount)
     
     print('\n=================== Camera status after configuration ==========================\n')    
     get_IEnumeration_node_current_entry_name(nodemap, 'AcquisitionMode')    
@@ -121,28 +132,39 @@ def cam_configuration(cam, triggerType):
     get_IFloat_node_current_val(nodemap, 'TriggerDelay')
     return result
 
-def acquire_images(cam, acquisition_index, savedir, triggerType):
+def acquire_images(cam, 
+                   acquisition_index,
+                   num_images,
+                   savedir,                   
+                   timeout=10):
     """
-    This function acquires and saves one image from a device. Note that camera 
-    must be initialized before calling this function, i.e., cam.Init() must be 
-    called before calling this function.
+    This function acquires and saves images from a device. Note that camera 
+    must be initialized and configurated before calling this function, i.e., 
+    cam.Init() and cam_configuration(cam,triggerType, ...,) must be called 
+    before calling this function.
 
     :param cam: Camera to acquire images from.
-    :param savedir: directory to save images
     :param acquisition_index: the index number of the current acquisition.
-    :param triggerType: trigger type, must be one of {"software", "hardware"}
+    :param num_images: the total number of images to be taken.
+    :param savedir: directory to save images.    
+    :param timeout: the maximum waiting time in seconds before termination.
     :type cam: CameraPtr
-    :tyoe savedir: str
     :type acquisition_index: int
-    :type triggerType: str
+    :type num_images: int
+    :tyoe savedir: str    
+    :type timeout: float
     :return: True if successful, False otherwise.
     :rtype: bool
     """
+    
+    nodemap = cam.GetNodeMap()
+    triggerSourceSymbolic = get_IEnumeration_node_current_entry_name(nodemap, 'TriggerSource', verbose=False)
+
     print('*** IMAGE ACQUISITION ***\n')
-
-    result = True        
-
-    # live view        
+    result = True
+    # live view
+    # First, deactivate the trigger!
+    deactivate_trigger(cam)        
     cam.BeginAcquisition()        
     while True:                
         ret, frame = capture_image(cam)       
@@ -152,13 +174,13 @@ def acquire_images(cam, acquisition_index, savedir, triggerType):
         if key == ord("q"):
             break
     cam.EndAcquisition()
-    cv2.destroyAllWindows()
-    
+    cv2.destroyAllWindows()    
+
     # Retrieve, convert, and save image
     activate_trigger(cam)
     cam.BeginAcquisition()        
     
-    if triggerType == "software":
+    if triggerSourceSymbolic == "Software":
         start = perf_counter_ns()            
         cam.TriggerSoftware.Execute()               
         ret, image_array = capture_image(cam=cam)                
@@ -172,19 +194,19 @@ def acquire_images(cam, acquisition_index, savedir, triggerType):
             print('Image saved at %s' % save_path)
         else:
             print('Capture failed')
+            result = False
     
-    if triggerType == "hardware":
+    if triggerSourceSymbolic == "Line0":
         count = 0        
         start = perf_counter_ns()                        
-        while count < 15:
+        while count < num_images:
             try:
                 ret, image_array = capture_image(cam=cam)
             except PySpin.SpinnakerException as ex:
                 print('Error: %s' % ex)
                 ret = False
                 image_array = None
-                pass
-                                
+                pass                                
             if ret:
                 print("extract successfully")
                 filename = 'Acquisition-%02d-%02d.jpg' %(acquisition_index,count)
@@ -197,10 +219,12 @@ def acquire_images(cam, acquisition_index, savedir, triggerType):
             else:
                 end = perf_counter_ns()
                 waiting_time = (end - start)/1e9
-                print('Capture failed, time spent %2.3f s before 10s timeout'%waiting_time)
-                if waiting_time > 10:
+                print('Capture failed. Time spent %2.3f s before %2.3f s timeout'%(waiting_time,timeout))
+                if waiting_time > timeout:
                     print('timeout is reached, stop capturing image ...')
                     break
+        if count == 0:
+            result = False
     
     cam.EndAcquisition()
     deactivate_trigger(cam)        
@@ -238,16 +262,40 @@ def print_device_info(nodemap_tldevice):
         return False
     return result
 
-def run_single_camera(cam, savedir, acquisition_index, triggerType):
+def run_single_camera(cam, 
+                      savedir, 
+                      acquisition_index, 
+                      num_images, 
+                      triggerType,
+                      frameRate=30,
+                      exposureTime=27084,
+                      gain=0,
+                      bufferCount=15,
+                      timeout=10):
     """
-    Initialize and configurate a camera and take one image.
+    Initialize and configurate a camera and take images. This is a wrapper
+    function.
 
-    :param cam: Camera to run on.
+    :param cam: Camera to acquire images from.
+    :param savedir: directory to save images.
+    :param acquisition_index: the index number of the current acquisition.
+    :param num_images: the total number of images to be taken.    
+    :param triggerType: trigger type, must be one of {"software", "hardware"}
+    :param frameRate: framerate.
+    :param exposureTime: exposure time in microseconds.
+    :param gain: gain
+    :param bufferCount: buffer count number on RAM
+    :param timeout: the waiting time in seconds before termination
     :type cam: CameraPtr
-    :param savedir: directory to save images
-    :param acquisition_index: the index of acquisition
-    :type savedir: str
+    :tyoe savedir: str
     :type acquisition_index: int
+    :type num_images: int    
+    :type triggerType: str
+    :type frameRate: float
+    :type exposureTime: int
+    :type gain: float
+    :type bufferCount: int
+    :type timeout: float
     :return: True if successful, False otherwise.
     :rtype: bool
     """
@@ -256,9 +304,18 @@ def run_single_camera(cam, savedir, acquisition_index, triggerType):
         # Initialize camera
         cam.Init()
         # config camera
-        result &= cam_configuration(cam, triggerType)        
+        result &= cam_configuration(cam=cam, 
+                                    triggerType=triggerType,
+                                    frameRate=frameRate,
+                                    exposureTime=exposureTime,
+                                    gain=gain,
+                                    bufferCount=bufferCount)
         # Acquire images        
-        result &= acquire_images(cam, acquisition_index, savedir, triggerType)
+        result &= acquire_images(cam=cam, 
+                                 acquisition_index=acquisition_index, 
+                                 num_images=num_images,
+                                 savedir=savedir,
+                                 timeout=timeout)
         # Deinitialize camera        
         cam.DeInit()
     except PySpin.SpinnakerException as ex:
@@ -278,7 +335,7 @@ def sysScan():
         Camera system object
     cam_list : list
         Camera list.
-    num_cameras : TYPE
+    num_cameras : int
         Number of cameras.
 
     """
@@ -295,8 +352,13 @@ def sysScan():
     cam_list = system.GetCameras()
     
     # Get the total number of cameras
-    num_cameras = cam_list.GetSize()
-    print('Number of cameras detected: %d' % num_cameras)
+    num_cameras = cam_list.GetSize()    
+    
+    if not cam_list:
+        result = False
+        print('No camera is detected...')
+    else:
+        print('Number of cameras detected: %d' % num_cameras) 
     
     return result, system, cam_list, num_cameras
 
@@ -321,62 +383,67 @@ def clearDir(targetDir):
     else:
         print('The target directory is empty! No image file needs to be removed')    
 
-def get_IEnumeration_node_current_entry_name(nodemap, nodename):
+def get_IEnumeration_node_current_entry_name(nodemap, nodename, verbose=True):
     node = PySpin.CEnumerationPtr(nodemap.GetNode(nodename))
     node_int_val = node.GetIntValue()
     node_entry = node.GetEntry(node_int_val)
     node_entry_name = node_entry.GetSymbolic()
-    node_description = node.GetDescription()
-    node_entries = node.GetEntries() # node_entries is a list of INode instances    
-    print('%s: %s' % (nodename, node_entry_name))    
-    print(node_description)    
-    print('All entries are listed below:')
-    for i, entry in enumerate(node_entries):        
-        entry_name = PySpin.CEnumEntryPtr(entry).GetSymbolic()        
-        print('%d: %s' % (i, entry_name))    
-    print('\n')
+    if verbose:
+        node_description = node.GetDescription()
+        node_entries = node.GetEntries() # node_entries is a list of INode instances    
+        print('%s: %s' % (nodename, node_entry_name))    
+        print(node_description)    
+        print('All entries are listed below:')
+        for i, entry in enumerate(node_entries):        
+            entry_name = PySpin.CEnumEntryPtr(entry).GetSymbolic()        
+            print('%d: %s' % (i, entry_name))    
+        print('\n')
     return node_entry_name
 
-def get_IInteger_node_current_val(nodemap, nodename):
+def get_IInteger_node_current_val(nodemap, nodename, verbose=True):
     node = PySpin.CIntegerPtr(nodemap.GetNode(nodename))
     node_val = node.GetValue()
-    node_val_max = node.GetMax()
-    node_val_min = node.GetMin()
-    node_description = node.GetDescription()    
-    print('%s: %d' % (nodename, node_val))
-    print(node_description)
-    print('Max = %d' % node_val_max)
-    print('Min = %d' % node_val_min)
-    print('\n')    
+    if verbose:
+        node_val_max = node.GetMax()
+        node_val_min = node.GetMin()
+        node_description = node.GetDescription()    
+        print('%s: %d' % (nodename, node_val))
+        print(node_description)
+        print('Max = %d' % node_val_max)
+        print('Min = %d' % node_val_min)
+        print('\n')    
     return node_val
 
-def get_IFloat_node_current_val(nodemap, nodename):
+def get_IFloat_node_current_val(nodemap, nodename, verbose=True):
     node = PySpin.CFloatPtr(nodemap.GetNode(nodename))
     node_val = node.GetValue()
-    node_val_max = node.GetMax()
-    node_val_min = node.GetMin()
-    node_unit = node.GetUnit()
-    print('%s: %f' % (nodename, node_val))    
-    print('Max = %f' % node_val_max)
-    print('Min = %f' % node_val_min)
-    print('Unit: ', node_unit)
-    print('\n')
+    if verbose:
+        node_val_max = node.GetMax()
+        node_val_min = node.GetMin()
+        node_unit = node.GetUnit()
+        print('%s: %f' % (nodename, node_val))    
+        print('Max = %f' % node_val_max)
+        print('Min = %f' % node_val_min)
+        print('Unit: ', node_unit)
+        print('\n')
     return node_val
 
-def get_IString_node_current_str(nodemap, nodename):
+def get_IString_node_current_str(nodemap, nodename, verbose=True):
     node = PySpin.CStringPtr(nodemap.GetNode(nodename))
     node_str = node.GetValue()
-    node_description = node.GetDescription()
-    print('%s: %s' % (nodename, node_str))
-    print(node_description, '\n')
+    if verbose:
+        node_description = node.GetDescription()
+        print('%s: %s' % (nodename, node_str))
+        print(node_description, '\n')
     return node_str
 
-def get_IBoolean_node_current_val(nodemap, nodename):
+def get_IBoolean_node_current_val(nodemap, nodename, verbose=True):
     node = PySpin.CBooleanPtr(nodemap.GetNode(nodename))
     node_val = node.GetValue()
-    node_description = node.GetDescription()
-    print('%s: %s' % (nodename, node_val))
-    print(node_description, '\n')
+    if verbose:
+        node_description = node.GetDescription()
+        print('%s: %s' % (nodename, node_val))
+        print(node_description, '\n')
     return node_val
 
 def enableFrameRateSetting(nodemap):
@@ -386,7 +453,7 @@ def enableFrameRateSetting(nodemap):
         print('Unable to retrieve AcquisitionFrameRateAuto. Aborting...')
         return False
     acqFrameRateAutoOff = acqFrameRateAuto.GetEntryByName('Off')
-    if not PySpin.IsAvailable(acqFrameRateAutoOff) or not PySpin.IsReadable(acqFrameRateAutoOff):
+    if (not PySpin.IsAvailable(acqFrameRateAutoOff)) or (not PySpin.IsReadable(acqFrameRateAutoOff)):
         print('Unable to set Buffer Handling mode (Value retrieval). Aborting...')
         return False    
     acqFrameRateAuto.SetIntValue(acqFrameRateAutoOff.GetValue()) # setting to Off
@@ -401,11 +468,15 @@ def enableFrameRateSetting(nodemap):
     return True
 
 def setFrameRate(nodemap, frameRate):
-    # frame rate should be a float number.    
+    # First enable framerate setting    
+    if not enableFrameRateSetting(nodemap):
+        return False
+    # frame rate should be a float number. Get the node and check availability   
     ptrAcquisitionFramerate = PySpin.CFloatPtr(nodemap.GetNode("AcquisitionFrameRate"))
-    if not PySpin.IsAvailable(ptrAcquisitionFramerate) and not PySpin.IsReadable(ptrAcquisitionFramerate):
+    if (not PySpin.IsAvailable(ptrAcquisitionFramerate)) or (not PySpin.IsWritable(ptrAcquisitionFramerate)):
         print('Unable to retrieve AcquisitionFrameRate. Aborting...')
         return False
+    # Set framerate value
     ptrAcquisitionFramerate.SetValue(frameRate)
     print('AcquisitionFrameRate set to %3.3f Hz' % frameRate)      
     return True
@@ -418,7 +489,7 @@ def enableExposureAuto(nodemap):
         return False
     # Get the "Continuous" entry
     ExposureAuto_on = ptrExposureAuto.GetEntryByName("Continuous")
-    if not PySpin.IsAvailable(ExposureAuto_on) or not PySpin.IsReadable(ExposureAuto_on):
+    if (not PySpin.IsAvailable(ExposureAuto_on)) or (not PySpin.IsReadable(ExposureAuto_on)):
         print('Unable to set ExposureAuto mode to Continuous. Aborting...')
         return False
     # set the "Continuous" entry to ExposureAuto
@@ -434,7 +505,7 @@ def disableExposureAuto(nodemap):
         return False
     # Get the "Off" entry
     ExposureAuto_off = ptrExposureAuto.GetEntryByName("Off")
-    if not PySpin.IsAvailable(ExposureAuto_off) or not PySpin.IsReadable(ExposureAuto_off):
+    if (not PySpin.IsAvailable(ExposureAuto_off)) or (not PySpin.IsReadable(ExposureAuto_off)):
         print('Unable to set ExposureAuto mode to Off. Aborting...')
         return False
     # set the "Off" entry to ExposureAuto
@@ -451,7 +522,7 @@ def setExposureMode(nodemap, exposureModeToSet):
     ----------
     nodemap : INodeMap
         Camara nodemap.
-    exposureModeToSet : Str
+    exposureModeToSet : str
         ExposureModeEnums, must be one of {"Timed", "TriggerWidth"}
 
     Returns
@@ -467,7 +538,7 @@ def setExposureMode(nodemap, exposureModeToSet):
         return False
     # Get the Entry to be set and check if it is available and writable
     ExposureMode_selected = ptrExposureMode.GetEntryByName(exposureModeToSet)
-    if not PySpin.IsAvailable(ExposureMode_selected) or not PySpin.IsReadable(ExposureMode_selected):
+    if (not PySpin.IsAvailable(ExposureMode_selected)) or (not PySpin.IsReadable(ExposureMode_selected)):
         print('Unable to set ExposureMode to %s. Aborting...'%exposureModeToSet)
         return False    
     # Set the entry to the node
@@ -499,7 +570,7 @@ def setTriggerMode(nodemap, TriggerModeToSet):
         return False
     # Get the Entry to be set and check if it is available and writable
     TriggerMode_selected = ptrTriggerMode.GetEntryByName(TriggerModeToSet)
-    if not PySpin.IsAvailable(TriggerMode_selected) or not PySpin.IsReadable(TriggerMode_selected):
+    if (not PySpin.IsAvailable(TriggerMode_selected)) or (not PySpin.IsReadable(TriggerMode_selected)):
         print('Unable to set TriggerMode to %s. Aborting...'%TriggerModeToSet)
         return False 
     ptrTriggerMode.SetIntValue(TriggerMode_selected.GetValue())
@@ -530,7 +601,7 @@ def setTriggerActivation(nodemap, TriggerActivationToSet):
         return False
     # Get the Entry to be set and check if it is available and writable
     TriggerActivation_selected = ptrTriggerActivation.GetEntryByName(TriggerActivationToSet)
-    if not PySpin.IsAvailable(TriggerActivation_selected) or not PySpin.IsReadable(TriggerActivation_selected):
+    if (not PySpin.IsAvailable(TriggerActivation_selected)) or (not PySpin.IsReadable(TriggerActivation_selected)):
         print('Unable to set TriggerActivation to %s. Aborting...'%TriggerActivationToSet)
         return False
     ptrTriggerActivation.SetIntValue(TriggerActivation_selected.GetValue())
@@ -561,7 +632,7 @@ def setTriggerOverlap(nodemap, TriggerOverlapToSet):
         return False
     # Get the Entry to be set and check if it is available and writable
     TriggerOverlap_selected = ptrTriggerOverlap.GetEntryByName(TriggerOverlapToSet)
-    if not PySpin.IsAvailable(TriggerOverlap_selected) or not PySpin.IsReadable(TriggerOverlap_selected):
+    if (not PySpin.IsAvailable(TriggerOverlap_selected)) or (not PySpin.IsReadable(TriggerOverlap_selected)):
         print('Unable to set TriggerOverlap to %s. Aborting...'%TriggerOverlapToSet)
         return False
     ptrTriggerOverlap.SetIntValue(TriggerOverlap_selected.GetValue())
@@ -592,7 +663,7 @@ def setTriggerSelector(nodemap, TriggerSelectorToSet):
         return False
     # Get the Entry to be set and check if it is available and writable
     TriggerSelector_selected = ptrTriggerSelector.GetEntryByName(TriggerSelectorToSet)
-    if not PySpin.IsAvailable(TriggerSelector_selected) or not PySpin.IsReadable(TriggerSelector_selected):
+    if (not PySpin.IsAvailable(TriggerSelector_selected)) or (not PySpin.IsReadable(TriggerSelector_selected)):
         print('Unable to set TriggerSelector to %s. Aborting...'%TriggerSelectorToSet)
         return False
     ptrTriggerSelector.SetIntValue(TriggerSelector_selected.GetValue())
@@ -623,31 +694,32 @@ def setTriggerSource(nodemap, TriggerSourceToSet):
         return False
     # Get the Entry to be set and check if it is available and writable
     TriggerSource_selected = ptrTriggerSource.GetEntryByName(TriggerSourceToSet)
-    if not PySpin.IsAvailable(TriggerSource_selected) or not PySpin.IsReadable(TriggerSource_selected):
+    if (not PySpin.IsAvailable(TriggerSource_selected)) or (not PySpin.IsReadable(TriggerSource_selected)):
         print('Unable to set TriggerSource to %s. Aborting...'%TriggerSourceToSet)
         return False
     ptrTriggerSource.SetIntValue(TriggerSource_selected.GetValue())
     print('TriggerSource is set to %s...'%TriggerSourceToSet)   
     return True
 
-def setExposureTime(nodemap, exposureTimeToSet=None):
+def setExposureTime(nodemap, exposureTime=None):
     # First disable the ExposureAuto
-    disableExposureAuto(nodemap)
+    if not disableExposureAuto(nodemap):
+        return False
     # Get the node "ExposureTime" and check if it is available and writable
     ptrExposureTime = PySpin.CFloatPtr(nodemap.GetNode("ExposureTime"))
-    if not PySpin.IsAvailable(ptrExposureTime) and not PySpin.IsReadable(ptrExposureTime):
+    if (not PySpin.IsAvailable(ptrExposureTime)) or (not PySpin.IsWritable(ptrExposureTime)):
         print('Unable to retrieve Exposure Time. Aborting...')
         return False
     # Ensure desired exposure time does not exceed the maximum
     exposureTimeMax = ptrExposureTime.GetMax()
-    if exposureTimeToSet is None:
-        exposureTimeToSet = exposureTimeMax
+    if exposureTime is None:
+        exposureTime = exposureTimeMax
     else:
-        if exposureTimeToSet > exposureTimeMax:
-            exposureTimeToSet = exposureTimeMax
+        if exposureTime > exposureTimeMax:
+            exposureTime = exposureTimeMax
     # Set the exposure time
-    ptrExposureTime.SetValue(exposureTimeToSet)
-    print('Exposure Time set to %5.6f microseconds'%exposureTimeToSet)      
+    ptrExposureTime.SetValue(exposureTime)
+    print('Exposure Time set to %5.6f microseconds'%exposureTime)      
     return True
 
 def setAcqusitionMode(nodemap, AcqusitionModeName):
@@ -671,12 +743,12 @@ def setAcqusitionMode(nodemap, AcqusitionModeName):
 
     # # In order to access the node entries, they have to be casted to a pointer type (CEnumerationPtr here)
     node_acquisition_mode = PySpin.CEnumerationPtr(nodemap.GetNode('AcquisitionMode'))
-    if not PySpin.IsAvailable(node_acquisition_mode) or not PySpin.IsWritable(node_acquisition_mode):
+    if (not PySpin.IsAvailable(node_acquisition_mode)) or (not PySpin.IsWritable(node_acquisition_mode)):
         print('Unable to set acquisition mode to continuous (enum retrieval). Aborting...')
         return False
     # Retrieve entry node from enumeration node
     node_acquisition_mode_selected = node_acquisition_mode.GetEntryByName(AcqusitionModeName)
-    if not PySpin.IsAvailable(node_acquisition_mode_selected) or not PySpin.IsReadable(node_acquisition_mode_selected):
+    if (not PySpin.IsAvailable(node_acquisition_mode_selected)) or (not PySpin.IsReadable(node_acquisition_mode_selected)):
         print('Unable to set acquisition mode to %s. Aborting...' % node_acquisition_mode_selected)
         return False
     # Set integer value from entry node as new value of enumeration node
@@ -702,11 +774,11 @@ def setStreamBufferHandlingMode(s_node_map, StreamBufferHandlingModeName):
 
     """
     handlingMode = PySpin.CEnumerationPtr(s_node_map.GetNode('StreamBufferHandlingMode'))
-    if not PySpin.IsAvailable(handlingMode) or not PySpin.IsWritable(handlingMode):
+    if (not PySpin.IsAvailable(handlingMode)) or (not PySpin.IsWritable(handlingMode)):
         print('Unable to set Buffer Handling mode (node retrieval). Aborting...')
         return False    
     handlingModeSelected = handlingMode.GetEntryByName(StreamBufferHandlingModeName)
-    if not PySpin.IsAvailable(handlingModeSelected) or not PySpin.IsReadable(handlingModeSelected):
+    if (not PySpin.IsAvailable(handlingModeSelected)) or (not PySpin.IsReadable(handlingModeSelected)):
         print('Unable to set Buffer Handling mode (Value retrieval). Aborting...')
         return False
     handlingMode.SetIntValue(handlingModeSelected.GetValue())
@@ -716,35 +788,39 @@ def setStreamBufferHandlingMode(s_node_map, StreamBufferHandlingModeName):
 def setBufferCount(s_node_map, bufferCount):
     # Retrieve and modify Stream Buffer Count
     buffer_count = PySpin.CIntegerPtr(s_node_map.GetNode('StreamBufferCountManual'))
-    if not PySpin.IsAvailable(buffer_count) or not PySpin.IsWritable(buffer_count):
+    if (not PySpin.IsAvailable(buffer_count)) or (not PySpin.IsWritable(buffer_count)):
         print('Unable to set Buffer Count (Integer node retrieval). Aborting...')
         return False
     buffer_count.SetValue(bufferCount)
     print('Buffer count now set to: %d'%buffer_count.GetValue())
     return True
     
-def disableGainAuto(nodemap):
-    # Turn off "AcquisitionFrameRateAuto"    
+def disableGainAuto(nodemap):    
     gainAuto = PySpin.CEnumerationPtr(nodemap.GetNode("GainAuto"))
     if (not PySpin.IsAvailable(gainAuto)) or (not PySpin.IsWritable(gainAuto)): 
         print('Unable to retrieve GainAuto. Aborting...')
         return False
     gainAutoOff = gainAuto.GetEntryByName('Off')
-    if not PySpin.IsAvailable(gainAutoOff) or not PySpin.IsReadable(gainAutoOff):
+    if (not PySpin.IsAvailable(gainAutoOff)) or (not PySpin.IsReadable(gainAutoOff)):
         print('Unable to set GainAuto to off (Value retrieval). Aborting...')
         return False
-    # setting up a value for the Gain auto ( 0 = Off, 1 = Once, 2= Continous, now we need "0 -- off")
+    # setting "Off" for the Gain auto
     gainAuto.SetIntValue(gainAutoOff.GetValue()) # setting to Off
     print('Set GainAuto to off')
     return True
 
-def setGain(nodemap, gain_val):
+def setGain(nodemap, gain):
+    # First disable gainAuto
+    if not disableGainAuto(nodemap):
+        return False
+    # Get the node "Gain" and check the availability
     gainValue = PySpin.CFloatPtr(nodemap.GetNode("Gain"))
     if (not PySpin.IsAvailable(gainValue)) or (not PySpin.IsWritable(gainValue)): 
         print('Unable to retrieve Gain. Aborting...')
         return False
-    gainValue.SetValue(gain_val)
-    print('Set Gain to %2.3f'%gain_val)
+    # Set the gain value
+    gainValue.SetValue(gain)
+    print('Set Gain to %2.3f'%gain)
     return True
 
 def configure_trigger(nodemap, triggerType):
@@ -776,22 +852,22 @@ def configure_trigger(nodemap, triggerType):
         # Ensure trigger mode off
         # The trigger must be disabled in order to configure whether the source
         # is software or hardware.
-        setTriggerMode(nodemap, "Off")
+        result &= setTriggerMode(nodemap, "Off")
                 
         if  triggerType == 'off':            
-            return True
+            return result
         
         if triggerType == 'software':
-            setTriggerSource(nodemap, "Software")            
-            setExposureMode(nodemap, "Timed")
-            setTriggerSelector(nodemap, "FrameStart")
-            setTriggerActivation(nodemap, "FallingEdge")           
+            result &= setTriggerSource(nodemap, "Software")            
+            result &= setExposureMode(nodemap, "Timed")
+            result &= setTriggerSelector(nodemap, "FrameStart")
+            result &= setTriggerActivation(nodemap, "FallingEdge")           
             
         if triggerType == 'hardware':
-            setTriggerSource(nodemap, "Line0")                       
-            setExposureMode(nodemap, "TriggerWidth")
-            setTriggerSelector(nodemap, "ExposureActive")
-            setTriggerActivation(nodemap, "FallingEdge")
+            result &= setTriggerSource(nodemap, "Line0")                       
+            result &= setExposureMode(nodemap, "TriggerWidth")
+            result &= setTriggerSelector(nodemap, "ExposureActive")
+            result &= setTriggerActivation(nodemap, "FallingEdge")
             
     except PySpin.SpinnakerException as ex:
         print('Error: %s'%ex)
@@ -800,16 +876,18 @@ def configure_trigger(nodemap, triggerType):
 
 def activate_trigger(cam):
     nodemap = cam.GetNodeMap()
-    setTriggerMode(nodemap, "On")    
+    result = setTriggerMode(nodemap, "On")    
     # setTriggerOverlap(nodemap, "ReadOut")    
-    return True
+    return result
 
 def deactivate_trigger(cam):
     nodemap = cam.GetNodeMap()
-    setTriggerMode(nodemap, "Off")
-    return True    
+    result = setTriggerMode(nodemap, "Off")
+    return result    
 
-def main():
+def main():    
+    acquisition_index=0
+    num_images = 15
     triggerType = "hardware"
     result, system, cam_list, num_cameras = sysScan()
     
@@ -818,9 +896,12 @@ def main():
         savedir = r'C:\Users\kl001\Documents\grasshopper3_python\images'
         clearDir(savedir)
         for i, cam in enumerate(cam_list):    
-            print('Running example for camera %d...'%i)
-            acquisition_index=0
-            result &= run_single_camera(cam, savedir, acquisition_index, triggerType=triggerType) # only one acquisition            
+            print('Running example for camera %d...'%i)            
+            result &= run_single_camera(cam=cam, 
+                                        savedir=savedir, 
+                                        acquisition_index=acquisition_index,
+                                        num_images=num_images,
+                                        triggerType=triggerType) 
             print('Camera %d example complete...'%i)
     
         # Release reference to camera
