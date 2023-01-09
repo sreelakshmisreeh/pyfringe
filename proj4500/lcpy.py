@@ -402,8 +402,8 @@ class dlpc350(object):
         tigger_rising_edge_delay = ans[1]
         trigger_falling_edge_delay = ans[-1]
         #convert to μs
-        self.trigedge_rise_delay_microsec = -20.05 + 0.1072 * tigger_rising_edge_delay
-        self.trigedge_fall_delay_microsec = -20.05 + 0.1072 * trigger_falling_edge_delay
+        self.trigedge_rise_delay_microsec = np.round(-20.05 + 0.1072 * tigger_rising_edge_delay, decimals = 3)
+        self.trigedge_fall_delay_microsec = np.round(-20.05 + 0.1072 * trigger_falling_edge_delay, decimals = 3)
         
     def trig_out1_control(self,polarity_invert = True, trigedge_rise_delay_microsec = 0, trigedge_fall_delay_microsec = 0):
          """
@@ -907,7 +907,7 @@ def single_img_load(image_index):
    return
 #%% Test Codes 
 # Checking current projector setting
-#current_setting()
+current_setting()
 
 #%%
 # image_index_list = [1,1,2,2,2,2,2]#,1,1,2,2,2]
