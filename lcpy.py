@@ -563,22 +563,29 @@ class dlpc350(object):
              ret = 1
              start = perf_counter_ns()
              while ret:
-                 self.command('r', 0x00, 0x1a, 0x1a,[])
+                 result &= self.command('r', 0x00, 0x1a, 0x1a,[])
                  ans = conv_len(self.ans[4],8)
                  ret = int(ans[0])    
                  end = perf_counter_ns()
                  t = (end - start)/1e9    
                  if t > 10:
+                     result &= False
+                     print('\n Validation timed out \n')
                      break
+             if not int(ans):  
+                 print('\nValidation successful \n')
+                 result &= True
+             else:
+                 print('\n Validation failure, see results below\n ')
+                 result &= False
              print('\n================= Validation result ======================\n')
              print(f'Exposure and frame period setting: {"invalid" if int(ans[-1]) else "valid"}\n')
              print(f'LUT: {"invalid" if int(ans[-2]) else "valid"}\n')
              print(f'Trigger Out1: {"invalid" if int(ans[-3]) else "valid"}\n')
              print(f'Post sector settings: {"warning:invalid" if int(ans[-4]) else "valid"}\n')
              print(f'DLPC350 is {"busy" if int(ans[-8]) else "valid"}\n')
-             return True
-         else:
-             return False
+         return result
+         
         
     def open_mailbox(self, mbox_num):
         """
@@ -869,12 +876,20 @@ def current_setting():
     '''
     with connect_usb() as lcr:
         # to stop current pattern sequence mode
-        lcr.pattern_display('stop')
-        lcr.pretty_print_status()
-        # do validation and project current LUT patterns
-        ans = lcr.start_pattern_lut_validate()
-        if not int(ans):
-            lcr.pattern_display('start')
+        result = lcr.pattern_display('stop')
+        if result:
+            lcr.pretty_print_status()
+            # do validation and project current LUT patterns
+            result &= lcr.start_pattern_lut_validate()
+            if result:
+                result &= lcr.pattern_display('start')
+            else:
+                print("ERROR: Projector cannot be started")
+                result &= False
+        else:
+            print("ERROR: Projector cannot be stopped.")
+            result &= False
+        
     return 
 
 def forge_bmp(single_channel_image_list, savedir, convertRGB = True):
@@ -970,8 +985,8 @@ def proj_single_img(image_index,
                                            do_insert_black=False,
                                            do_trig_out_prev=False)
             lcr.pretty_print_status()
-            ans = lcr.start_pattern_lut_validate()
-            if ans:
+            result &= lcr.start_pattern_lut_validate()
+            if result:
                 result &= lcr.pattern_display('start')
                 input("Press Enter to stop...")
                 result &= lcr.pattern_display('stop')                
@@ -1028,9 +1043,9 @@ def proj_pattern_LUT(image_index_list,
             temp = 3 * lcr.num_lut_entries # each lut entry has 3 bytes
             lut_read = lcr.pattern_LUT_entries[0:temp]
             #start validation
-            ans = lcr.start_pattern_lut_validate()
+            result &= lcr.start_pattern_lut_validate()
             #Check validation status
-            if ans:   
+            if result:   
                 result &= lcr.pattern_display('start')
         except:
             print("An exception occurred")
