@@ -260,7 +260,7 @@ class dlpc350(object):
             return False
     
     def read_num_of_flashimages(self):
-#TODO: add return result
+
         """
         This command retrieves the information about the number of Images in the flash.
         
