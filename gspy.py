@@ -41,7 +41,8 @@ def capture_image(cam, timeout=1000):
         image_result.Release()       
         return True, image_array
 
-def cam_configuration(cam, 
+def cam_configuration(nodemap,
+                      s_node_map,
                       triggerType='off', # default is for preview
                       frameRate=30,
                       exposureTime=27084,
@@ -72,13 +73,9 @@ def cam_configuration(cam,
         operation result.
 
     """
-    nodemap = cam.GetNodeMap()
-    nodemap_tldevice = cam.GetTLDeviceNodeMap()
-    s_node_map = cam.GetTLStreamNodeMap()
     
     print('\n=================== Camera status before configuration ==========================\n')    
-    print_device_info(nodemap_tldevice)    
-    get_IEnumeration_node_current_entry_name(nodemap, 'AcquisitionMode')    
+    AcquisitionMode = get_IEnumeration_node_current_entry_name(nodemap, 'AcquisitionMode')    
     get_IEnumeration_node_current_entry_name(s_node_map, 'StreamBufferHandlingMode')
     get_IEnumeration_node_current_entry_name(s_node_map, 'StreamBufferCountMode')
     get_IInteger_node_current_val(s_node_map, 'StreamBufferCountManual')
@@ -89,7 +86,7 @@ def cam_configuration(cam,
     get_IEnumeration_node_current_entry_name(nodemap, 'AcquisitionFrameRateAuto')
     get_IBoolean_node_current_val(nodemap, 'AcquisitionFrameRateEnabled')
     get_IFloat_node_current_val(nodemap, 'AcquisitionFrameRate')
-    get_IEnumeration_node_current_entry_name(nodemap, 'pgrExposureCompensationAuto')
+    ExposureCompensationAuto = get_IEnumeration_node_current_entry_name(nodemap, 'pgrExposureCompensationAuto')
     get_IEnumeration_node_current_entry_name(nodemap, 'ExposureAuto')
     get_IEnumeration_node_current_entry_name(nodemap, 'ExposureMode')    
     get_IFloat_node_current_val(nodemap, 'ExposureTime')
@@ -99,25 +96,29 @@ def cam_configuration(cam,
     get_IFloat_node_current_val(nodemap, 'TriggerDelay')
     
     print('\n=================== Config camera ==============================================\n')
-    result = True    
-    result &= setAcqusitionMode(nodemap, AcqusitionModeName='Continuous')    
-    result &= setFrameRate(nodemap, frameRate=frameRate)
-    result &= disableExposureCompensationAuto(nodemap)    
-    result &= setGain(nodemap, gain=gain)
+    result = True
+    if not (AcquisitionMode == 'Continuous'):
+        result &= setAcqusitionMode(nodemap, AcqusitionModeName='Continuous')
+    if frameRate is not None:
+        result &= setFrameRate(nodemap, frameRate=frameRate)
+    if not (ExposureCompensationAuto == 'Off'):
+        result &= disableExposureCompensationAuto(nodemap)        
+    if exposureTime is not None:
+        result &= setExposureTime(nodemap, exposureTime=exposureTime)    
+    if gain is not None:
+        result &= setGain(nodemap, gain=gain)
+    if bufferCount is not None:
+        result &= setBufferCount(s_node_map, bufferCount=bufferCount)
     result &= configure_trigger(nodemap, triggerType=triggerType)
     
     if triggerType == "off":
-        result &= setExposureTime(nodemap, exposureTime=exposureTime)
-        result &= setStreamBufferHandlingMode(s_node_map, StreamBufferHandlingModeName='NewestOnly')
+        result &= setStreamBufferHandlingMode(s_node_map, StreamBufferHandlingModeName='NewestOnly') 
     
     if triggerType == 'software':
-        result &= setExposureTime(nodemap, exposureTime=exposureTime)
         result &= setStreamBufferHandlingMode(s_node_map, StreamBufferHandlingModeName='OldestFirst')
-        result &= setBufferCount(s_node_map, bufferCount=bufferCount)        
-    
+        
     if triggerType == 'hardware':
         result &= setStreamBufferHandlingMode(s_node_map, StreamBufferHandlingModeName='OldestFirst')
-        result &= setBufferCount(s_node_map, bufferCount=bufferCount)
     
     print('\n=================== Camera status after configuration ==========================\n')    
     get_IEnumeration_node_current_entry_name(nodemap, 'AcquisitionMode')    
@@ -182,15 +183,22 @@ def acquire_images(cam,
     :rtype: bool
     """
     
+    nodemap = cam.GetNodeMap()
+    nodemap_tldevice = cam.GetTLDeviceNodeMap()
+    s_node_map = cam.GetTLStreamNodeMap()
+    print_device_info(nodemap_tldevice)
+    
     print('*** IMAGE ACQUISITION ***\n')
     result = True
     # live view
     # config camera for live view
-    result &= cam_configuration(cam=cam, 
-                                triggerType='off',
+    result &= cam_configuration(nodemap=nodemap,
+                                s_node_map=s_node_map,
+                                triggerType='off', # 'off' is for preview
                                 frameRate=frameRate,
                                 exposureTime=exposureTime,
-                                gain=gain)
+                                gain=gain,
+                                bufferCount=bufferCount)
         
     cam.BeginAcquisition()        
     while True:                
@@ -204,21 +212,22 @@ def acquire_images(cam,
     cv2.destroyAllWindows()    
 
     # Retrieve, convert, and save image
-    # config camera for image aquasition
-    result &= cam_configuration(cam=cam, 
+    # config camera for image aquasition, put "None" at parameters that does not need to be reset 
+    result &= cam_configuration(nodemap=nodemap,
+                                s_node_map=s_node_map,
                                 triggerType=triggerType,
-                                frameRate=frameRate,
-                                exposureTime=exposureTime,
-                                gain=gain,
-                                bufferCount=bufferCount)
+                                frameRate=None,
+                                exposureTime=None,
+                                gain=None,
+                                bufferCount=None)
     
-    activate_trigger(cam)
+    activate_trigger(nodemap)
     cam.BeginAcquisition()        
     
     if triggerType == "software":
         start = perf_counter_ns()            
         cam.TriggerSoftware.Execute()               
-        ret, image_array = capture_image(cam=cam)                
+        ret, image_array = capture_image(cam)                
         end = perf_counter_ns()
         t = (end - start)/1e9
         print('time spent: %2.3f s' % t)                
@@ -236,7 +245,7 @@ def acquire_images(cam,
         start = perf_counter_ns()                        
         while count < num_images:
             try:
-                ret, image_array = capture_image(cam=cam)
+                ret, image_array = capture_image(cam)
             except PySpin.SpinnakerException as ex:
                 print('Error: %s' % ex)
                 ret = False
@@ -262,7 +271,7 @@ def acquire_images(cam,
             result = False
     
     cam.EndAcquisition()
-    deactivate_trigger(cam)        
+    deactivate_trigger(nodemap)        
 
     return result
 
@@ -928,14 +937,12 @@ def configure_trigger(nodemap, triggerType):
         result = False
     return result
 
-def activate_trigger(cam):
-    nodemap = cam.GetNodeMap()
+def activate_trigger(nodemap):    
     result = setTriggerMode(nodemap, "On")    
     # setTriggerOverlap(nodemap, "ReadOut")    
     return result
 
-def deactivate_trigger(cam):
-    nodemap = cam.GetNodeMap()
+def deactivate_trigger(nodemap):    
     result = setTriggerMode(nodemap, "Off")
     return result    
 
