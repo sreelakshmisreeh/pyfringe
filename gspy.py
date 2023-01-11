@@ -6,10 +6,11 @@ import sys
 import cv2
 from time import perf_counter_ns
 
+
 def capture_image(cam, timeout=1000):
     """
     Once the camera engine has been activated, this function is used to Extract 
-    one image from the buffering memery and save it into a numpy array.
+    one image from the buffering memory and save it into a numpy array.
     Note that the camera mode must be set, e.g., "Continuous", and the 
     cam.BeginAcquisition() must be called before calling this function.
     
@@ -40,6 +41,7 @@ def capture_image(cam, timeout=1000):
         # Release image
         image_result.Release()       
         return True, image_array
+
 
 def cam_configuration(nodemap,
                       s_node_map,                      
@@ -249,13 +251,13 @@ def acquire_images(cam,
 
     return result
 
+
 def print_device_info(nodemap_tldevice):
     """
     This function prints the device information of the camera from the transport
     layer.
 
     :param nodemap_tldevice: Transport layer device nodemap.
-    :type nodemap: INodeMap
     :returns: True if successful, False otherwise.
     :rtype: bool
     """
@@ -864,10 +866,13 @@ def trigger_configuration(nodemap, s_node_map, triggerType):
     This function configures the camera to use a trigger. First, trigger mode is
     ensured to be off in order to select the trigger source.
 
-     :param cam: Camera to configure trigger for.
-     :type cam: CameraPtr
+     :param nodemap: camera nodemap.
+     :type nodemap: CNodemapPtr
+     :param s_node_map: camera stream nodemap.
+     :type s_node_map: CNodemapPtr
      :param triggerType: Trigger type, 'software' or 'hardware' or 'off'. If triggerType is "off", 
                          camera is configureated for live view.
+     :type triggerType: str
      :return: True if successful, False otherwise.
      :rtype: bool
     """
