@@ -42,7 +42,7 @@ def capture_image(cam, timeout=1000):
         return True, image_array
 
 def cam_configuration(cam, 
-                      triggerType,
+                      triggerType='off', # default is for preview
                       frameRate=30,
                       exposureTime=27084,
                       gain=0,
@@ -56,7 +56,8 @@ def cam_configuration(cam,
     cam : camera object
         The camera to be configureated.
     triggerType : str
-        Must be one of {"software", "hardware"}.
+        Must be one of {"software", "hardware", "off"}.
+        If triggerType is "off", camera is configureated for live view.
     frameRate : float
         Framerate
     exposureTime : int
@@ -101,13 +102,18 @@ def cam_configuration(cam,
     result = True    
     result &= setAcqusitionMode(nodemap, AcqusitionModeName='Continuous')    
     result &= setFrameRate(nodemap, frameRate=frameRate)
-    result &= disableExposureCompensationAuto(nodemap)
-    result &= setExposureTime(nodemap, exposureTime=exposureTime)
+    result &= disableExposureCompensationAuto(nodemap)    
     result &= setGain(nodemap, gain=gain)
     result &= configure_trigger(nodemap, triggerType=triggerType)
     
+    if triggerType == "off":
+        result &= setExposureTime(nodemap, exposureTime=exposureTime)
+        result &= setStreamBufferHandlingMode(s_node_map, StreamBufferHandlingModeName='NewestOnly')
+    
     if triggerType == 'software':
-        result &= setStreamBufferHandlingMode(s_node_map, StreamBufferHandlingModeName='NewestOnly')        
+        result &= setExposureTime(nodemap, exposureTime=exposureTime)
+        result &= setStreamBufferHandlingMode(s_node_map, StreamBufferHandlingModeName='OldestFirst')
+        result &= setBufferCount(s_node_map, bufferCount=bufferCount)        
     
     if triggerType == 'hardware':
         result &= setStreamBufferHandlingMode(s_node_map, StreamBufferHandlingModeName='OldestFirst')
@@ -138,7 +144,12 @@ def cam_configuration(cam,
 def acquire_images(cam, 
                    acquisition_index,
                    num_images,
-                   savedir,                   
+                   savedir,
+                   triggerType,
+                   frameRate=30,
+                   exposureTime=27084,
+                   gain=0,
+                   bufferCount=15,
                    timeout=10):
     """
     This function acquires and saves images from a device. Note that camera 
@@ -149,25 +160,38 @@ def acquire_images(cam,
     :param cam: Camera to acquire images from.
     :param acquisition_index: the index number of the current acquisition.
     :param num_images: the total number of images to be taken.
-    :param savedir: directory to save images.    
+    :param savedir: directory to save images.
+    :param triggerType: Must be one of {"software", "hardware", "off"}.
+                        If triggerType is "off", camera is configureated for live view.
+    :param frameRate: frame rate.
+    :param exposureTime: exposure time in microseconds.
+    :param gain: gain
+    :param bufferCount: buffer count in RAM
     :param timeout: the maximum waiting time in seconds before termination.
     :type cam: CameraPtr
     :type acquisition_index: int
     :type num_images: int
-    :tyoe savedir: str    
+    :tyoe savedir: str
+    :type triggerType: str
+    :type frameRate: float
+    :type exposureTime: int
+    :type gain: float
+    :type bufferCount: int
     :type timeout: float
     :return: True if successful, False otherwise.
     :rtype: bool
     """
     
-    nodemap = cam.GetNodeMap()
-    triggerSourceSymbolic = get_IEnumeration_node_current_entry_name(nodemap, 'TriggerSource', verbose=False)
-
     print('*** IMAGE ACQUISITION ***\n')
     result = True
     # live view
-    # First, deactivate the trigger!
-    deactivate_trigger(cam)        
+    # config camera for live view
+    result &= cam_configuration(cam=cam, 
+                                triggerType='off',
+                                frameRate=frameRate,
+                                exposureTime=exposureTime,
+                                gain=gain)
+        
     cam.BeginAcquisition()        
     while True:                
         ret, frame = capture_image(cam)       
@@ -180,10 +204,18 @@ def acquire_images(cam,
     cv2.destroyAllWindows()    
 
     # Retrieve, convert, and save image
+    # config camera for image aquasition
+    result &= cam_configuration(cam=cam, 
+                                triggerType=triggerType,
+                                frameRate=frameRate,
+                                exposureTime=exposureTime,
+                                gain=gain,
+                                bufferCount=bufferCount)
+    
     activate_trigger(cam)
     cam.BeginAcquisition()        
     
-    if triggerSourceSymbolic == "Software":
+    if triggerType == "software":
         start = perf_counter_ns()            
         cam.TriggerSoftware.Execute()               
         ret, image_array = capture_image(cam=cam)                
@@ -199,7 +231,7 @@ def acquire_images(cam,
             print('Capture failed')
             result = False
     
-    if triggerSourceSymbolic == "Line0":
+    if triggerType == "hardware":
         count = 0        
         start = perf_counter_ns()                        
         while count < num_images:
@@ -306,19 +338,18 @@ def run_single_camera(cam,
         result = True
         # Initialize camera
         cam.Init()
-        # config camera
-        result &= cam_configuration(cam=cam, 
-                                    triggerType=triggerType,
-                                    frameRate=frameRate,
-                                    exposureTime=exposureTime,
-                                    gain=gain,
-                                    bufferCount=bufferCount)
+
         # Acquire images        
         result &= acquire_images(cam=cam, 
-                                 acquisition_index=acquisition_index, 
+                                 acquisition_index=acquisition_index,
                                  num_images=num_images,
                                  savedir=savedir,
-                                 timeout=timeout)
+                                 triggerType=triggerType,
+                                 frameRate=frameRate,
+                                 exposureTime=exposureTime,
+                                 gain=gain,
+                                 bufferCount=bufferCount,
+                                 timeout=10)
         # Deinitialize camera        
         cam.DeInit()
     except PySpin.SpinnakerException as ex:
@@ -866,7 +897,7 @@ def configure_trigger(nodemap, triggerType):
     elif triggerType == 'hardware':
         print('Hardware trigger is chosen...')
     elif triggerType == 'off':
-        print('Disable trigger mode...') 
+        print('Disable trigger mode for live view...') 
 
     try:
         result = True
@@ -876,8 +907,9 @@ def configure_trigger(nodemap, triggerType):
         # is software or hardware.
         result &= setTriggerMode(nodemap, "Off")
                 
-        if  triggerType == 'off':            
-            return result
+        if  triggerType == 'off':
+            result &= setExposureMode(nodemap, "Timed")
+            result &= setTriggerSelector(nodemap, "FrameStart")            
         
         if triggerType == 'software':
             result &= setTriggerSource(nodemap, "Software")            
@@ -893,7 +925,7 @@ def configure_trigger(nodemap, triggerType):
             
     except PySpin.SpinnakerException as ex:
         print('Error: %s'%ex)
-        return False
+        result = False
     return result
 
 def activate_trigger(cam):
