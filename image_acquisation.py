@@ -26,37 +26,39 @@ def proj_cam_preview(cam,
     delta = 100      
   
     #set projector configuration
-    lcr.set_pattern_config(num_lut_entries= 1, 
-                           do_repeat = True, 
-                           num_pats_for_trig_out2 = 1, 
-                           num_images = 1)
-    lcr.set_exposure_frame_period( proj_exposure_period, proj_frame_period)
+    result = lcr.set_pattern_config(num_lut_entries= 1, 
+                                    do_repeat = True, 
+                                    num_pats_for_trig_out2 = 1, 
+                                    num_images = 1)
+    result &= lcr.set_exposure_frame_period(proj_exposure_period, 
+                                            proj_frame_period)
     if preview_type == 'focus':
-        lcr.image_flash_index([image_index],0)
-        lcr.send_pattern_lut(trig_type = 0, 
-                             bit_depth = 8, 
-                             led_select = 0b111,
-                             swap_location_list = [0],
-                             image_index_list = [image_index], 
-                             pattern_num_list = [0], 
-                             starting_address = 0,  
-                             do_insert_black = False) 
+        result &= lcr.send_img_lut([image_index],0)
+        result &= lcr.send_pattern_lut(trig_type = 0, 
+                                       bit_depth = 8, 
+                                       led_select = 0b111,
+                                       swap_location_list = [0],
+                                       image_index_list = [image_index], 
+                                       pattern_num_list = [0], 
+                                       starting_address = 0,  
+                                       do_insert_black = False) 
         
     elif preview_type == 'preview':
-        lcr.image_flash_index([image_index],0)
-        lcr.send_pattern_lut(trig_type = 0, 
-                             bit_depth = 8, 
-                             led_select = 0b111,
-                             swap_location_list = [0],
-                             image_index_list = [image_index], 
-                             pattern_num_list = [0], 
-                             starting_address = 0,  
-                             do_insert_black = False)  
-    ans = lcr.start_pattern_lut_validate()
+        result &= lcr.send_img_lut([image_index],0)
+        result &= lcr.send_pattern_lut(trig_type = 0, 
+                                       bit_depth = 8, 
+                                       led_select = 0b111,
+                                       swap_location_list = [0],
+                                       image_index_list = [image_index], 
+                                       pattern_num_list = [0], 
+                                       starting_address = 0,  
+                                       do_insert_black = False)  
+    result &= lcr.start_pattern_lut_validate()
     # live view   
-    if (not int(ans)) or (int(ans,2)==8):
+    if result:
+        gspy.deactivate_trigger(cam)   
         cam.BeginAcquisition()
-        lcr.pattern_display('start')
+        result &= lcr.pattern_display('start')
         while True:                
             ret, frame = gspy.capture_image(cam)       
             img_show = cv2.resize(frame, None, fx=0.5, fy=0.5)
@@ -67,12 +69,12 @@ def proj_cam_preview(cam,
                 img_show_color = img_show
             center_y = int(img_show.shape[0]/2)
             center_x = int(img_show.shape[1]/2)
-            cv2.line(img_show_color,(center_x,center_y - delta),(center_x,center_y + delta),(0,0,0),5)
-            cv2.line(img_show_color,(center_x - delta,center_y),(center_x + delta,center_y),(0,0,0),5)
+            cv2.line(img_show_color,(center_x,center_y - delta),(center_x,center_y + delta),(0,255,0),5)
+            cv2.line(img_show_color,(center_x - delta,center_y),(center_x + delta,center_y),(0,255,0),5)
             cv2.imshow("press q to quit", img_show_color)    
             key = cv2.waitKey(1)        
             if key == ord("q"):
-                lcr.pattern_display('stop')
+                result &= lcr.pattern_display('stop')
                 break
         cam.EndAcquisition()
         cv2.destroyAllWindows()
@@ -80,16 +82,16 @@ def proj_cam_preview(cam,
 
 def run_proj_cam_capt(cam, 
                       lcr, 
-                      savedir,
-                      acquisition_index, 
-                      image_index_list, 
-                      pattern_num_list, 
-                      cam_capt_timeout,
-                      proj_exposure_period, 
-                      proj_frame_period, 
-                      do_insert_black,
-                      preview_image_index,
-                      pprint_proj_status):
+                      savedir = None,
+                      acquisition_index = 0, 
+                      image_index_list = None, 
+                      pattern_num_list = None, 
+                      cam_capt_timeout = 10,
+                      proj_exposure_period = 27084, 
+                      proj_frame_period = 33334, 
+                      do_insert_black = True,
+                      pprint_proj_status = True,
+                      do_validation = True):
     
     
     """
@@ -120,56 +122,49 @@ def run_proj_cam_capt(cam,
     
     print('*** IMAGE ACQUISITION ***\n')
 
-    result = True      
+    result = True  
+    image_array_list = []    
     # Retrieve, convert, and save image
     gspy.activate_trigger(cam)
-    cam.BeginAcquisition()        
-    
-    if triggerSourceSymbolic == "Software":
-        start = perf_counter_ns()            
-        cam.TriggerSoftware.Execute()               
-        ret, image_array = gspy.capture_image(cam=cam)                
-        end = perf_counter_ns()
-        t = (end - start)/1e9
-        print('time spent: %2.3f s' % t)                
-        if ret:
-            filename = 'Acquisition-%02d.jpg' %acquisition_index
-            save_path = os.path.join(savedir, filename)                    
-            cv2.imwrite(save_path, image_array)
-            print('Image saved at %s' % save_path)
-        else:
-            print('Capture failed')
-            result = False
+    cam.BeginAcquisition()
     
     if triggerSourceSymbolic == "Line0":
         count = 0        
         total_dual_time_start = perf_counter_ns()
         start = perf_counter_ns() 
-        #Configure projector
-        image_LUT_entries, swap_location_list = lcpy.get_image_LUT_swap_location(image_index_list)
-        lcr.set_pattern_config(num_lut_entries= len(image_index_list),
-                               do_repeat = False,  
-                               num_pats_for_trig_out2 = len(image_index_list),
-                               num_images = len(image_LUT_entries))
-        lcr.set_exposure_frame_period( proj_exposure_period, proj_frame_period)
-        # To set new image LUT
-        lcr.image_flash_index(image_LUT_entries,0)
-        # To set pattern LUT table    
-        lcr.send_pattern_lut(trig_type = 0 , 
-                             bit_depth = 8, 
-                             led_select = 0b111,
-                             swap_location_list = swap_location_list, 
-                             image_index_list = image_index_list, 
-                             pattern_num_list = pattern_num_list, 
-                             starting_address = 0,
-                             do_insert_black = do_insert_black)
-        if pprint_proj_status:# Print all projector current attributes set
-            lcr.pretty_print_status()
-        ans = lcr.start_pattern_lut_validate()
-        #Check validation status
-        if (not int(ans)) or (int(ans,2)==8):   
-            lcr.pattern_display('start') 
-                 
+        if do_validation: 
+            #Configure projector
+            if image_index_list and pattern_num_list:
+                image_LUT_entries, swap_location_list = lcpy.get_image_LUT_swap_location(image_index_list)
+                result &= lcr.set_pattern_config(num_lut_entries= len(image_index_list),
+                                                 do_repeat = False,  
+                                                 num_pats_for_trig_out2 = len(image_index_list),
+                                                 num_images = len(image_LUT_entries))
+                result &= lcr.set_exposure_frame_period(proj_exposure_period, 
+                                                        proj_frame_period)
+                # To set new image LUT
+                result &= lcr.send_img_lut(image_LUT_entries,0)
+                # To set pattern LUT table    
+                result &= lcr.send_pattern_lut(trig_type = 0, 
+                                               bit_depth = 8, 
+                                               led_select = 0b111,
+                                               swap_location_list = swap_location_list, 
+                                               image_index_list = image_index_list, 
+                                               pattern_num_list = pattern_num_list, 
+                                               starting_address = 0,
+                                               do_insert_black = do_insert_black)
+                if pprint_proj_status:# Print all projector current attributes set
+                    lcr.pretty_print_status()
+                result &=  lcr.start_pattern_lut_validate()
+            elif not image_index_list:
+                print('\n image_index_list cannot be empty')
+                result &= False
+            elif not pattern_num_list:
+                print('\n pattern_num_list cannot be empty')
+                result &= False
+        if result:   
+            result &= lcr.pattern_display('start') 
+            capturing_time_start = perf_counter_ns()     
             while count < len(image_index_list):
                 try:
                     ret, image_array = gspy.capture_image(cam=cam)
@@ -184,6 +179,7 @@ def run_proj_cam_capt(cam,
                     filename = 'capt%d_%d.jpg' %(acquisition_index,count)
                     save_path = os.path.join(savedir, filename)
                     cv2.imwrite(save_path, image_array)
+                    image_array_list.append(image_array)
                     print('Image saved at %s' % save_path)
                     count += 1
                     start = perf_counter_ns()
@@ -196,15 +192,17 @@ def run_proj_cam_capt(cam,
                         print('timeout is reached, stop capturing image ...')
                         break
             total_dual_time_end = perf_counter_ns()
+            image_capture_time = (total_dual_time_end - capturing_time_start)/1e9
             total_dual_time = (total_dual_time_end - total_dual_time_start)/1e9
+            print('image capturing time:%.3f'%image_capture_time)
             print('Total dual device time:%.3f'%total_dual_time)
         else:
             result = False
     
     cam.EndAcquisition()
-    gspy.deactivate_trigger(cam)        
+    gspy.deactivate_trigger(cam)     
 
-    return result
+    return result, image_array_list
 
 def proj_cam_acquire_images(cam,
                             lcr, 
@@ -220,115 +218,152 @@ def proj_cam_acquire_images(cam,
                             do_insert_black,
                             preview_image_index,
                             pprint_proj_status,
-                            focus_image_index):
+                            focus_image_index,
+                            do_validation = True):
     result = True
+    proj_preview_exp_period = proj_exposure_period + 230
+    proj_preview_frame_period = proj_preview_exp_period
+    
     if not focus_image_index == None:
         result &= proj_cam_preview(cam, 
                              lcr, 
-                             proj_exposure_period, 
-                             proj_frame_period, 
+                             proj_preview_exp_period, 
+                             proj_preview_frame_period, 
                              'focus',
                              focus_image_index)
     
     if (number_scan == 1) & (preview_option == 'Once'):
         result &= proj_cam_preview(cam, 
-                             lcr, 
-                             proj_exposure_period, 
-                             proj_frame_period,
-                             'preview',
-                             preview_image_index)
+                                   lcr, 
+                                   proj_preview_exp_period, 
+                                   proj_preview_frame_period,
+                                   'preview',
+                                   preview_image_index)
         
-        result &= run_proj_cam_capt(cam, 
-                                    lcr, 
-                                    savedir,
-                                    acquisition_index, 
-                                    image_index_list, 
-                                    pattern_num_list, 
-                                    cam_capt_timeout,
-                                    proj_exposure_period, 
-                                    proj_frame_period, 
-                                    do_insert_black,
-                                    preview_image_index,
-                                    pprint_proj_status)
+        ret, n_scanned_image_list = run_proj_cam_capt(cam, 
+                                                 lcr, 
+                                                 savedir,
+                                                 acquisition_index, 
+                                                 image_index_list, 
+                                                 pattern_num_list, 
+                                                 cam_capt_timeout,
+                                                 proj_exposure_period, 
+                                                 proj_frame_period, 
+                                                 do_insert_black,
+                                                 pprint_proj_status,
+                                                 do_validation)
         
         
     elif (number_scan > 1) & (preview_option == 'Always'):
         initial_acq_index = acquisition_index
+        n_scanned_image_list = []
+        validation_flag = do_validation
         for i in range(number_scan):
+            if i !=0:
+                validation_flag = False
             result &= proj_cam_preview(cam, 
-                                 lcr, 
-                                 proj_exposure_period, 
-                                 proj_frame_period,
-                                 'preview',
-                                 preview_image_index)
+                                       lcr, 
+                                       proj_preview_exp_period, 
+                                       proj_preview_frame_period,
+                                       'preview',
+                                       preview_image_index)
             
-            result &= run_proj_cam_capt(cam, 
-                                        lcr, 
-                                        savedir,
-                                        (initial_acq_index + i), 
-                                        image_index_list, 
-                                        pattern_num_list, 
-                                        cam_capt_timeout,
-                                        proj_exposure_period, 
-                                        proj_frame_period, 
-                                        do_insert_black,
-                                        preview_image_index,
-                                        pprint_proj_status)
+            ret, image_array_list = run_proj_cam_capt(cam, 
+                                                      lcr, 
+                                                      savedir,
+                                                      initial_acq_index, 
+                                                      image_index_list, 
+                                                      pattern_num_list, 
+                                                      cam_capt_timeout,
+                                                      proj_exposure_period, 
+                                                      proj_frame_period, 
+                                                      do_insert_black,
+                                                      pprint_proj_status,
+                                                      do_validation = validation_flag)
+            initial_acq_index +=1
+            n_scanned_image_list.append(image_array_list)
             
     elif (number_scan > 1) & (preview_option == 'Once'):
         initial_acq_index = acquisition_index
+        n_scanned_image_list = []
+        validation_flag = do_validation
         result &= proj_cam_preview(cam, 
-                             lcr, 
-                             proj_exposure_period, 
-                             proj_frame_period,
-                             'preview',
-                             preview_image_index)
+                                   lcr, 
+                                   proj_preview_exp_period, 
+                                   proj_preview_frame_period,
+                                   'preview',
+                                   preview_image_index)
         for i in range(number_scan):
-            result &= run_proj_cam_capt(cam, 
-                                        lcr, 
-                                        savedir,
-                                        (initial_acq_index + i), 
-                                        image_index_list, 
-                                        pattern_num_list, 
-                                        cam_capt_timeout,
-                                        proj_exposure_period, 
-                                        proj_frame_period, 
-                                        do_insert_black,
-                                        preview_image_index,
-                                        pprint_proj_status)
+            if i !=0:
+                validation_flag = False
+            ret, image_array_list= run_proj_cam_capt(cam, 
+                                                     lcr, 
+                                                     savedir,
+                                                     initial_acq_index, 
+                                                     image_index_list, 
+                                                     pattern_num_list, 
+                                                     cam_capt_timeout,
+                                                     proj_exposure_period, 
+                                                     proj_frame_period, 
+                                                     do_insert_black,
+                                                     pprint_proj_status,
+                                                     do_validation = validation_flag)
+            initial_acq_index +=1
+            n_scanned_image_list.append(image_array_list)
+    elif (number_scan > 1) & (preview_option == 'Never'):
+        initial_acq_index = acquisition_index
+        n_scanned_image_list = []
+        validation_flag = do_validation
+        for i in range(number_scan):
+            if i !=0:
+                validation_flag = False
+            ret, image_array_list= run_proj_cam_capt(cam, 
+                                                         lcr, 
+                                                         savedir,
+                                                         initial_acq_index, 
+                                                         image_index_list, 
+                                                         pattern_num_list, 
+                                                         cam_capt_timeout,
+                                                         proj_exposure_period, 
+                                                         proj_frame_period, 
+                                                         do_insert_black,
+                                                         pprint_proj_status,
+                                                         do_validation = validation_flag)
+            initial_acq_index +=1
+            n_scanned_image_list.append(image_array_list)
             
     elif (number_scan == 1) & (preview_option == 'Never'):
-        result &= run_proj_cam_capt(cam, 
-                                    lcr, 
-                                    savedir,
-                                    acquisition_index, 
-                                    image_index_list, 
-                                    pattern_num_list, 
-                                    cam_capt_timeout,
-                                    proj_exposure_period, 
-                                    proj_frame_period, 
-                                    do_insert_black,
-                                    preview_image_index,
-                                    pprint_proj_status)
-    return result
+       ret, n_scanned_image_list= run_proj_cam_capt(cam, 
+                                                    lcr, 
+                                                    savedir,
+                                                    acquisition_index, 
+                                                    image_index_list, 
+                                                    pattern_num_list, 
+                                                    cam_capt_timeout,
+                                                    proj_exposure_period, 
+                                                    proj_frame_period, 
+                                                    do_insert_black,
+                                                    pprint_proj_status,
+                                                    do_validation)
+    result &= ret
+    
+    return result, n_scanned_image_list
 
-def run_proj_single_camera(cam,
-                           savedir,
-                           preview_option, 
-                           number_scan,
-                           acquisition_index, 
-                           cam_triggerType, 
+def run_proj_single_camera(savedir,                          
                            image_index_list,
                            pattern_num_list,
-                           cam_gain,
-                           cam_bufferCount,
-                           cam_capt_timeout,
-                           proj_exposure_period, 
-                           proj_frame_period,
-                           do_insert_black,
-                           preview_image_index,
-                           pprint_proj_status,
-                           focus_image_index ):
+                           cam_gain = 0,
+                           cam_bufferCount = 15,
+                           cam_capt_timeout = 10,
+                           proj_exposure_period = 27084, 
+                           proj_frame_period = 33334,
+                           do_insert_black = True,
+                           preview_image_index = 21,
+                           number_scan = 1,
+                           acquisition_index = 0,
+                           pprint_proj_status = True,
+                           preview_option = 'Once',
+                           focus_image_index = None):
     """
     Initialize and configurate a camera and take one image.
 
@@ -351,97 +386,84 @@ def run_proj_single_camera(cam,
     """
     try:
         result = True
+        result, system, cam_list, num_cameras = gspy.sysScan()
+        cam = cam_list[0]
+        gspy.clearDir(savedir)
         device = usb.core.find(idVendor=0x0451, idProduct=0x6401) #finding the projector usb port
         device.set_configuration()
 
         lcr = lcpy.dlpc350(device)
-        lcr.pattern_display('stop')
+        result &= lcr.pattern_display('stop')
         
         # Initialize camera
         cam.Init()
         # config camera
-        frameRate = 1e6/proj_frame_period
-        result &= gspy.cam_configuration(cam=cam,
-                                         triggerType=cam_triggerType,
-                                         frameRate=frameRate, #proj_frame_period is in μs
-                                         exposureTime=proj_exposure_period,
-                                         gain=cam_gain,
-                                         bufferCount=cam_bufferCount)        
+        frameRate = 1e6/proj_frame_period  #proj_frame_period is in μs
+        result &= gspy.cam_configuration(cam = cam,
+                                         triggerType = 'hardware',
+                                         frameRate = frameRate,
+                                         exposureTime = proj_exposure_period,
+                                         gain = cam_gain,
+                                         bufferCount = cam_bufferCount)  
+        print('result',result)
         # Acquire images        
-        result &= proj_cam_acquire_images(cam,
-                                          lcr, 
-                                          savedir,
-                                          preview_option, 
-                                          number_scan,
-                                          acquisition_index,  
-                                          image_index_list,
-                                          pattern_num_list, 
-                                          cam_capt_timeout,
-                                          proj_exposure_period, 
-                                          proj_frame_period,
-                                          do_insert_black,
-                                          preview_image_index,
-                                          pprint_proj_status,
-                                          focus_image_index)
+        ret, n_scanned_image_list = proj_cam_acquire_images(cam,
+                                                            lcr, 
+                                                            savedir,
+                                                            preview_option, 
+                                                            number_scan,
+                                                            acquisition_index,  
+                                                            image_index_list,
+                                                            pattern_num_list, 
+                                                            cam_capt_timeout,
+                                                            proj_exposure_period, 
+                                                            proj_frame_period,
+                                                            do_insert_black,
+                                                            preview_image_index,
+                                                            pprint_proj_status,
+                                                            focus_image_index)
+        result &= ret
         # Deinitialize camera        
         cam.DeInit()
         device.reset()
         del lcr
         del device
+        del cam
+        cam_list.Clear()
+        system.ReleaseInstance() 
     except PySpin.SpinnakerException as ex:
         print('Error: %s' % ex)
         result = False
-    return result
+    return result, n_scanned_image_list
 
 def main():
-    
-    triggerType = "hardware"
-    result, system, cam_list, num_cameras = gspy.sysScan()
+  
     image_index_list = np.repeat(np.arange(0,5),3).tolist()
     pattern_num_list = [0,1,2] * len(set(image_index_list))
-    if result:
-        # Run example on each camera
-        savedir = r'C:\Users\kl001\Documents\grasshopper3_python\images'
-        gspy.clearDir(savedir)
-        for i, cam in enumerate(cam_list):    
-            print('Running example for camera %d...'%i)            
-            result &= run_proj_single_camera(cam = cam,
-                                             savedir = savedir,
-                                             preview_option = 'Once', 
-                                             number_scan = 1,
-                                             acquisition_index = 0, 
-                                             cam_triggerType = triggerType, 
-                                             image_index_list = image_index_list,
-                                             pattern_num_list = pattern_num_list,
-                                             cam_gain = 0,
-                                             cam_bufferCount = 15,
-                                             cam_capt_timeout = 10,
-                                             proj_exposure_period = 27084, 
-                                             proj_frame_period = 33334,
-                                             do_insert_black = True,
-                                             preview_image_index = 21,
-                                             pprint_proj_status = True,
-                                             focus_image_index = 34 ) 
-            print('Camera %d example complete...'%i)
-    
-        # Release reference to camera
-        # NOTE: Unlike the C++ examples, we cannot rely on pointer objects being automatically
-        # cleaned up when going out of scope.
-        # The usage of del is preferred to assigning the variable to None.
-        if cam_list:    
-            del cam
-        else:
-            print('Camera list is empty! No camera is detected, please check camera connection.')    
-    else:
-        pass
-    # Clear camera list before releasing system
-    cam_list.Clear()
-    # Release system instance
-    system.ReleaseInstance()    
-    return result
+    savedir = r'C:\Users\kl001\Documents\grasshopper3_python\images'
+    result = True
+    ret, n_scanned_image_list= run_proj_single_camera(savedir = savedir,
+                                     preview_option = 'Always', 
+                                     number_scan = 2,
+                                     acquisition_index = 0, 
+                                     image_index_list = image_index_list,
+                                     pattern_num_list = pattern_num_list,
+                                     cam_gain = 0,
+                                     cam_bufferCount = 15,
+                                     cam_capt_timeout = 10,
+                                     proj_exposure_period = 27084, 
+                                     proj_frame_period = 33334,
+                                     do_insert_black = True,
+                                     preview_image_index = 21,
+                                     pprint_proj_status = True,
+                                     focus_image_index = 34 ) 
+    result &= ret
+ 
+    return result ,n_scanned_image_list
 
 if __name__ == '__main__':
-    if main():
+    result , n_scanned_image_list = main()
+    if result:
         sys.exit(0)
     else:
         sys.exit(1)
