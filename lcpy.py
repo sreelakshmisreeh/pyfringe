@@ -100,6 +100,8 @@ class dlpc350(object):
         :param device: lcr4500 USB device.
         """
         #Initialse device address
+        self.trigger_polarity = None
+        self.mode = None
         self.dlpc = device
         # Initialise properties of class (read default status)
         self.read_main_status()
@@ -306,8 +308,10 @@ class dlpc350(object):
         modes = ['video', 'pattern'] #video = 0, pattern =1
         if mode in modes:
             mode_no = modes.index(mode)
-
-        result = self.command('w', 0x00, 0x1a, 0x1b, [mode_no])
+            result = self.command('w', 0x00, 0x1a, 0x1b, [mode_no])
+        else:
+            print('ERROR: Required display mode is not supported.')
+            return False
         if result:
             self.mode = mode
             return True
@@ -336,15 +340,17 @@ class dlpc350(object):
 
         (USB: CMD2: 0x1A, CMD3: 0x22)
 
-        :param int mode:
+        :param str source:
             :0: "video"
             :3: "flash"
         """
         sources = ['video', '', '', 'flash']  # video = 0, reserved, reserved, flash=11 (bin 3)
         if source in sources:
             source_no = sources.index(source)
-
-        result = self.command('w', 0x00, 0x1a, 0x22, [source_no])
+            result = self.command('w', 0x00, 0x1a, 0x22, [source_no])
+        else:
+            print('ERROR: Required pattern input source is not supported.')
+            return False
         if result:
             self.source = source
             return True
@@ -435,19 +441,23 @@ class dlpc350(object):
 
         (USB: CMD2: 0x1A, CMD3: 0x23)
 
-        :param int mode:
-            :0: "vsync"
+        :param str trigger_mode:
+            :0: 'vsync'
+            :1: 'trig_mode1'
+            :2: 'trig_mode2'
+            :3: 'trig_mode3'
+            :4: 'trig_mode4'
         """
-        trigger_modes = ['vsync','trig_mode1', 'trig_mode2', 'trig_mode3', 'trig_mode4']
+        trigger_modes = ['vsync', 'trig_mode1', 'trig_mode2', 'trig_mode3', 'trig_mode4']
         if trigger_mode in trigger_modes:
             trigger_mode_no = trigger_modes.index(trigger_mode)
-
-        result = self.command('w', 0x00, 0x1a, 0x23, [trigger_mode_no])
+            result = self.command('w', 0x00, 0x1a, 0x23, [trigger_mode_no])
+        else:
+            print('ERROR: Input trigger mode is not supported')
+            result = False
         if result:
             self.trigger_mode = trigger_mode
-            return True
-        else:
-            return False
+        return result
     
     def read_trig_out1_control(self):
         """
@@ -477,36 +487,36 @@ class dlpc350(object):
                           polarity_invert = True, 
                           trigedge_rise_delay_microsec = 0, 
                           trigedge_fall_delay_microsec = 0):
-         """
-         The Trigger Out1 Control command sets the polarity, rising edge delay, 
-         and falling edge delay of the TRIG_OUT_1 signal of the DLPC350. 
-         Before executing this command, stop the current pattern sequence. After executing this command, 
-         send the Validation command (I2C: 0x7D or USB: 0x1A1A) once before starting the pattern sequence.
-         
-         param bool plarity_invert: True for active low signal
-         param int trigedge_rise_delay: rising edge delay control ranging from –20.05 μs to 2.787 μs. Each bit adds 107.2 ns.
-         param int trigedge_fall_delay: falling edge delay control with range -20.05 μs to +2.787 μs. Each bit adds 107.2 ns
-         """
-         #convert μs to number equivalent
-         trigedge_rise_delay = int(trigedge_rise_delay_microsec - (-20.05))/0.1072
-         trigedge_fall_delay = int(trigedge_fall_delay_microsec - (-20.05))/0.1072
-         if polarity_invert:
-             polarity = '00000010'
-             self.trigger_polarity = "active low signal"
-         else:
-             polarity = '00000000'
-             self.trigger_polarity = "active high signal"
-         trigedge_rise_delay = conv_len(trigedge_rise_delay, 8)
-         trigedge_fall_delay = conv_len(trigedge_fall_delay, 8)
-         payload =   trigedge_fall_delay + trigedge_rise_delay + polarity
-         payload = bits_to_bytes(payload)
-         result = self.command('w', 0x00, 0x1a, 0x1d, payload)
-         if result:
-             self.trigedge_rise_delay_microsec = trigedge_rise_delay_microsec
-             self.trigedge_fall_delay_microsec = trigedge_fall_delay_microsec
-             return True
-         else:
-             return False
+        """
+        The Trigger Out1 Control command sets the polarity, rising edge delay, 
+        and falling edge delay of the TRIG_OUT_1 signal of the DLPC350. 
+        Before executing this command, stop the current pattern sequence. After executing this command, 
+        send the Validation command (I2C: 0x7D or USB: 0x1A1A) once before starting the pattern sequence.
+        
+        param bool plarity_invert: True for active low signal
+        param int trigedge_rise_delay: rising edge delay control ranging from –20.05 μs to 2.787 μs. Each bit adds 107.2 ns.
+        param int trigedge_fall_delay: falling edge delay control with range -20.05 μs to +2.787 μs. Each bit adds 107.2 ns
+        """
+        # convert μs to number equivalent
+        trigedge_rise_delay = int((trigedge_rise_delay_microsec - (-20.05))/0.1072)
+        trigedge_fall_delay = int((trigedge_fall_delay_microsec - (-20.05))/0.1072)
+        if polarity_invert:
+            polarity = '00000010'
+            self.trigger_polarity = "active low signal"
+        else:
+            polarity = '00000000'
+            self.trigger_polarity = "active high signal"
+        trigedge_rise_delay = conv_len(trigedge_rise_delay, 8)
+        trigedge_fall_delay = conv_len(trigedge_fall_delay, 8)
+        payload =   trigedge_fall_delay + trigedge_rise_delay + polarity
+        payload = bits_to_bytes(payload)
+        result = self.command('w', 0x00, 0x1a, 0x1d, payload)
+        if result:
+            self.trigedge_rise_delay_microsec = trigedge_rise_delay_microsec
+            self.trigedge_fall_delay_microsec = trigedge_fall_delay_microsec
+            return True
+        else:
+            return False
              
          
     def read_exposure_frame_period(self):
@@ -768,7 +778,7 @@ class dlpc350(object):
             result &= self.open_mailbox(0) 
             result &= self.read_mailbox_info() # to update the image and pattern LUT table
         else:
-            result &= False
+            result = False
         return result
         
     def pattern_display(self, action='start'):
