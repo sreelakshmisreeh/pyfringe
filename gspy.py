@@ -61,7 +61,7 @@ def cam_configuration(nodemap,
         camera stream nodemap
     frameRate : float
         Framerate
-    exposureTime : int
+    exposureTime : float
         Exposure time in microseconds
     gain : float
         Gain
