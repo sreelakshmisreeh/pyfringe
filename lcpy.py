@@ -22,10 +22,12 @@ def conv_len(a, l):
     """
     Function that converts a number into a bit string of given length.
 
-    :param int a: Number to convert.
-    :param int l: Length of bit string.
-
+    :param a: Number to convert.
+    :param l: Length of bit string.
+    :type a : int
+    :type l : int
     :return: Padded bit string.
+    :rtype: str
     """
     b = bin(a)[2:]
     padding = l - len(b)
@@ -36,9 +38,10 @@ def bits_to_bytes(a, reverse=True): # default is reverse
     """
     Function that converts bit string into a given number of bytes.
 
-    :param str a: Bytes to convert.
-    :param bool reverse: Whether or not to reverse the byte list.
-
+    :param a: Bytes to convert.
+    :param reverse: Whether or not to reverse the byte list.
+    :type a: str
+    :type reverse: bool
     :return: List of bytes.
     """
     bytelist = []
@@ -60,9 +63,10 @@ def fps_to_period(fps):
     """
     Calculates desired period (us) from given fps.
 
-    :param int fps: Frames per second.
-
-    :return: Period (us).
+    :param fps: Frames per second.
+    :type fps: int
+    :return period: Period (us).
+    :rtype period: int
     """
     period = int(np.floor(1.0 / fps * 10**6))
     return period
@@ -71,7 +75,6 @@ def fps_to_period(fps):
 def connect_usb():
     """
     Context manager for connecting to and releasing usb device.
-
     :yields: USB device.
     """
     device = usb.core.find(idVendor=0x0451, idProduct=0x6401) #finding the projector usb port
@@ -91,13 +94,11 @@ class dlpc350(object):
     Check IDs in device manager.
     """
     #TODO: Writing log file
-    
-    
     def __init__(self, device):
         """
         Connects the device.
-
         :param device: lcr4500 USB device.
+        :type device: ptr
         """
         #Initialse device address
         self.trigger_polarity = None
@@ -122,12 +123,18 @@ class dlpc350(object):
                 data=None):
         """
         Sends a command to the dlpc.
-
         :param str rw_mode: Whether reading or writing.
-        :param int sequence_byte:
-        :param int com1: Command 1
-        :param int com2: Command 2
-        :param list data: Data to pass with command.
+        :param sequence_byte:
+        :param com1: Command 1
+        :param com2: Command 2
+        :param data: Data to pass with command.
+        :type rw_mode: str
+        :type sequence_byte: int
+        :type com1: int
+        :type com2: int
+        :type data: list
+        :return result: True if successful, False otherwise.
+        :rtype result:bool
         """
 
         buffer = []
@@ -207,6 +214,9 @@ class dlpc350(object):
             print(hex(i))
             
     def pretty_print_status(self):
+        '''
+        Function to pretty print projector current attributes.
+        '''
         print('\n====================================Current status of projector attributes=============================\n')
         print('\nMirror :{}'.format(self.mirrorStatus))
         print('\nSequencer :{}'.format(self.sequencer_status))
@@ -230,8 +240,8 @@ class dlpc350(object):
         """
         The Main Status command shows the status of DMD park and DLPC350 sequencer, frame buffer, and gamma
          correction.
-
-         (USB: CMD2: 0x02, CMD3: 0x0C)
+        :return result: True if all steps executed correctly
+        :rtype result: bool
         """
         result = self.command('r', 0x00, 0x1a, 0x0c, [])  # rw_mode, sequence,com1=0x1a,com2=0x0c for main status, data
         if result:            
@@ -262,10 +272,10 @@ class dlpc350(object):
             return False
     
     def read_num_of_flashimages(self):
-
         """
         This command retrieves the information about the number of Images in the flash.
-        
+        :return result: True if all steps executed correctly
+        :rtype result: bool
         """
         
         result = self.command('r', 0x00, 0x1a, 0x42,[])
@@ -278,9 +288,9 @@ class dlpc350(object):
        
     def read_mode(self):  #default mode is 'pattern'
         """
-        Read the current  input mode for the projector.
-
-        (USB: CMD2: 0x1A, CMD3: 0x1B)
+        Read the current input mode for the projector.
+        :return result: True if all steps executed correctly
+        :rtype result: bool
         """
         result = self.command('r', 0x00, 0x1a, 0x1b, [])
         if result:
@@ -296,13 +306,11 @@ class dlpc350(object):
         
     def set_display_mode(self, mode):  #default mode is 'pattern'
         """
-        Selects the input mode for the projector.
-
-        (USB: CMD2: 0x1A, CMD3: 0x1B)
-
-        :param int mode:
-            :0: "video" mode
-            :1: "pattern" mode
+        Sets the input mode for the projector.
+        :param mode: 'video' or 'pattern'
+        :type mode: str
+        :return result: True if all steps executed correctly
+        :rtype result: bool
         """
        
         modes = ['video', 'pattern'] #video = 0, pattern =1
@@ -321,6 +329,8 @@ class dlpc350(object):
     def read_pattern_input_source(self):
         """
         Read current input source.
+        :return result: True if all steps executed correctly
+        :rtype result: bool
         """
         result = self.command('r', 0x00, 0x1a, 0x22, [])
         if result:
@@ -337,12 +347,10 @@ class dlpc350(object):
     def set_pattern_input_source(self, source='flash'):  # pattern source default = 'flash'
         """
         Selects the input type for pattern sequence.
-
-        (USB: CMD2: 0x1A, CMD3: 0x22)
-
-        :param str source:
-            :0: "video"
-            :3: "flash"
+        :param source: "video" ,"flash"
+        :type source: str
+        :return result: True if all steps executed correctly
+        :rtype result: bool
         """
         sources = ['video', '', '', 'flash']  # video = 0, reserved, reserved, flash=11 (bin 3)
         if source in sources:
@@ -359,7 +367,9 @@ class dlpc350(object):
     
     def read_pattern_config(self):
         """
-        Read current pattern loopup table.
+        Read current pattern lookup table.
+        :return result: True if all steps executed correctly
+        :rtype result: bool
         """
         result = self.command('r', 0x00, 0x1a, 0x31, [])
         if result:
@@ -388,20 +398,19 @@ class dlpc350(object):
         This API controls the execution of patterns stored in the lookup table. Before using this API, stop the current
         pattern sequence using ``DLPC350_PatternDisplay()`` API. After calling this API, send the Validation command
         using the API DLPC350_ValidatePatLutData() before starting the pattern sequence.
-
         (USB: CMD2: 0x1A, CMD3: 0x31)
-
-        :param int num_lut_entries: Number of LUT entries.
-        :param bool do_repeat:
-
-            :True: Execute the pattern sequence once.
-            :False: Repeat the pattern sequence.
-
-        :param int num_pats_for_trig_out2: Number of patterns to display(range 1 through 256). If in repeat mode, then
-           this value dictates how often TRIG_OUT_2 is generated.
-
-        :param int num_images: Number of Image Index LUT Entries(range 1 through 64). This Field is irrelevant for Pattern
-            Display Data Input Source set to a value other than internal.
+        :param num_lut_entries: Number of LUT entries.
+        :param do_repeat:True: Execute the pattern sequence once. False: Repeat the pattern sequence.
+        :param num_pats_for_trig_out2: Number of patterns to display(range 1 through 256). If in repeat mode, then
+                                       this value dictates how often TRIG_OUT_2 is generated.
+        :param num_images: Number of Image Index LUT Entries(range 1 through 64). This Field is irrelevant for Pattern
+                           Display Data Input Source set to a value other than internal.
+        :type num_lut_entries: int
+        :type do_repeat: bool
+        :type num_pats_for_trig_out2: int
+        :type num_images: int
+        :return result: True if all steps executed correctly
+        :rtype result: bool
         """
         
         num_lut_entries_bin = '0' + conv_len(num_lut_entries - 1, 7)
@@ -425,6 +434,8 @@ class dlpc350(object):
     def read_pattern_trigger_mode(self):
         """
         Read current trigger mode.
+        :return result: True if all steps executed correctly
+        :rtype result: bool
         """
         result = self.command('r', 0x00, 0x1a, 0x23, [])
         if result:
@@ -438,15 +449,14 @@ class dlpc350(object):
     def set_pattern_trigger_mode(self, trigger_mode='vsync'):
         """
         Selects the trigger type for pattern sequence.
-
-        (USB: CMD2: 0x1A, CMD3: 0x23)
-
-        :param str trigger_mode:
-            :0: 'vsync'
-            :1: 'trig_mode1'
-            :2: 'trig_mode2'
-            :3: 'trig_mode3'
-            :4: 'trig_mode4'
+        :param trigger_mode :0: 'vsync'
+                                :1: 'trig_mode1'
+                                :2: 'trig_mode2'
+                                :3: 'trig_mode3'
+                                :4: 'trig_mode4'
+        :type trigger_mode: str
+        :return result: True if all steps executed correctly
+        :rtype result: bool
         """
         trigger_modes = ['vsync', 'trig_mode1', 'trig_mode2', 'trig_mode3', 'trig_mode4']
         if trigger_mode in trigger_modes:
@@ -462,6 +472,8 @@ class dlpc350(object):
     def read_trig_out1_control(self):
         """
         Read current trig_out1 setting.
+        :return result: True if all steps executed correctly
+        :rtype result: bool
         """
         result = self.command('r', 0x00, 0x1a, 0x1d, [])
         if result:
@@ -493,9 +505,14 @@ class dlpc350(object):
         Before executing this command, stop the current pattern sequence. After executing this command, 
         send the Validation command (I2C: 0x7D or USB: 0x1A1A) once before starting the pattern sequence.
         
-        param bool plarity_invert: True for active low signal
-        param int trigedge_rise_delay: rising edge delay control ranging from –20.05 μs to 2.787 μs. Each bit adds 107.2 ns.
-        param int trigedge_fall_delay: falling edge delay control with range -20.05 μs to +2.787 μs. Each bit adds 107.2 ns
+        :param polarity_invert: True for active low signal
+        :param trigedge_rise_delay_microsec: rising edge delay control ranging from –20.05 μs to 2.787 μs. Each bit adds 107.2 ns.
+        :param trigedge_fall_delay_microsec: falling edge delay control with range -20.05 μs to +2.787 μs. Each bit adds 107.2 ns
+        :type polarity_invert: bool
+        :type trigedge_rise_delay_microsec: int
+        :type trigedge_fall_delay_microsec: int
+        :return result: True if all steps executed correctly
+        :rtype result: bool
         """
         # convert μs to number equivalent
         trigedge_rise_delay = int((trigedge_rise_delay_microsec - (-20.05))/0.1072)
@@ -521,7 +538,9 @@ class dlpc350(object):
          
     def read_exposure_frame_period(self):
         """
-        Read current exposure time and frame period
+        Read current exposure time and frame period.
+        :return result: True if all steps executed correctly
+        :rtype result: bool
         """
         result = self.command('r', 0x00, 0x1a, 0x29, [])
         if result:
@@ -540,11 +559,12 @@ class dlpc350(object):
         Either the exposure time must be equivalent to the frame period, or the exposure time must be less than the
         frame period by 230 microseconds. Before executing this command, stop the current pattern sequence. After
         executing this command, call ``DLPC350_ValidatePatLutData()`` API before starting the pattern sequence.
-
-        (USB: CMD2: 0x1A, CMD3: 0x29)
-
-        :param int exposure_period: Exposure time in microseconds (4 bytes).
-        :param int frame_period: Frame period in microseconds (4 bytes).
+        :param exposure_period: Exposure time in microseconds (4 bytes).
+        :param frame_period: Frame period in microseconds (4 bytes).
+        :type exposure_period: int
+        :type frame_period: int
+        :return result: True if all steps executed correctly
+        :rtype result: bool
         """
         
         exposure_period_bin = conv_len(exposure_period, 32) # decimal to bit string of size 32
@@ -565,8 +585,8 @@ class dlpc350(object):
          """
          This API checks the programmed pattern display modes and indicates any invalid settings. This command needs to
          be executed after all pattern display configurations have been completed.
-
-         (USB: CMD2: 0x1A, CMD3: 0x1A)
+         :return result: True if all steps executed correctly
+         :rtype result: bool
          """
          result = self.command('w', 0x00, 0x1a, 0x1a, bits_to_bytes(conv_len(0x00, 8))) # Pattern Display Mode: Validate Data: CMD2: 0x1A, CMD3: 0x1A
          if result:
@@ -582,33 +602,35 @@ class dlpc350(object):
                      result &= False
                      print('\n Validation timed out \n')
                      break
-             if not int(ans):  
-                 print('\nValidation successful \n')
-                 result &= True
-             else:
+
+             if int(ans):
                  print('\n Validation failure, see results below\n ')
                  result &= False
+             else:
+                 print('\nValidation successful \n')
+                 result &= True
              print('\n================= Validation result ======================\n')
              print(f'Exposure and frame period setting: {"invalid" if int(ans[-1]) else "valid"}\n')
              print(f'LUT: {"invalid" if int(ans[-2]) else "valid"}\n')
              print(f'Trigger Out1: {"invalid" if int(ans[-3]) else "valid"}\n')
              print(f'Post sector settings: {"warning:invalid" if int(ans[-4]) else "valid"}\n')
              print(f'DLPC350 is {"busy" if int(ans[-8]) else "valid"}\n')
-         return result
+             return result
+         else:
+             return False
          
         
     def open_mailbox(self, mbox_num):
         """
         This API opens the specified Mailbox within the DLPC350 controller. This API must be called before sending data
         to the mailbox/LUT using DLPC350_SendPatLut() or DLPC350_SendImageLut() APIs.
-
-        (USB: CMD2: 0x1A, CMD3: 0x33)
-
-        :param mbox_num:
-            :0: Disable (close) the mailboxes.
-            :1: Open the mailbox for image index configuration.
-            :2: Open the mailbox for pattern definition.
-            :3: Open the mailbox for the Variable Exposure.
+        :param mbox_num :0: Disable (close) the mailboxes.
+                        :1: Open the mailbox for image index configuration.
+                        :2: Open the mailbox for pattern definition.
+                        :3: Open the mailbox for the Variable Exposure.
+        :type mbox_num:int
+        :return result: True if all steps executed correctly
+        :rtype result: bool
         """
         mbox_num = bits_to_bytes(conv_len(mbox_num, 8))
         result = self.command('w', 0x00, 0x1a, 0x33, mbox_num)
@@ -617,16 +639,21 @@ class dlpc350(object):
     def mailbox_set_address(self, address=0):
         """
         This API defines the offset location within the DLPC350 mailboxes to write data into or to read data from.
-
-        (USB: CMD2: 0x1A, CMD3: 0x32)
-
-        :param int address: Defines the offset within the selected (opened) LUT to write/read data to/from (0-127).
+        :param address: Defines the offset within the selected (opened) LUT to write/read data to/from (0-127).
+        :type address: int
+        :return result: True if all steps executed correctly
+        :rtype result: bool
         """
         address = bits_to_bytes(conv_len(address, 8))
         result = self.command('w', 0x00, 0x1a, 0x32, address)
         return result
         
     def read_mailbox_address(self):
+        '''
+        Function to read current mailbox address
+        :return result: True if all steps executed correctly
+        :rtype result: bool
+        '''
         result = self.command('r', 0x00, 0x1a, 0x32, [])
         return result
         
@@ -635,9 +662,13 @@ class dlpc350(object):
         The following parameters: display mode, trigger mode, exposure, 
         and frame rate must be set up before sending any mailbox data.
         If the mailbox is opened to define the flash image indexes, list the index numbers in the mailbox. 
-        For example, if image indexes 0 through 3 are desired, write 0x0 0x1 0x2 0x3 to the mailbox. 
-        
+        For example, if image indexes 0 through 3 are desired, write 0x0 0x1 0x2 0x3 to the mailbox.
         :param index_list: image index list to be written
+        :param address: starting offset location within the DLPC350 mailboxes to write data
+        :type index_list: list
+        :type address: int
+        :return result: True if all steps executed correctly
+        :rtype result: bool
         """
         result = self.open_mailbox(1)
         result &= self.mailbox_set_address(address = address)      
@@ -656,7 +687,31 @@ class dlpc350(object):
                                  do_insert_black=True,
                                  do_trig_out_prev=False):
         '''
-        Function to create payload for pattern LUT
+        Helper function to create payload for creating pattern LUT written using send_pattern_lut.
+        :param trig_type:the trigger type for the pattern
+                        :0: Internal trigger.
+                        :1: External positive.
+                        :2: External negative.
+                        :3: No Input Trigger (Continue from previous; Pattern still has full exposure time).
+        :param bit_depth: desired bit-depth
+        :param led_select: LEDs that are on
+        :param swap_location_list: list of indices to perform a buffer swap if true.
+        :param image_index_list: projector pattern sequence to create and project.
+        :param pattern_num_list:  pattern number for each pattern in image_index_list.
+        :param do_invert_pat: invert pattern if true.
+        :param do_insert_black: Insert black-fill pattern after current pattern if true.
+        :param do_trig_out_prev:Trigger Out 1 will continue to be high when set true.
+        :type trig_type: int
+        :type bit_depth: int
+        :type led_select: int
+        :type swap_location_list:list
+        :type image_index_list: list
+        :type pattern_num_list: list
+        :type do_invert_pat: bool
+        :type do_insert_black: bool
+        :type do_trig_out_prev: bool
+        :return payload_list: hex payload for each pattern entry
+        :rtype: list
         '''
         payload_list = []
         trig_type = conv_len(trig_type, 2)
@@ -700,66 +755,57 @@ class dlpc350(object):
         """
         Mailbox content to setup pattern definition. See table 2-65 in programmer's guide for detailed description of
         pattern LUT entries.
-
-        (USB: CMD2: 0x1A, CMD3: 0x34)
-
-        :param int trig_type: Select the trigger type for the pattern
-
-            :0: Internal trigger.
-            :1: External positive.
-            :2: External negative.
-            :3: No Input Trigger (Continue from previous; Pattern still has full exposure time).
-            :0x3FF: Full Red Foreground color intensity
-
-        :param int pat_num: Pattern number (0 based index). For pattern number ``0x3F``, there is no pattern display. The
-            maximum number supported is 24 for 1 bit-depth patterns. Setting the pattern number to be 25, with a
-            bit-depth of 1 will insert a white-fill pattern. Inverting this pattern will insert a black-fill pattern.
-            These patterns will have the same exposure time as defined in the Pattern Display Exposure and Frame Period
-            command. Table 2-70 in the programmer's guide illustrates which bit planes are illuminated by each pattern
-            number.
-
+        :param trig_type: Select the trigger type for the pattern.
+                              :0: Internal trigger.
+                              :1: External positive.
+                              :2: External negative.
+                              :3: No Input Trigger (Continue from previous; Pattern still has full exposure time).
         :param bit_depth: Select desired bit-depth
-
-            :0: Reserved
-            :1: 1-bit
-            :2: 2-bit
-            :3: 3-bit
-            :4: 4-bit
-            :5: 5-bit
-            :6: 6-bit
-            :7: 7-bit
-            :8: 8-bit
-
-        :param int led_select: Choose the LEDs that are on (bit flags b0 = Red, b1 = Green, b2 = Blue)
-
-            :0: 0b000 No LED (Pass through)
-            :1: 0b001 Red
-            :2: 0b010 Green
-            :3: 0b011 Yellow (Green + Red)
-            :4: 0b100 Blue
-            :5: 0b101 Magenta (Blue + Red)
-            :6: 0b110 Cyan (Blue + Green)
-
-        :param bool do_invert_pat:
-            :True: Invert pattern.
-            :False: Do not invert pattern.
-
-        :param bool do_insert_black:
-            :True: Insert black-fill pattern after current pattern. This setting requires 230 us of time before the
-               start of the next pattern.
-            :False: Do not insert any post pattern.
-
-        :param bool do_buf_swap:
-            :True: perform a buffer swap.
-            :False: Do not perform a buffer swap.
-
-        :param do_trig_out_prev:
-            :True: Trigger Out 1 will continue to be high. There will be no falling edge between the end of the
-               previous pattern and the start of the current pattern. Exposure time is shared between all patterns
-               defined under a common trigger out). This setting cannot be combined with the black-fill pattern.
-            :False: Trigger Out 1 has a rising edge at the start of a pattern, and a falling edge at the end of the
-               pattern.
-
+                          :0: Reserved
+                          :1: 1-bit
+                          :2: 2-bit
+                          :3: 3-bit
+                          :4: 4-bit
+                          :5: 5-bit
+                          :6: 6-bit
+                          :7: 7-bit
+                          :8: 8-bit
+        :param led_select: Choose the LEDs that are on (bit flags b0 = Red, b1 = Green, b2 = Blue)
+                          :0: 0b000 No LED (Pass through)
+                          :1: 0b001 Red
+                          :2: 0b010 Green
+                          :3: 0b011 Yellow (Green + Red)
+                          :4: 0b100 Blue
+                          :5: 0b101 Magenta (Blue + Red)
+                          :6: 0b110 Cyan (Blue + Green)
+        :param swap_location_list: list of indices to perform a buffer swap if true.
+        :param image_index_list: projector pattern sequence to create and project.
+        :param pattern_num_list: Pattern number (0 based index). For pattern number ``0x3F``, there is no pattern display.
+                                    The maximum number supported is 24 for 1 bit-depth patterns. Setting the pattern
+                                    number to be 25, with a bit-depth of 1 will insert a white-fill pattern.
+                                    These patterns will have the same exposure time as defined in the Pattern Display
+                                    Exposure and Frame Period command. Table 2-70 in the programmer's guide
+                                    illustrates which bit planes are illuminated by each pattern number.
+        :param starting_address: Defines the offset within the selected (opened) LUT to write/read data to/from (0-127).
+        :param bool do_invert_pat: Invert pattern if true.
+        :param bool do_insert_black: Insert black-fill pattern after current pattern if true.
+                                     This setting requires 230 us of time before the start of the next pattern.
+        :param do_trig_out_prev: Trigger Out 1 will continue to be high when set true. There will be no falling edge
+                                 between the end of the previous pattern and the start of the current pattern.
+                                 Exposure time is shared between all patterns defined under a common trigger out).
+                                 This setting cannot be combined with the black-fill pattern.
+        :type trig_type: int
+        :type bit_depth: int
+        :type led_select: int
+        :type swap_location_list:list
+        :type image_index_list: list
+        :type pattern_num_list: list
+        :type starting_address: int
+        :type do_invert_pat: bool
+        :type do_insert_black: bool
+        :type do_trig_out_prev: bool
+        :return result: True if all steps executed correctly
+        :rtype result: bool
         """
         
         payload_flat_list = self.pattern_lut_payload_list(trig_type,
@@ -782,30 +828,29 @@ class dlpc350(object):
         return result
         
     def pattern_display(self, action='start'):
-         """
+         '''
          This API starts or stops the programmed patterns sequence.
-
-         (USB: CMD2: 0x1A, CMD3: 0x24)
-
-         :param int action: Pattern Display Start/Stop Pattern Sequence
-
-             :0: Stop Pattern Display Sequence. The next "Start" command will restart the pattern sequence from the
-                beginning.
-             :1: Pause Pattern Display Sequence. The next "Start" command will start the pattern sequence by
-                re-displaying the current pattern in the sequence.
-             :2: Start Pattern Display Sequence.
-         """
+         :param action: Pattern Display Start/Stop Pattern Sequence.
+         :type action: str
+         :return result:True if successful, False otherwise.
+         :rtype result: bool
+         '''
          actions = ['stop', 'pause', 'start']
          if action in actions:
              action_no = actions.index(action)
+             result = self.command('w', 0x00, 0x1a, 0x24, [action_no])
+             return result
+         else:
+             print('\n Invalid action keyword')
+             return False
 
-         result = self.command('w', 0x00, 0x1a, 0x24, [action_no])
-         return result
+
          
     def read_mailbox_info(self):
         '''
         This function reads image LUT table and pattern LUT contents
-        :param bool read_image_index: Read image table True or False
+        :return result: True if all steps executed correctly
+        :rtype result: bool
         '''
         #Read image table
         result = self.open_mailbox(1)
@@ -830,6 +875,15 @@ class dlpc350(object):
             return False
         
 def get_image_LUT_swap_location(image_index_list):
+    '''
+    Function creates buffer swap location index list and image index according to image_index_list pattern list.
+    :param image_index_list:  projector pattern sequence to create and project.
+    :type image_index_list: list
+    :return image_LUT_entries: user image index LUT list.
+    :return swap_location_list: list of indices to perform a buffer swap if true.
+    :rtype image_LUT_entries: list
+    :rtype swap_location_list: list
+    '''
     swap_location_list = [0] + [i for i in range(1,len(image_index_list)) if image_index_list[i]!=image_index_list[i-1]]
     image_LUT_entries = [image_index_list[i] for i in swap_location_list]
 
@@ -840,16 +894,22 @@ def get_image_LUT_swap_location(image_index_list):
         
     return image_LUT_entries, swap_location_list
 
-def LUT_verification(image_index_list, 
-                     swap_location_list,  
+def LUT_verification(image_index_list,
+                     swap_location_list,
                      image_LUT_entries_read, lut_read):
     '''
     This function compares the projector LUT with the user requested LUT to verify the correct LUT is generated in the projector.
     The projector has two LUTs, one with only image index order, and other with image bit plane order.
-    :param list image_index_list: user requested LUT
-    :param list swap_location_list: locations of buffer swap according to user image_index_list
-    :param list image_LUT_entries_read: projector image index read from projector
-    :param list lut_read: projector LUT read from projector.
+    :param image_index_list: user requested LUT
+    :param swap_location_list: locations of buffer swap according to user image_index_list
+    :param image_LUT_entries_read: projector image index read from projector
+    :param lut_read: projector LUT read from projector.
+    :type image_index_list: list
+    :type swap_location_list:list
+    :type image_LUT_entries_read:list
+    :type lut_read:list
+    :return result:True if successful, False otherwise.
+    :rtype result: bool
     '''      
     
     swap_location_list_read = []
@@ -883,6 +943,8 @@ def LUT_verification(image_index_list,
 def current_setting():
     '''
     Function to read the current settings of the projector.
+    :return result: True if all steps executed correctly
+    :rtype result: bool
     '''
     with connect_usb() as lcr:
         # to stop current pattern sequence mode
@@ -900,13 +962,17 @@ def current_setting():
             print("ERROR: Projector cannot be stopped.")
             result &= False
         
-    return 
+    return result
 
 def forge_bmp(single_channel_image_list, savedir, convertRGB = True):
     '''
     Function to create list of 3 channel (24 bit) image from list of single channel (8 bit) images.
     :param single_channel_image_list : list of 8 bit images
     :param convertRGB: If set each image will be RGB otherwise BGR
+    :type single_channel_image_list: list
+    :type convertRGB: bool
+    :return three_channel_list: list of three channel image (color image)
+    :rtype three_channel_list: list
     '''
         
     image_array = np.empty((single_channel_image_list[0].shape[0],single_channel_image_list[0].shape[1],3))
@@ -928,14 +994,45 @@ def forge_bmp(single_channel_image_list, savedir, convertRGB = True):
     return three_channel_list 
 
 def forge_fringe_bmp(savedir, 
-                       pitch_list, 
-                       N_list, 
-                       type_unwrap, 
-                       phase_st, 
-                       inte_rang, direc = 'v', 
-                       calib_fringes = False, 
-                       proj_width = 912, 
-                       proj_height = 1140):
+                     pitch_list,
+                     N_list,
+                     type_unwrap,
+                     phase_st,
+                     inte_rang, direc = 'v',
+                     calib_fringes = False,
+                     proj_width = 912,
+                     proj_height = 1140):
+    '''
+    Function to creat image deck of fringe patterns used for phase shift fringe projection.
+    If  calib_fringes is set to True fringe deck in both vertical and horizontal directions used mainly for calibration
+    is created.
+    :param savedir: path to save the color pattern images as bmp which can be saved into projector flash
+    :param pitch_list: List of number of pixels per fringe period.
+    :param N_list: List of number of steps for each pitch.
+    :param type_unwrap:Type of temporal unwrapping to be applied.
+                      'phase' = phase coded unwrapping method,
+                      'multifreq' = multi-frequency unwrapping method
+                      'multiwave' = multi-wavelength unwrapping method.
+    :param phase_st: Starting phase. To apply multifrequency and multiwavelength temporal unwraping
+                     starting phase should be zero. Whereas for phase coding trmporal
+                     uwrapping starting phase should be -π.
+    :param inte_rang, direc: Visually vertical (v) or horizontal(h) fringe pattern.
+    :param calib_fringes: If set with create fringes in both direction.
+    :param proj_width: width of projector
+    :param proj_height: height of projector
+    :type savedir: str
+    :type pitch_list: list
+    :type N_list: list
+    :type type_unwrap: str
+    :type phase_st: int
+    :type inte_rang: list
+    :type direc: str
+    :type calib_fringes: bool
+    :type proj_width: int
+    :type proj_height: int
+    :return fringe_bmp_list: list of patterns stacked as 3 channel image.
+    :rtype fringe_bmp_list: list
+    '''
     
     if calib_fringes:
         fringe_array, delta_deck_list = nstep.calib_generate(proj_width, 
@@ -967,7 +1064,14 @@ def proj_single_img(image_index,
     
     '''
     Function projects single image with given flash image index in repeat mode.
-    :param int image_index: Index of image on projector flash
+    :param image_index: index of image on projector flash.
+    :param exposure_period: projector exposure period.
+    :param frame_period: projector frame period.
+    :type image_index: int
+    :type exposure_period: int
+    :type frame_period: int
+    :return result:True if successful, False otherwise.
+    :rtype result: bool
     '''
   
     with connect_usb() as lcr:
@@ -1014,13 +1118,13 @@ def proj_pattern_LUT(image_index_list,
                      pprint_proj_status = True ):
     '''
     This function is used to create look up table and project the sequence for the projector based on the 
-    image_index_list (sequence) given. 
-
+    image_index_list (sequence) given.
     :param image_index_list : The sequence to be created.
-    :param bit_depth : Desired bit-depth
     :param exposure_period: Exposure time in microseconds (4 bytes)
     :param frame_period: Frame period in microseconds (4 bytes).
     :pprint_proj_status: If set will print projector's current status.
+    :return result:True if successful, False otherwise.
+    :rtype result: bool
     '''
     
     image_LUT_entries, swap_location_list = get_image_LUT_swap_location(image_index_list)    
@@ -1070,6 +1174,9 @@ def proj_pattern_LUT(image_index_list,
     return result
 
 def main():
+    '''
+    Main function example.
+    '''
     option = input("Please choose: 1 -- project single image; 2 -- project pattern sequence\n")
     result = True
     if option == '1':
