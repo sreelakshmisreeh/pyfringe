@@ -88,6 +88,7 @@ def cam_configuration(cam,
     get_IEnumeration_node_current_entry_name(nodemap, 'AcquisitionFrameRateAuto')
     get_IBoolean_node_current_val(nodemap, 'AcquisitionFrameRateEnabled')
     get_IFloat_node_current_val(nodemap, 'AcquisitionFrameRate')
+    get_IEnumeration_node_current_entry_name(nodemap, 'pgrExposureCompensationAuto')
     get_IEnumeration_node_current_entry_name(nodemap, 'ExposureAuto')
     get_IEnumeration_node_current_entry_name(nodemap, 'ExposureMode')    
     get_IFloat_node_current_val(nodemap, 'ExposureTime')
@@ -100,6 +101,7 @@ def cam_configuration(cam,
     result = True    
     result &= setAcqusitionMode(nodemap, AcqusitionModeName='Continuous')    
     result &= setFrameRate(nodemap, frameRate=frameRate)
+    result &= disableExposureCompensationAuto(nodemap)
     result &= setExposureTime(nodemap, exposureTime=exposureTime)
     result &= setGain(nodemap, gain=gain)
     result &= configure_trigger(nodemap, triggerType=triggerType)
@@ -123,6 +125,7 @@ def cam_configuration(cam,
     get_IEnumeration_node_current_entry_name(nodemap, 'AcquisitionFrameRateAuto')
     get_IBoolean_node_current_val(nodemap, 'AcquisitionFrameRateEnabled')
     get_IFloat_node_current_val(nodemap, 'AcquisitionFrameRate')
+    get_IEnumeration_node_current_entry_name(nodemap, 'pgrExposureCompensationAuto')
     get_IEnumeration_node_current_entry_name(nodemap, 'ExposureAuto')
     get_IEnumeration_node_current_entry_name(nodemap, 'ExposureMode')    
     get_IFloat_node_current_val(nodemap, 'ExposureTime')
@@ -513,6 +516,22 @@ def disableExposureAuto(nodemap):
     print('ExposureAuto mode is set to "off"')
     return True
 
+def disableExposureCompensationAuto(nodemap):
+    # Get the node "ExposureCompensationAuto" and convert it to Enumeration class
+    ptrExposureCompensationAuto = PySpin.CEnumerationPtr(nodemap.GetNode("pgrExposureCompensationAuto"))
+    if (not PySpin.IsAvailable(ptrExposureCompensationAuto)) or (not PySpin.IsWritable(ptrExposureCompensationAuto)): 
+        print('Unable to retrieve ExposureCompensationAuto. Aborting...')
+        return False
+    # Get the "Off" entry
+    ExposureCompensationAuto_off = ptrExposureCompensationAuto.GetEntryByName("Off")
+    if (not PySpin.IsAvailable(ExposureCompensationAuto_off)) or (not PySpin.IsReadable(ExposureCompensationAuto_off)):
+        print('Unable to set ExposureCompensationAuto mode to Off. Aborting...')
+        return False
+    # set the "Off" entry to ExposureAuto
+    ptrExposureCompensationAuto.SetIntValue(ExposureCompensationAuto_off.GetValue())
+    print('ExposureCompensationAuto mode is set to "off"')
+    return True    
+
 def setExposureMode(nodemap, exposureModeToSet):
     """
     Sets the operation mode of the exposure (shutter). Toggles the Trigger
@@ -543,7 +562,7 @@ def setExposureMode(nodemap, exposureModeToSet):
         return False    
     # Set the entry to the node
     ptrExposureMode.SetIntValue(ExposureMode_selected.GetValue())
-    print('ExposureMode is set to %s...'%exposureModeToSet)
+    print('ExposureMode is set to %s'%exposureModeToSet)
     return True
 
 def setTriggerMode(nodemap, TriggerModeToSet):
@@ -702,9 +721,12 @@ def setTriggerSource(nodemap, TriggerSourceToSet):
     return True
 
 def setExposureTime(nodemap, exposureTime=None):
-    # First disable the ExposureAuto
-    if not disableExposureAuto(nodemap):
+    # First set the exposure mode to "timed"
+    if not setExposureMode(nodemap, "Timed"):
         return False
+    # Second disable the ExposureAuto
+    if not disableExposureAuto(nodemap):
+        return False    
     # Get the node "ExposureTime" and check if it is available and writable
     ptrExposureTime = PySpin.CFloatPtr(nodemap.GetNode("ExposureTime"))
     if (not PySpin.IsAvailable(ptrExposureTime)) or (not PySpin.IsWritable(ptrExposureTime)):
@@ -719,7 +741,7 @@ def setExposureTime(nodemap, exposureTime=None):
             exposureTime = exposureTimeMax
     # Set the exposure time
     ptrExposureTime.SetValue(exposureTime)
-    print('Exposure Time set to %5.6f microseconds'%exposureTime)      
+    print('Exposure Time set to %5.2f microseconds'%exposureTime)      
     return True
 
 def setAcqusitionMode(nodemap, AcqusitionModeName):
@@ -753,7 +775,7 @@ def setAcqusitionMode(nodemap, AcqusitionModeName):
         return False
     # Set integer value from entry node as new value of enumeration node
     node_acquisition_mode.SetIntValue(node_acquisition_mode_selected.GetValue())
-    print('Acquisition mode set to %s...'%AcqusitionModeName)  
+    print('Acquisition mode set to %s'%AcqusitionModeName)  
     return True
 
 def setStreamBufferHandlingMode(s_node_map, StreamBufferHandlingModeName):
