@@ -48,7 +48,8 @@ def cam_configuration(nodemap,
                       frameRate=30,
                       exposureTime=27084,
                       gain=0,
-                      bufferCount=15):
+                      bufferCount=15,
+                      verbose=True):
     """
     Configurate the camera. Note that the camera must be initialized before calling
     this function, i.e., cam.Init() must be called before calling this function.
@@ -67,6 +68,8 @@ def cam_configuration(nodemap,
         Gain
     bufferCount : int
         Buffer count.
+    verbose : bool
+        If information should be printed out
     Returns
     -------
     result : bool
@@ -74,25 +77,14 @@ def cam_configuration(nodemap,
 
     """
 
-    print('\n=================== Camera status before configuration ==========================\n')
-    AcquisitionMode = get_IEnumeration_node_current_entry_name(nodemap, 'AcquisitionMode')
-    get_IEnumeration_node_current_entry_name(nodemap, 'AcquisitionFrameRateAuto')
-    get_IBoolean_node_current_val(nodemap, 'AcquisitionFrameRateEnabled')
-    get_IFloat_node_current_val(nodemap, 'AcquisitionFrameRate')
-    ExposureCompensationAuto = get_IEnumeration_node_current_entry_name(nodemap, 'pgrExposureCompensationAuto')
-    get_IEnumeration_node_current_entry_name(nodemap, 'ExposureAuto')
-    get_IFloat_node_current_val(nodemap, 'ExposureTime')
-    get_IEnumeration_node_current_entry_name(nodemap, 'GainAuto')
-    get_IFloat_node_current_val(nodemap, 'Gain')
-    get_IEnumeration_node_current_entry_name(s_node_map, 'StreamBufferCountMode')
-    get_IInteger_node_current_val(s_node_map, 'StreamBufferCountManual')
-
     print('\n=================== Config camera ==============================================\n')
     result = True
+    AcquisitionMode = get_IEnumeration_node_current_entry_name(nodemap, 'AcquisitionMode')
     if not (AcquisitionMode == 'Continuous'):
-        result &= setAcqusitionMode(nodemap, AcqusitionModeName='Continuous')
+        result &= setAcquisitionMode(nodemap, AcquisitionModeName='Continuous')
     if frameRate is not None:
         result &= setFrameRate(nodemap, frameRate=frameRate)
+    ExposureCompensationAuto = get_IEnumeration_node_current_entry_name(nodemap, 'pgrExposureCompensationAuto')
     if not (ExposureCompensationAuto == 'Off'):
         result &= disableExposureCompensationAuto(nodemap)
     if exposureTime is not None:
@@ -102,18 +94,9 @@ def cam_configuration(nodemap,
     if bufferCount is not None:
         result &= setBufferCount(s_node_map, bufferCount=bufferCount)
 
-    print('\n=================== Camera status after configuration ==========================\n')
-    get_IEnumeration_node_current_entry_name(nodemap, 'AcquisitionMode')
-    get_IEnumeration_node_current_entry_name(nodemap, 'AcquisitionFrameRateAuto')
-    get_IBoolean_node_current_val(nodemap, 'AcquisitionFrameRateEnabled')
-    get_IFloat_node_current_val(nodemap, 'AcquisitionFrameRate')
-    get_IEnumeration_node_current_entry_name(nodemap, 'pgrExposureCompensationAuto')
-    get_IEnumeration_node_current_entry_name(nodemap, 'ExposureAuto')
-    get_IFloat_node_current_val(nodemap, 'ExposureTime')
-    get_IEnumeration_node_current_entry_name(nodemap, 'GainAuto')
-    get_IFloat_node_current_val(nodemap, 'Gain')
-    get_IEnumeration_node_current_entry_name(s_node_map, 'StreamBufferCountMode')
-    get_IInteger_node_current_val(s_node_map, 'StreamBufferCountManual')
+    if verbose:
+        print('\n=================== Camera status after configuration ==========================\n')
+        print_camera_config(nodemap, s_node_map)
     return result
 
 
@@ -129,7 +112,7 @@ def acquire_images(cam,
                    timeout=10):
     """
     This function acquires and saves images from a device. Note that camera 
-    must be initialized and configurated before calling this function, i.e., 
+    must be initialized and configurated before calling this function, i.e.,
     cam.Init() and cam_configuration(cam,triggerType, ...,) must be called 
     before calling this function.
 
@@ -138,7 +121,7 @@ def acquire_images(cam,
     :param num_images: the total number of images to be taken.
     :param savedir: directory to save images.
     :param triggerType: Must be one of {"software", "hardware", "off"}.
-                        If triggerType is "off", camera is configureated for live view.
+                        If triggerType is "off", camera is configurated for live view.
     :param frameRate: frame rate.
     :param exposureTime: exposure time in microseconds.
     :param gain: gain
@@ -147,7 +130,7 @@ def acquire_images(cam,
     :type cam: CameraPtr
     :type acquisition_index: int
     :type num_images: int
-    :tyoe savedir: str
+    :type savedir: str
     :type triggerType: str
     :type frameRate: float
     :type exposureTime: int
@@ -191,7 +174,7 @@ def acquire_images(cam,
     cv2.destroyAllWindows()
 
     # Retrieve, convert, and save image
-    # config trigger for image acquasition
+    # config trigger for image acquisition
     result &= trigger_configuration(nodemap=nodemap,
                                     s_node_map=s_node_map,
                                     triggerType=triggerType)
@@ -307,7 +290,7 @@ def run_single_camera(cam,
     :param bufferCount: buffer count number on RAM
     :param timeout: the waiting time in seconds before termination
     :type cam: CameraPtr
-    :tyoe savedir: str
+    :type savedir: str
     :type acquisition_index: int
     :type num_images: int    
     :type triggerType: str
@@ -780,15 +763,15 @@ def setExposureTime(nodemap, exposureTime=None):
     return True
 
 
-def setAcqusitionMode(nodemap, AcqusitionModeName):
+def setAcquisitionMode(nodemap, AcquisitionModeName):
     """
-    Explicitely set AcqusitionMode
+    Explicitly set AcquisitionMode
 
     Parameters
     ----------
     nodemap : camera nodemap
         camera nodemap.
-    AcqusitionModeName : str
+    AcquisitionModeName : str
         must be one from the three: Continuous, SingleFrame, MultiFrame.
 
     Returns
@@ -805,19 +788,19 @@ def setAcqusitionMode(nodemap, AcqusitionModeName):
         print('Unable to set acquisition mode to continuous (enum retrieval). Aborting...')
         return False
     # Retrieve entry node from enumeration node
-    node_acquisition_mode_selected = node_acquisition_mode.GetEntryByName(AcqusitionModeName)
+    node_acquisition_mode_selected = node_acquisition_mode.GetEntryByName(AcquisitionModeName)
     if (not PySpin.IsAvailable(node_acquisition_mode_selected)) or (not PySpin.IsReadable(node_acquisition_mode_selected)):
         print('Unable to set acquisition mode to %s. Aborting...' % node_acquisition_mode_selected)
         return False
     # Set integer value from entry node as new value of enumeration node
     node_acquisition_mode.SetIntValue(node_acquisition_mode_selected.GetValue())
-    print('Acquisition mode set to %s' % AcqusitionModeName)
+    print('Acquisition mode set to %s' % AcquisitionModeName)
     return True
 
 
 def setStreamBufferHandlingMode(s_node_map, StreamBufferHandlingModeName):
     """
-    Explicitely set StreamBufferHandlingModeName
+    Explicitly set StreamBufferHandlingModeName
 
     Parameters
     ----------
@@ -886,7 +869,7 @@ def setGain(nodemap, gain):
     return True
 
 
-def trigger_configuration(nodemap, s_node_map, triggerType):
+def trigger_configuration(nodemap, s_node_map, triggerType, verbose=True):
     """
     This function configures the camera to use a trigger. First, trigger mode is
     ensured to be off in order to select the trigger source.
@@ -896,8 +879,10 @@ def trigger_configuration(nodemap, s_node_map, triggerType):
      :param s_node_map: camera stream nodemap.
      :type s_node_map: CNodemapPtr
      :param triggerType: Trigger type, 'software' or 'hardware' or 'off'. If triggerType is "off", 
-                         camera is configureated for live view.
+                         camera is configurated for live view.
      :type triggerType: str
+     :param verbose: verbose print out
+     :type verbose: bool
      :return: True if successful, False otherwise.
      :rtype: bool
     """
@@ -907,16 +892,6 @@ def trigger_configuration(nodemap, s_node_map, triggerType):
         'Note that if the application / user software triggers faster than frame time, the trigger may be dropped / skipped by the camera.\n')
     print(
         'If several frames are needed per trigger, a more reliable alternative for such case, is to use the multi-frame mode.\n\n')
-
-    print('\n=================== Trigger status before configuration ==========================\n')
-    get_IEnumeration_node_current_entry_name(nodemap, 'TriggerSource')
-    get_IEnumeration_node_current_entry_name(nodemap, 'ExposureMode')
-    get_IEnumeration_node_current_entry_name(nodemap, 'TriggerMode')
-    get_IEnumeration_node_current_entry_name(nodemap, 'TriggerSelector')
-    get_IEnumeration_node_current_entry_name(nodemap, 'TriggerActivation')
-    get_IEnumeration_node_current_entry_name(s_node_map, 'StreamBufferHandlingMode')
-    get_IBoolean_node_current_val(nodemap, 'TriggerDelayEnabled')
-    get_IFloat_node_current_val(nodemap, 'TriggerDelay')
 
     if triggerType == 'software':
         print('Software trigger is chosen...')
@@ -956,15 +931,9 @@ def trigger_configuration(nodemap, s_node_map, triggerType):
         print('Error: %s' % ex)
         result = False
 
-    print('\n=================== Trigger status after configuration ==========================\n')
-    get_IEnumeration_node_current_entry_name(nodemap, 'TriggerSource')
-    get_IEnumeration_node_current_entry_name(nodemap, 'ExposureMode')
-    get_IEnumeration_node_current_entry_name(nodemap, 'TriggerMode')
-    get_IEnumeration_node_current_entry_name(nodemap, 'TriggerSelector')
-    get_IEnumeration_node_current_entry_name(nodemap, 'TriggerActivation')
-    get_IEnumeration_node_current_entry_name(s_node_map, 'StreamBufferHandlingMode')
-    get_IBoolean_node_current_val(nodemap, 'TriggerDelayEnabled')
-    get_IFloat_node_current_val(nodemap, 'TriggerDelay')
+    if verbose:
+        print('\n=================== Trigger status after configuration ==========================\n')
+        print_trigger_config(nodemap, s_node_map)
 
     return result
 
@@ -978,6 +947,31 @@ def activate_trigger(nodemap):
 def deactivate_trigger(nodemap):
     result = setTriggerMode(nodemap, "Off")
     return result
+
+
+def print_camera_config(nodemap, s_node_map):
+    get_IEnumeration_node_current_entry_name(nodemap, 'AcquisitionMode')
+    get_IEnumeration_node_current_entry_name(nodemap, 'AcquisitionFrameRateAuto')
+    get_IBoolean_node_current_val(nodemap, 'AcquisitionFrameRateEnabled')
+    get_IFloat_node_current_val(nodemap, 'AcquisitionFrameRate')
+    get_IEnumeration_node_current_entry_name(nodemap, 'pgrExposureCompensationAuto')
+    get_IEnumeration_node_current_entry_name(nodemap, 'ExposureAuto')
+    get_IFloat_node_current_val(nodemap, 'ExposureTime')
+    get_IEnumeration_node_current_entry_name(nodemap, 'GainAuto')
+    get_IFloat_node_current_val(nodemap, 'Gain')
+    get_IEnumeration_node_current_entry_name(s_node_map, 'StreamBufferCountMode')
+    get_IInteger_node_current_val(s_node_map, 'StreamBufferCountManual')
+
+
+def print_trigger_config(nodemap, s_node_map):
+    get_IEnumeration_node_current_entry_name(nodemap, 'TriggerSource')
+    get_IEnumeration_node_current_entry_name(nodemap, 'ExposureMode')
+    get_IEnumeration_node_current_entry_name(nodemap, 'TriggerMode')
+    get_IEnumeration_node_current_entry_name(nodemap, 'TriggerSelector')
+    get_IEnumeration_node_current_entry_name(nodemap, 'TriggerActivation')
+    get_IEnumeration_node_current_entry_name(s_node_map, 'StreamBufferHandlingMode')
+    get_IBoolean_node_current_val(nodemap, 'TriggerDelayEnabled')
+    get_IFloat_node_current_val(nodemap, 'TriggerDelay')
 
 
 def main():
