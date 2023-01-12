@@ -818,7 +818,7 @@ class dlpc350(object):
                                      This setting requires 230 us of time before the start of the next pattern.
         :param do_trig_out_prev: Trigger Out 1 will continue to be high when set true. There will be no falling edge
                                  between the end of the previous pattern and the start of the current pattern.
-                                 Exposure time is shared between all patterns defined under a common trigger out).
+                                 Exposure time is shared between all patterns defined under a common trigger out.
                                  This setting cannot be combined with the black-fill pattern.
         :type trig_type: int
         :type bit_depth: int
@@ -923,7 +923,7 @@ def LUT_verification(image_index_list,
                      lut_read):
     """
     This function compares the projector LUT with the user requested LUT to verify the correct LUT is generated in the projector.
-    The projector has two LUTs, one with only image index order, and other with image bit plane order.
+    The projector has two LUTs, one with only image index order, and the other with the image bit plane order.
     :param image_index_list: user requested LUT
     :param image_LUT_entries_read: projector image index read from projector
     :param lut_read: projector LUT read from projector.
