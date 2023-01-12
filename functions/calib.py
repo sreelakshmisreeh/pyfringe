@@ -13,14 +13,14 @@ import matplotlib.pyplot as plt
 from matplotlib.ticker import MaxNLocator
 import seaborn as sns
 import reconstruction as rc
-import open3d as o3d
+from plyfile import PlyData, PlyElement
 from scipy.optimize import leastsq
 from scipy.spatial import distance
 from copy import deepcopy
 
 EPSILON = -0.5
 TAU = 5.5
-
+#TODO: modify to compute directly from list of images 
 class calibration:
     '''
     Calibration class is used to calibrate camera and projector setting. User can choose between phase coded , multifrequency and multiwavelength temporal unwrapping.
@@ -1193,9 +1193,7 @@ class calibration:
         
         return delta_df, abs_delta_df
     
-    def recon_xyz(self,unwrap_phase, 
-                  distance, 
-                  delta_distance, 
+    def recon_xyz(self,unwrap_phase,  
                   white_imgs, 
                   mask_cond, 
                   modulation= None, 
@@ -1255,20 +1253,24 @@ class calibration:
                 roi_mask[:] = True # all pixels are sellected.
                 print("The inpput mask_cond is not supported, no mask is applied.")
             u_copy[~roi_mask] = np.nan
-            w_copy[~roi_mask] = np.nan
             x, y, z = rc.reconstruction_obj(u_copy, c_mtx, c_dist, p_mtx, cp_rot_mtx, cp_trans_mtx, phi0, self.pitch[-1])
-            flag = (z > (distance - delta_distance)) & (z < (distance + delta_distance)) & roi_mask
-            xt = x[flag]
-            yt = y[flag]
-            zt = z[flag]
-            intensity = w_copy[flag] / np.nanmax(w_copy[flag])
-            cordi = np.vstack((xt, yt, zt)).T
-            color = np.vstack((intensity, intensity, intensity)).T
-            cordi_lst.append(cordi)
-            color_lst.append(color)
-            pcd = o3d.geometry.PointCloud()
-            pcd.points = o3d.utility.Vector3dVector(cordi)
-            pcd.colors = o3d.utility.Vector3dVector(color)
+            
+            w_copy[~roi_mask] = False
+            x[~roi_mask] = np.nan
+            y[~roi_mask] = np.nan
+            z[~roi_mask] = np.nan
+            
+            cordi = np.vstack((x.ravel(), y.ravel(), z.ravel())).T
+            nan_mask = np.isnan(cordi)
+            up_cordi = cordi[~nan_mask.all(axis =1)]
+            xyz = list(map(tuple, up_cordi)) 
+            inte_img = w_copy / np.nanmax(w_copy)
+            inte_rgb = np.stack((inte_img,inte_img,inte_img),axis = -1)
+            rgb_intensity_vect = np.vstack((inte_rgb[:,:,0].ravel(), inte_rgb[:,:,1].ravel(),inte_rgb[:,:,2].ravel())).T
+            up_rgb_intensity_vect = rgb_intensity_vect[~nan_mask.all(axis =1)]
+            color = list(map(tuple, up_rgb_intensity_vect))
+            cordi_lst.append(up_cordi)
+            color_lst.append(up_rgb_intensity_vect)
             if mask_cond == 'modulation':
                 point_cloud_dir = os.path.join(self.path, 'modulation_mask')
                 if not os.path.exists(point_cloud_dir):
@@ -1280,8 +1282,12 @@ class calibration:
             else:
                 point_cloud_dir = os.path.join(self.path, 'no_mask')
                 if not os.path.exists(point_cloud_dir):
-                    os.makedirs(point_cloud_dir)                
-            o3d.io.write_point_cloud(os.path.join(point_cloud_dir,'obj_%d.ply'%i), pcd)  
+                    os.makedirs(point_cloud_dir)  
+            PlyData(
+                [
+                    PlyElement.describe(np.array(xyz, dtype=[('x', 'f4'), ('y', 'f4'), ('z', 'f4')]), 'points'),
+                    PlyElement.describe(np.array(color, dtype=[('r', 'f4'), ('g', 'f4'), ('b', 'f4')]), 'color'),
+                ]).write(os.path.join(point_cloud_dir,'obj_%d.ply'%i))    
         if mask_cond == 'intensity':
             residual_lst, outlier_lst = self.white_center_planefit(cordi_lst, resid_outlier_limit)
         return cordi_lst, color_lst
