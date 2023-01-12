@@ -23,7 +23,8 @@ def proj_cam_preview(cam,
                      proj_exposure_period, 
                      proj_frame_period, 
                      preview_type,
-                     image_index):
+                     image_index,
+                     pprint_status = True):
     '''
     Function is used to show a preview of camera projector setting before scanning.There two options :
     focus:  The projector projects the focus adjustment image at the given image index and the camera will be in free run vedio mode. 
@@ -38,6 +39,7 @@ def proj_cam_preview(cam,
     :param proj_frame_period: projector frame period.
     :param preview_type: 'focus' or 'preview'.
     :param image_index: image index on projector flash.
+    :pprint_status: pretty print projector and camera current parameters.
     :type cam: cameraPtr.
     :type nodemap:cNodemapPtr.
     :type s_node_map:cNodemapPtr.
@@ -46,6 +48,7 @@ def proj_cam_preview(cam,
     :type proj_frame_period: int.
     :type preview_type: str.
     :type image_index: int.
+    :type pprint_status: bool
     :return True if successful, False otherwise. 
     :rtype: bool
     '''
@@ -63,6 +66,7 @@ def proj_cam_preview(cam,
     result &= gspy.trigger_configuration(nodemap=nodemap,
                                          s_node_map=s_node_map,
                                          triggerType="off")
+    
     if preview_type == 'focus':
         result &= lcr.send_img_lut([image_index],0)
         result &= lcr.send_pattern_lut(trig_type = 0, 
@@ -83,7 +87,11 @@ def proj_cam_preview(cam,
                                        image_index_list = [image_index], 
                                        pattern_num_list = [0], 
                                        starting_address = 0,  
-                                       do_insert_black = False)  
+                                       do_insert_black = False) 
+        
+    if pprint_status:# Print all projector current attributes set
+        lcr.pretty_print_status()
+        gspy.print_trigger_config(nodemap, s_node_map) 
     result &= lcr.start_pattern_lut_validate()
     # live view   
     if result:
@@ -122,7 +130,7 @@ def run_proj_cam_capt(cam,
                       proj_exposure_period = 27084, 
                       proj_frame_period = 33334, 
                       do_insert_black = True,
-                      pprint_proj_status = True,
+                      pprint_status = True,
                       do_validation = True):
     
     
@@ -144,7 +152,7 @@ def run_proj_cam_capt(cam,
     :param proj_frame_period : projector frame period in microseconds. 
     :param do_insert_black: insert black-fill pattern after each pattern. This setting requires 230 us of time before the
                             start of the next pattern.
-    :pprint_proj_status: pretty print projector current parameters.
+    :pprint_status: pretty print projector and camera current parameters.
     :do_validation : do validation of projector LUT before projection and capture. 
                     Warning: for each new pattern sequence this must be True to change the projector LUT.
     :type cam: CameraPtr
@@ -203,8 +211,9 @@ def run_proj_cam_capt(cam,
                                            pattern_num_list = pattern_num_list, 
                                            starting_address = 0,
                                            do_insert_black = do_insert_black)
-            if pprint_proj_status:# Print all projector current attributes set
+            if pprint_status:# Print all projector current attributes set
                 lcr.pretty_print_status()
+                gspy.print_trigger_config(nodemap, s_node_map)
             result &=  lcr.start_pattern_lut_validate()
         elif not image_index_list:
             print('\n image_index_list cannot be empty')
@@ -271,8 +280,8 @@ def proj_cam_acquire_images(cam,
                             do_insert_black,
                             preview_image_index,
                             focus_image_index,
-                            pprint_proj_status,
-                            do_validation = True):
+                            do_validation = True,
+                            pprint_status = True):
     '''
     Wrapper function combining preview option and object scanning. 
     The projector configuration and camera trigger mode for each is diffrent.
@@ -294,7 +303,7 @@ def proj_cam_acquire_images(cam,
                             start of the next pattern.
     :param preview_image_index: image to be projected for adjusting camera exposure.
     :param focus_image_index: image to be projected to adjust projector and camera focus. If set to None this will be skipped.
-    :param pprint_proj_status: pretty print projector current parameters.
+    :param pprint_status: pretty print projector and camera current parameters.
     :param do_validation: do validation of projector LUT before projection and capture.
                           Warning: for each new pattern sequence this must be True to change the projector LUT.
     :type cam: CameraPtr
@@ -345,7 +354,8 @@ def proj_cam_acquire_images(cam,
                                    proj_preview_exp_period, 
                                    proj_preview_frame_period, 
                                    'focus',
-                                   focus_image_index)
+                                   focus_image_index,
+                                   pprint_status)
     
     if (number_scan == 1) & ((preview_option == 'Once') or (preview_option == 'Always')):
         result &= proj_cam_preview(cam,
@@ -355,7 +365,8 @@ def proj_cam_acquire_images(cam,
                                    proj_preview_exp_period, 
                                    proj_preview_frame_period,
                                    'preview',
-                                   preview_image_index)
+                                   preview_image_index,
+                                   pprint_status)
         
         ret, n_scanned_image_list = run_proj_cam_capt(cam,
                                                       nodemap,
@@ -369,8 +380,8 @@ def proj_cam_acquire_images(cam,
                                                       proj_exposure_period, 
                                                       proj_frame_period, 
                                                       do_insert_black,
-                                                      pprint_proj_status,
-                                                      do_validation)
+                                                      do_validation,
+                                                      pprint_status)
         
         
     elif (number_scan > 1) & (preview_option == 'Always'):
@@ -385,7 +396,8 @@ def proj_cam_acquire_images(cam,
                                        proj_preview_exp_period, 
                                        proj_preview_frame_period,
                                        'preview',
-                                       preview_image_index)
+                                       preview_image_index,
+                                       pprint_status)
             
             ret, image_array_list = run_proj_cam_capt(cam, 
                                                       nodemap,
@@ -399,8 +411,8 @@ def proj_cam_acquire_images(cam,
                                                       proj_exposure_period, 
                                                       proj_frame_period, 
                                                       do_insert_black,
-                                                      pprint_proj_status,
-                                                      do_validation = do_validation)
+                                                      do_validation = do_validation,
+                                                      pprint_status = pprint_status)
             initial_acq_index +=1
             n_scanned_image_list.append(image_array_list)
             
@@ -415,7 +427,8 @@ def proj_cam_acquire_images(cam,
                                    proj_preview_exp_period, 
                                    proj_preview_frame_period,
                                    'preview',
-                                   preview_image_index)
+                                   preview_image_index,
+                                   pprint_status )
         for i in range(number_scan):
             if i !=0:
                 validation_flag = False
@@ -431,8 +444,8 @@ def proj_cam_acquire_images(cam,
                                                      proj_exposure_period, 
                                                      proj_frame_period, 
                                                      do_insert_black,
-                                                     pprint_proj_status,
-                                                     do_validation = validation_flag)
+                                                     do_validation = validation_flag,
+                                                     pprint_status = pprint_status)
             initial_acq_index +=1
             n_scanned_image_list.append(image_array_list)
     elif (preview_option == 'Never'):
@@ -454,8 +467,8 @@ def proj_cam_acquire_images(cam,
                                                      proj_exposure_period, 
                                                      proj_frame_period, 
                                                      do_insert_black,
-                                                     pprint_proj_status,
-                                                     do_validation = validation_flag)
+                                                     do_validation = validation_flag,
+                                                     pprint_status = pprint_status)
             initial_acq_index +=1
             n_scanned_image_list.append(image_array_list)
             
@@ -475,7 +488,7 @@ def run_proj_single_camera(savedir,
                            preview_image_index = 21,
                            number_scan = 1,
                            acquisition_index = 0,
-                           pprint_proj_status = True,
+                           pprint_status = True,
                            preview_option = 'Once',
                            focus_image_index = None):
     """
@@ -493,7 +506,7 @@ def run_proj_single_camera(savedir,
     :param preview_image_index: image to be projected for adjusting camera exposure.
     :param number_scan: number of times the projector camera system scans the object.
     :param acquisition_index: the index number of the current acquisition.
-    :param pprint_proj_status: pretty print projector current parameters.
+    :param pprint_status: pretty print projector and camera current parameters.
     :param preview_option: 'Once','Always,'Never'
     :param focus_image_index: image to be projected to adjust projector and camera focus. If set to None this will be skipped.
     :type savedir: str
@@ -548,7 +561,7 @@ def run_proj_single_camera(savedir,
                                                             do_insert_black,
                                                             preview_image_index,
                                                             focus_image_index,
-                                                            pprint_proj_status)
+                                                            pprint_status)
         result &= ret
         # Deinitialize camera        
         cam.DeInit()
@@ -585,14 +598,14 @@ def main():
                                                       proj_frame_period=33334,
                                                       do_insert_black=True,
                                                       preview_image_index=21,
-                                                      pprint_proj_status=True,
-                                                      focus_image_index=34 )
+                                                      focus_image_index=34,
+                                                      pprint_status=True,)
     result &= ret
  
     return result ,n_scanned_image_list
 
 if __name__ == '__main__':
-    result , n_scanned_image_list = main()
+    result, n_scanned_image_list = main()
     if result:
         sys.exit(0)
     else:
