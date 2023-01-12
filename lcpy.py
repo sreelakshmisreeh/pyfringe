@@ -614,35 +614,42 @@ class dlpc350(object):
         :rtype result: bool
         """
         result = self.command('w', 0x00, 0x1a, 0x1a, bits_to_bytes(conv_len(0x00, 8)))  # Pattern Display Mode: Validate Data: CMD2: 0x1A, CMD3: 0x1A
-        if result:
-            ret = 1
+        if result:            
+            ans = '11111111'
+            ret = int(ans[0], 2)
             start = perf_counter_ns()
             while ret:
                 result &= self.command('r', 0x00, 0x1a, 0x1a, [])
-                ans = conv_len(self.ans[4], 8)
-                ret = int(ans[0])
+                if result:
+                    ans = conv_len(self.ans[4], 8)
+                    ret = int(ans[0], 2)
                 end = perf_counter_ns()
                 t = (end - start)/1e9
                 if t > 10:
                     result &= False
-                    print('\n Validation timed out \n')
+                    print('\n Validation time longer than 10s \n')
                     break
 
             if int(ans):
-                print('\n Validation failure, see results below\n ')
+                if ret == 255:
+                    print('\n ERROR: validation timeout. Reason: Cannot hear back from projector, ')
+                else:
+                    print('\n ERROR: Validation failure, see results below\n ')
                 result &= False
             else:
                 print('\nValidation successful \n')
                 result &= True
-
-            print('\n================= Validation result ======================\n')
-            print(f'Exposure and frame period setting: {"invalid" if int(ans[-1]) else "valid"}\n')
-            print(f'LUT: {"invalid" if int(ans[-2]) else "valid"}\n')
-            print(f'Trigger Out1: {"invalid" if int(ans[-3]) else "valid"}\n')
-            print(f'Post sector settings: {"warning:invalid" if int(ans[-4]) else "valid"}\n')
-            print(f'DLPC350 is {"busy" if int(ans[-8]) else "valid"}\n')
+            
+            if ret != 255:
+                print('\n================= Validation result ======================\n')
+                print(f'Exposure and frame period setting: {"invalid" if int(ans[-1]) else "valid"}\n')
+                print(f'LUT: {"invalid" if int(ans[-2]) else "valid"}\n')
+                print(f'Trigger Out1: {"invalid" if int(ans[-3]) else "valid"}\n')
+                print(f'Post sector settings: {"warning:invalid" if int(ans[-4]) else "valid"}\n')
+                print(f'DLPC350 is {"busy" if int(ans[-8]) else "valid"}\n')
             return result
         else:
+            print('ERROR: Cannot exacuate validate operation.')
             return result
         
     def open_mailbox(self, mbox_num):
