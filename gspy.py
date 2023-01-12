@@ -79,12 +79,12 @@ def cam_configuration(nodemap,
 
     print('\n=================== Config camera ==============================================\n')
     result = True
-    AcquisitionMode = get_IEnumeration_node_current_entry_name(nodemap, 'AcquisitionMode')
+    AcquisitionMode = get_IEnumeration_node_current_entry_name(nodemap, 'AcquisitionMode', verbose=False)
     if not (AcquisitionMode == 'Continuous'):
         result &= setAcquisitionMode(nodemap, AcquisitionModeName='Continuous')
     if frameRate is not None:
         result &= setFrameRate(nodemap, frameRate=frameRate)
-    ExposureCompensationAuto = get_IEnumeration_node_current_entry_name(nodemap, 'pgrExposureCompensationAuto')
+    ExposureCompensationAuto = get_IEnumeration_node_current_entry_name(nodemap, 'pgrExposureCompensationAuto', verbose=False)
     if not (ExposureCompensationAuto == 'Off'):
         result &= disableExposureCompensationAuto(nodemap)
     if exposureTime is not None:
@@ -109,7 +109,8 @@ def acquire_images(cam,
                    exposureTime=27084,
                    gain=0,
                    bufferCount=15,
-                   timeout=10):
+                   timeout=10,
+                   verbose=True):
     """
     This function acquires and saves images from a device. Note that camera 
     must be initialized and configurated before calling this function, i.e.,
@@ -144,7 +145,11 @@ def acquire_images(cam,
     nodemap = cam.GetNodeMap()
     nodemap_tldevice = cam.GetTLDeviceNodeMap()
     s_node_map = cam.GetTLStreamNodeMap()
-    print_device_info(nodemap_tldevice)
+    
+    if verbose:
+        print_device_info(nodemap_tldevice)
+        print_camera_config(nodemap, s_node_map)
+        print_trigger_config(nodemap, s_node_map)    
 
     result = True
     # live view
@@ -154,13 +159,15 @@ def acquire_images(cam,
                                 frameRate=frameRate,
                                 exposureTime=exposureTime,
                                 gain=gain,
-                                bufferCount=bufferCount)
+                                bufferCount=bufferCount,
+                                verbose=verbose)
 
     print('*** IMAGE ACQUISITION ***\n')
     # config trigger for preview
     result &= trigger_configuration(nodemap=nodemap,
                                     s_node_map=s_node_map,
-                                    triggerType="off")  # 'off' for preview
+                                    triggerType="off",
+                                    verbose=verbose)  # 'off' for preview
 
     cam.BeginAcquisition()
     while True:
@@ -177,7 +184,8 @@ def acquire_images(cam,
     # config trigger for image acquisition
     result &= trigger_configuration(nodemap=nodemap,
                                     s_node_map=s_node_map,
-                                    triggerType=triggerType)
+                                    triggerType=triggerType,
+                                    verbose=verbose)
 
     activate_trigger(nodemap)
     cam.BeginAcquisition()
