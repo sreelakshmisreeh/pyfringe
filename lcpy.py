@@ -615,8 +615,7 @@ class dlpc350(object):
         """
         result = self.command('w', 0x00, 0x1a, 0x1a, bits_to_bytes(conv_len(0x00, 8)))  # Pattern Display Mode: Validate Data: CMD2: 0x1A, CMD3: 0x1A
         if result:
-            ans = conv_len(self.ans[4], 8)
-            ret = int(ans[0])
+            ret = 1
             start = perf_counter_ns()
             while ret:
                 result &= self.command('r', 0x00, 0x1a, 0x1a, [])
@@ -1111,6 +1110,7 @@ def proj_single_img(image_index,
             # To set image LUT
             result &= lcr.send_img_lut(index_list=[image_index],
                                        address=0)   
+            
             # To set pattern LUT table
             result &= lcr.send_pattern_lut(trig_type=0,
                                            bit_depth=8,
@@ -1196,6 +1196,7 @@ def proj_pattern_LUT(image_index_list,
                                image_LUT_entries_read, 
                                lut_read)
     return result
+
 
 def main():
     """
