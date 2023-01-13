@@ -203,6 +203,27 @@ def recon_generate(width, height, type_unwrap, N_list, pitch_list, phase_st, int
     np.save(os.path.join(path, '{}_fringes.npy'.format(type_unwrap)), fringe_arr) 
     return fringe_arr, delta_deck_list
 
+def B_cutoff_limit(sigma_path, quantile_limit, N_list, pitch_list):
+    '''
+    Function to calculate modulation minimum based on success rate.
+    :param sigma_path:  Path to read variance of noise model (sigma)
+    :param quantile_limit:  Sigma level upto which all pixels can be successfully unwrapped.
+    :param N_list:  Number of images taken for each level.
+    :param pitch_list: Number of pixels per fringe period in each level
+    :type sigma_path:str
+    :type quantile_limit:float
+    :type N_list:list
+    :type pitch_list:list
+    :return Lower limit of modulation. Pixels above this value is used for reconstruction.
+    :rtype:float
+
+    '''
+    sigma = np.load(sigma_path)
+    sigma_sq_delta_phi = (np.pi / quantile_limit)**2
+    modulation_limit_sq = ((pitch_list[-1]**2 / pitch_list[-2]**2) + 1) * (2 * sigma**2) / (N_list[-1]* sigma_sq_delta_phi)
+    
+    return np.sqrt(modulation_limit_sq)
+
 def mask_img(images, limit ):
     '''
     Function computes and applies mask to captured image based on data modulation (relative modulation) of each pixel.
