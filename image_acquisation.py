@@ -14,8 +14,7 @@ from time import perf_counter_ns
 import usb.core
 import PySpin
 import matplotlib.pyplot as plt
-os.environ["KMP_DUPLICATE_LIB_OK"] = "True" # needed when openCV and matplotlib used at the same time
-
+os.environ["KMP_DUPLICATE_LIB_OK"] = "True"  # needed when openCV and matplotlib used at the same time
     
 
 def proj_cam_preview(cam, 
@@ -26,8 +25,8 @@ def proj_cam_preview(cam,
                      proj_frame_period, 
                      preview_type,
                      image_index,
-                     cam_trig_reconfig = True,
-                     pprint_status = True):
+                     cam_trig_reconfig=True,
+                     pprint_status=True):
     """
     Function is used to show a preview of camera projector setting before scanning.There two options :
     focus:  The projector projects the focus adjustment image at the given image index and the camera will be in free run vedio mode. 
@@ -60,11 +59,11 @@ def proj_cam_preview(cam,
     
     delta = 100      
   
-    #set projector configuration
-    result = lcr.set_pattern_config(num_lut_entries= 1, 
-                                    do_repeat = True, 
-                                    num_pats_for_trig_out2 = 1, 
-                                    num_images = 1)
+    # set projector configuration
+    result = lcr.set_pattern_config(num_lut_entries=1,
+                                    do_repeat=True,
+                                    num_pats_for_trig_out2=1,
+                                    num_images=1)
     result &= lcr.set_exposure_frame_period(proj_exposure_period, 
                                             proj_frame_period)
     # config camera trigger for preview
@@ -74,32 +73,36 @@ def proj_cam_preview(cam,
                                              triggerType="off")
     
     if preview_type == 'focus':
-        result &= lcr.send_img_lut([image_index],0)
-        result &= lcr.send_pattern_lut(trig_type = 0, 
-                                       bit_depth = 8, 
-                                       led_select = 0b111,
-                                       swap_location_list = [0],
-                                       image_index_list = [image_index], 
-                                       pattern_num_list = [0], 
-                                       starting_address = 0,  
-                                       do_insert_black = False) 
+        result &= lcr.send_img_lut([image_index], 0)
+        result &= lcr.send_pattern_lut(trig_type=0,
+                                       bit_depth=8,
+                                       led_select=0b111,
+                                       swap_location_list=[0],
+                                       image_index_list=[image_index],
+                                       pattern_num_list=[0],
+                                       starting_address=0,
+                                       do_insert_black=False)
         
     elif preview_type == 'preview':
-        result &= lcr.send_img_lut([image_index],0)
-        result &= lcr.send_pattern_lut(trig_type = 0, 
-                                       bit_depth = 8, 
-                                       led_select = 0b111,
-                                       swap_location_list = [0],
-                                       image_index_list = [image_index], 
-                                       pattern_num_list = [0], 
-                                       starting_address = 0,  
-                                       do_insert_black = False) 
-        
-    if pprint_status:# Print all projector current attributes set
+        result &= lcr.send_img_lut([image_index], 0)
+        result &= lcr.send_pattern_lut(trig_type=0,
+                                       bit_depth=8,
+                                       led_select=0b111,
+                                       swap_location_list=[0],
+                                       image_index_list=[image_index],
+                                       pattern_num_list=[0],
+                                       starting_address=0,
+                                       do_insert_black=False)
+
+    # Print all projector current attributes set
+    if pprint_status:
         lcr.pretty_print_status()
         gspy.print_trigger_config(nodemap, s_node_map) 
+
+    # validate the pattern lut
     result &= lcr.start_pattern_lut_validate()
-    # live view   
+
+    # live view
     if result:
         cam.BeginAcquisition()
         result &= lcr.pattern_display('start')
@@ -108,37 +111,39 @@ def proj_cam_preview(cam,
             img_show = cv2.resize(frame, None, fx=0.5, fy=0.5)
             if preview_type == 'preview':
                 img_show_color = cv2.cvtColor(img_show, cv2.COLOR_GRAY2BGR)
-                img_show_color[img_show == 255] = [0,0,255] #over exposed
+                img_show_color[img_show == 255] = [0, 0, 255]  # over exposed
             else:
                 img_show_color = img_show
+
+            # draw the cross
             center_y = int(img_show.shape[0]/2)
             center_x = int(img_show.shape[1]/2)
-            cv2.line(img_show_color,(center_x,center_y - delta),(center_x,center_y + delta),(0,255,0),5)
-            cv2.line(img_show_color,(center_x - delta,center_y),(center_x + delta,center_y),(0,255,0),5)
-            cv2.imshow("press q to quit", img_show_color)    
+            cv2.line(img_show_color, (center_x, center_y - delta), (center_x, center_y + delta), (0, 255, 0), 5)
+            cv2.line(img_show_color, (center_x - delta, center_y), (center_x + delta, center_y), (0, 255, 0), 5)
+
+            cv2.imshow("press q to quit", img_show_color)
             key = cv2.waitKey(1)        
             if key == ord("q"):
                 result &= lcr.pattern_display('stop')
                 break
         cam.EndAcquisition()
         cv2.destroyAllWindows()
-    return True
+    return result
 
 def run_proj_cam_capt(cam, 
                       nodemap,
                       s_node_map,
                       lcr, 
                       savedir,
-                      acquisition_index = 0, 
-                      image_index_list = None, 
-                      pattern_num_list = None, 
-                      cam_capt_timeout = 10,
-                      proj_exposure_period = 27084, 
-                      proj_frame_period = 33334, 
-                      do_insert_black = True,
-                      pprint_status = True,
-                      do_validation = True):
-    
+                      acquisition_index=0,
+                      image_index_list=None,
+                      pattern_num_list=None,
+                      cam_capt_timeout=10,
+                      proj_exposure_period=27084,
+                      proj_frame_period=33334,
+                      do_insert_black=True,
+                      pprint_status=True,
+                      do_validation=True):
     
     """
     This function projects and acquires images. Note that projector and camera must be initialized before 
@@ -158,8 +163,8 @@ def run_proj_cam_capt(cam,
     :param proj_frame_period : projector frame period in microseconds. 
     :param do_insert_black: insert black-fill pattern after each pattern. This setting requires 230 us of time before the
                             start of the next pattern.
-    :pprint_status: pretty print projector and camera current parameters.
-    :do_validation : do validation of projector LUT before projection and capture. 
+    :param pprint_status: pretty print projector and camera current parameters.
+    :param do_validation : do validation of projector LUT before projection and capture.
                     Warning: for each new pattern sequence this must be True to change the projector LUT.
     :type cam: CameraPtr
     :type nodemap:cNodemapPtr.
@@ -173,8 +178,8 @@ def run_proj_cam_capt(cam,
     :type proj_exposure_period : int.
     :type proj_frame_period: int.
     :type do_insert_black: bool.
-    :type pprint_proj_status:bool.
-    :type do_validation:bool.
+    :type pprint_status: bool.
+    :type do_validation: bool.
     :return result :True if successful, False otherwise. 
     :rtype: bool
     """
@@ -189,7 +194,7 @@ def run_proj_cam_capt(cam,
     start = perf_counter_ns() 
     result &= lcr.pattern_display('stop')
     if do_validation: 
-        #Configure projector
+        # Configure projector
         if image_index_list and pattern_num_list:
             image_LUT_entries, swap_location_list = lcpy.get_image_LUT_swap_location(image_index_list)
             result &= lcr.set_pattern_config(num_lut_entries= len(image_index_list),
@@ -526,7 +531,6 @@ def run_proj_single_camera(savedir,
     :rtype :bool
     """
     try:
-        result = True
         result, system, cam_list, num_cameras = gspy.sysScan()
         cam = cam_list[0]
         if savedir is not None:
@@ -624,22 +628,22 @@ def calib_capture(image_index_list,
                   savedir,
                   number_scan):
     
-     result = run_proj_single_camera(savedir=savedir,
-                                  preview_option='Always',
-                                  number_scan=number_scan,
-                                  acquisition_index=0,
-                                  image_index_list = image_index_list,
-                                  pattern_num_list = pattern_num_list,
-                                  cam_gain=0,
-                                  cam_bufferCount=15,
-                                  cam_capt_timeout=10,
-                                  proj_exposure_period=27084,
-                                  proj_frame_period=33334,
-                                  do_insert_black=True,
-                                  preview_image_index=21,
-                                  focus_image_index=34,
-                                  pprint_status=True)
-     return result
+    result = run_proj_single_camera(savedir=savedir,
+                                    preview_option='Always',
+                                    number_scan=number_scan,
+                                    acquisition_index=0,
+                                    image_index_list = image_index_list,
+                                    pattern_num_list = pattern_num_list,
+                                    cam_gain=0,
+                                    cam_bufferCount=15,
+                                    cam_capt_timeout=10,
+                                    proj_exposure_period=27084,
+                                    proj_frame_period=33334,
+                                    do_insert_black=True,
+                                    preview_image_index=21,
+                                    focus_image_index=34,
+                                    pprint_status=True)
+    return result
 
 
 def main():
@@ -652,23 +656,24 @@ def main():
     savedir = r'C:\Users\kl001\Documents\grasshopper3_python\images'
     result = True
     ret = run_proj_single_camera(savedir=savedir,
-                                                      preview_option='Once',
-                                                      number_scan=2,
-                                                      acquisition_index=0,
-                                                      image_index_list=image_index_list,
-                                                      pattern_num_list=pattern_num_list,
-                                                      cam_gain=0,
-                                                      cam_bufferCount=15,
-                                                      cam_capt_timeout=10,
-                                                      proj_exposure_period=27084,
-                                                      proj_frame_period=33334,
-                                                      do_insert_black=True,
-                                                      preview_image_index=21,
-                                                      focus_image_index=34,
-                                                      pprint_status=True,)
+                                 preview_option='Once',
+                                 number_scan=2,
+                                 acquisition_index=0,
+                                 image_index_list=image_index_list,
+                                 pattern_num_list=pattern_num_list,
+                                 cam_gain=0,
+                                 cam_bufferCount=15,
+                                 cam_capt_timeout=10,
+                                 proj_exposure_period=27084,
+                                 proj_frame_period=33334,
+                                 do_insert_black=True,
+                                 preview_image_index=21,
+                                 focus_image_index=34,
+                                 pprint_status=True,)
     result &= ret
  
     return result 
+
 
 if __name__ == '__main__':
     result = main()

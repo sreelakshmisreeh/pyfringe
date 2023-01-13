@@ -287,13 +287,12 @@ class dlpc350(object):
                 self.gamma_correction = "enabled"
             else:
                 self.gamma_correction = "disabled"
-            return True
         else:
             self.mirrorStatus = None            
             self.sequencer_status = None
             self.frame_buffer_status = None
             self.gamma_correction = None
-            return False
+        return result
     
     def read_num_of_flashimages(self):
         """
@@ -305,10 +304,9 @@ class dlpc350(object):
         result = self.command('r', 0x00, 0x1a, 0x42, [])
         if result:
             self.images_on_flash = self.ans[4]
-            return True
         else:
             self.images_on_flash = None
-            return False
+        return result
        
     def read_mode(self):  # default mode is 'pattern'
         """
@@ -323,10 +321,9 @@ class dlpc350(object):
                 self.mode = "pattern"
             else:
                 self.mode = "video"
-            return True
         else:
             self.mode = None
-            return False
+        return result
         
     def set_display_mode(self, mode):  # default mode is 'pattern'
         """
@@ -342,13 +339,11 @@ class dlpc350(object):
             mode_no = modes.index(mode)
             result = self.command('w', 0x00, 0x1a, 0x1b, [mode_no])
         else:
+            result = False
             print('ERROR: Required display mode is not supported. Mode must be one of {"video", "pattern"}')
-            return False
         if result:
             self.mode = mode
-            return True
-        else:
-            return False
+        return result
         
     def read_pattern_input_source(self):
         """
@@ -363,10 +358,9 @@ class dlpc350(object):
                 self.source = "flash"
             else:
                 self.source = "video"
-            return True
         else:
             self.source = None
-            return False
+        return result
         
     def set_pattern_input_source(self, source='flash'):  # pattern source default = 'flash'
         """
@@ -381,13 +375,11 @@ class dlpc350(object):
             source_no = sources.index(source)
             result = self.command('w', 0x00, 0x1a, 0x22, [source_no])
         else:
+            result = False
             print('ERROR: Required pattern input source is not supported.')
-            return False
         if result:
             self.source = source
-            return True
-        else:
-            return False
+        return result
     
     def read_pattern_config(self):
         """
@@ -405,13 +397,12 @@ class dlpc350(object):
                 self.do_pattern_repeat = "no"
             self.num_pats_for_trig_out2 = int(ans[-2])+1
             self.num_images = int(ans[-1])+1
-            return True
         else:
             self.num_lut_entries = None
             self.do_pattern_repeat = None
             self.num_pats_for_trig_out2 = None
             self.num_images = None
-            return False
+        return result
         
     def set_pattern_config(self,
                            num_lut_entries=15,
@@ -451,9 +442,7 @@ class dlpc350(object):
             self.do_pattern_repeat = do_repeat
             self.num_pats_for_trig_out2 = num_pats_for_trig_out2
             self.num_images = num_images
-            return True
-        else:
-            return False
+        return result
     
     def read_pattern_trigger_mode(self):
         """
@@ -465,10 +454,9 @@ class dlpc350(object):
         if result:
             ans = self.ans[4]
             self.trigger_mode = ans
-            return True
         else:
             self.trigger_mode = None
-            return False
+        return result
         
     def set_pattern_trigger_mode(self, trigger_mode='vsync'):
         """
@@ -512,12 +500,11 @@ class dlpc350(object):
             # convert to μs
             self.trigedge_rise_delay_microsec = np.round(-20.05 + 0.1072 * tigger_rising_edge_delay, decimals=2)
             self.trigedge_fall_delay_microsec = np.round(-20.05 + 0.1072 * trigger_falling_edge_delay, decimals=2)
-            return True
         else:
             self.trigger_polarity = None
             self.trigedge_rise_delay_microsec = None
             self.trigedge_fall_delay_microsec = None
-            return False
+        return result
         
     def trig_out1_control(self,
                           polarity_invert=True,
@@ -555,9 +542,7 @@ class dlpc350(object):
         if result:
             self.trigedge_rise_delay_microsec = trigedge_rise_delay_microsec
             self.trigedge_fall_delay_microsec = trigedge_fall_delay_microsec
-            return True
-        else:
-            return False
+        return result
 
     def read_exposure_frame_period(self):
         """
@@ -570,11 +555,10 @@ class dlpc350(object):
             ans = self.ans
             self.exposure_period = ans[4] + ans[5]*256 + ans[6]*256**2 + ans[7]*256**3
             self.frame_period = ans[8] + ans[9]*256 + ans[10]*256**2 + ans[11]*256**3
-            return True
         else:
             self.exposure_period = None
             self.frame_period = None
-            return False
+        return result
     
     def set_exposure_frame_period(self, 
                                   exposure_period, 
@@ -602,9 +586,7 @@ class dlpc350(object):
         if result:
             self.exposure_period = exposure_period
             self.frame_period = frame_period
-            return True
-        else:
-            return False
+        return result
   
     def start_pattern_lut_validate(self):
         """
@@ -647,10 +629,9 @@ class dlpc350(object):
                 print(f'Trigger Out1: {"invalid" if int(ans[-3]) else "valid"}\n')
                 print(f'Post sector settings: {"warning:invalid" if int(ans[-4]) else "valid"}\n')
                 print(f'DLPC350 is {"busy" if int(ans[-8]) else "valid"}\n')
-            return result
         else:
-            print('ERROR: Cannot exacuate validate operation.')
-            return result
+            print('ERROR: Cannot execute validate operation.')
+        return result
         
     def open_mailbox(self, mbox_num):
         """
@@ -871,10 +852,10 @@ class dlpc350(object):
         if action in actions:
             action_no = actions.index(action)
             result = self.command('w', 0x00, 0x1a, 0x24, [action_no])
-            return result
         else:
+            result = False
             print("\n Invalid action keyword, must be one of {'stop', 'pause', 'start'}")
-            return False
+        return result
          
     def read_mailbox_info(self):
         """
@@ -898,11 +879,10 @@ class dlpc350(object):
         if result:
             self.image_LUT_entries = image_ans
             self.pattern_LUT_entries = pattern_ans
-            return True
         else:
             self.image_LUT_entries = None
             self.pattern_LUT_entries = None
-            return False
+        return result
         
 def get_image_LUT_swap_location(image_index_list):
     """
