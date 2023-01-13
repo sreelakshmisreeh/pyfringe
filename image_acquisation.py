@@ -289,7 +289,7 @@ def proj_cam_acquire_images(cam,
                             focus_image_index,
                             do_validation = True,
                             pprint_status = True):
-    '''
+    """
     Wrapper function combining preview option and object scanning. 
     The projector configuration and camera trigger mode for each is diffrent.
     
@@ -333,7 +333,7 @@ def proj_cam_acquire_images(cam,
     :type do_validation: bool
     :return result :True if successful, False otherwise.
     :rtype: bool
-    '''
+    """
     nodemap = cam.GetNodeMap()
     nodemap_tldevice = cam.GetTLDeviceNodeMap()
     s_node_map = cam.GetTLStreamNodeMap()
@@ -582,11 +582,12 @@ def gamm_curve(gamma_image_index_list,
                cam_width = 1920, 
                cam_height = 1200,
                half_cross_length = 100):
-    '''
+    """
     Function to generate gamma curve
-    '''
+    """
     
-    camx, camy = int(cam_width/2), int(cam_height/2)
+    camx = int(cam_width/2)
+    camy = int(cam_height/2)
    
     result = run_proj_single_camera(savedir=savedir,
                                  preview_option='Once',
@@ -603,35 +604,41 @@ def gamm_curve(gamma_image_index_list,
                                  preview_image_index=21,
                                  focus_image_index=34,
                                  pprint_status=True)
+    if result:
     
-    n_scanned_image_list = np.load(os.path.join(savedir,'capt_0.npy'))
-    camera_captured = n_scanned_image_list[:,camy - half_cross_length : camy + half_cross_length, camx - half_cross_length : camx + half_cross_length]
-    mean_intensity = np.mean(camera_captured.reshape((camera_captured.shape[0],-1)),axis=1)
-    x_axis = np.arange(5,256,5)
-    a,b = np.polyfit(x_axis,mean_intensity,1)
-    plt.figure(figsize=(16,9))
-    plt.scatter(x_axis, mean_intensity, label = 'captured mean per frame')
-    plt.plot(x_axis,a*x_axis+b, label = 'linear fit', color = 'r')
-    plt.xlabel("Input Intensity",fontsize = 20)
-    plt.ylabel("Output Intensity",fontsize = 20)
-    plt.title("Projector gamma curve", fontsize = 20)
-    plt.xticks(fontsize = 15)
-    plt.yticks(fontsize = 15)
-    plt.legend(fontsize = 15)
-    plt.show()
-    plt.savefig(os.path.join(savedir, 'gamma_curve.png'))
-    np.save(os.path.join(savedir, 'gamma_curve.npy'),mean_intensity)
+        n_scanned_image_list = np.load(os.path.join(savedir,'capt_0.npy'))
+        camera_captured = n_scanned_image_list[:,camy - half_cross_length : camy + half_cross_length, camx - half_cross_length : camx + half_cross_length]
+        mean_intensity = np.mean(camera_captured.reshape((camera_captured.shape[0],-1)),axis=1)
+        x_axis = np.arange(5,256,5)
+        a,b = np.polyfit(x_axis,mean_intensity,1)
+        plt.figure(figsize=(16,9))
+        plt.scatter(x_axis, mean_intensity, label = 'captured mean per frame')
+        plt.plot(x_axis,a*x_axis+b, label = 'linear fit', color = 'r')
+        plt.xlabel("Input Intensity",fontsize = 20)
+        plt.ylabel("Output Intensity",fontsize = 20)
+        plt.title("Projector gamma curve", fontsize = 20)
+        plt.xticks(fontsize = 15)
+        plt.yticks(fontsize = 15)
+        plt.legend(fontsize = 15)
+        plt.show()
+        plt.savefig(os.path.join(savedir, 'gamma_curve.png'))
+        np.save(os.path.join(savedir, 'gamma_curve.npy'),mean_intensity)
+    else:
+        print('Capture failure')
     return result
 
 def calib_capture(image_index_list,
                   pattern_num_list,
                   savedir,
-                  number_scan):
-    
+                  number_scan,
+                  acquisition_index):
+    """
+    Function to capture calibration images.
+    """
     result = run_proj_single_camera(savedir=savedir,
                                     preview_option='Always',
                                     number_scan=number_scan,
-                                    acquisition_index=0,
+                                    acquisition_index = acquisition_index,
                                     image_index_list = image_index_list,
                                     pattern_num_list = pattern_num_list,
                                     cam_gain=0,
@@ -644,7 +651,60 @@ def calib_capture(image_index_list,
                                     focus_image_index=34,
                                     pprint_status=True)
     return result
-
+def mranpixel_std(savedir,
+                  image_index,
+                  pattern_no,
+                  no_images,
+                  acquisition_index,
+                  cam_width = 1920,
+                  cam_height = 1200,
+                  half_cross_length = 100):
+    """
+    Function to determine additive noise std of camera sensor using constant image (image_index).
+    :param savedir : path to save npy file.
+    :param image_index: pattern to be projected.
+    :param no_images: no of images to be used in the calculation.
+    :param acquisition_index: the index number of the current acquisition.
+    :param cam_width : camera width
+    :param cam_height: camera height
+    :half_cross_length: half window size for calculation.
+    :type savedir: str
+    :type image_index: int
+    :type pattern_no: int
+    :type no_images: int
+    :type acquisition_index: int
+    :type cam_width: int
+    :type cam_height: int
+    :type half_cross_length: int
+    :return mean_std_pixel: mean of std of each pixel within the given window.
+    :rtype mean_std_pixel:float
+    """
+    image_index_list = [image_index]*no_images
+    pattern_num_list = [pattern_no]*no_images
+    result = run_proj_single_camera(savedir=savedir,
+                                    preview_option='Once',
+                                    number_scan=1,
+                                    acquisition_index=acquisition_index,
+                                    image_index_list = image_index_list,
+                                    pattern_num_list = pattern_num_list,
+                                    cam_gain=0,
+                                    cam_bufferCount=15,
+                                    cam_capt_timeout=10,
+                                    proj_exposure_period=27084,
+                                    proj_frame_period=33334,
+                                    do_insert_black=True,
+                                    preview_image_index=21,
+                                    focus_image_index=None,
+                                    pprint_status=True)
+    if result:
+        n_scanned_image_list = np.load(os.path.join(savedir,'capt_%d.npy'%acquisition_index))
+        camx = int(cam_width/2)
+        camy =  int(cam_height/2)
+        capt_cropped = n_scanned_image_list[:,camy - half_cross_length : camy + half_cross_length, camx - half_cross_length : camx + half_cross_length]
+        mean_std_pixel = np.mean(np.std(capt_cropped, axis = 0 ))
+        np.save(os.path.join(savedir, 'mean_std_pixel.npy'),mean_std_pixel)
+        
+    return mean_std_pixel
 
 def main():
     '''
