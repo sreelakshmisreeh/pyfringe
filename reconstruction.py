@@ -13,7 +13,6 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 import cv2
-import open3d as o3d
 import os
 from copy import deepcopy
 from plyfile import PlyData, PlyElement
@@ -26,17 +25,17 @@ TAU = 5.5
 ## ideal if this function added to nstep
 def B_cutoff_limit(sigma_path, quantile_limit, N_list, pitch_list):
     '''
-    Function to calculate modulation minitue based on sucess rate
-
-    Parameters
-    ----------
-    sigma_path = type:string. Path to read variance of noise model (sigma) 
-    quantile_limit = type: float. Sigma level upto which all pixels can be successfully unwrapped.
-    N_list = type: Array of int. Number of images taken for each level.
-    pitch_list =type: Array of int. Number of pixels per fringe period in each level
-    Returns
-    -------
-    Lower limit of modulation. Pixels above this value is used for reconstruction.
+    Function to calculate modulation minimum based on success rate.
+    :param sigma_path:  Path to read variance of noise model (sigma)
+    :param quantile_limit:  Sigma level upto which all pixels can be successfully unwrapped.
+    :param N_list:  Number of images taken for each level.
+    :param pitch_list: Number of pixels per fringe period in each level
+    :type sigma_path:str
+    :type quantile_limit:float
+    :type N_list:list
+    :type pitch_list:list
+    :return Lower limit of modulation. Pixels above this value is used for reconstruction.
+    :rtype:float
 
     '''
     sigma = np.load(sigma_path)
@@ -45,11 +44,14 @@ def B_cutoff_limit(sigma_path, quantile_limit, N_list, pitch_list):
     
     return np.sqrt(modulation_limit_sq)
 
-
 def inv_mtx(a11,a12,a13,a21,a22,a23,a31,a32,a33):
     '''
     Function to calculate inversion matrix required for object reconstruction.
     Ref: S.Zhong, High-Speed 3D Imaging with Digital Fringe Projection Techniques, CRC Press, 2016.
+    :params a11,a12,a13,a21,a22,a23,a31,a32,a33: A matrix elements
+    :type: float
+    :return: Inverse matrix elements
+    :rtype: float
     '''
    
     
@@ -67,8 +69,6 @@ def inv_mtx(a11,a12,a13,a21,a22,a23,a31,a32,a33):
     b32 = -(a11 * a32 - a12 * a31) / det
     b33 = (a11 * a22 - a12 * a21) / det
     
-    #b_mtx=np.stack((np.vstack((b11,b12,b13)).T,np.vstack((b21,b22,b23)).T,np.vstack((b31,b32,b33)).T),axis=1)
-    
     return b11, b12, b13, b21, b22, b23, b31, b32, b33
     
     
@@ -76,27 +76,30 @@ def inv_mtx(a11,a12,a13,a21,a22,a23,a31,a32,a33):
     
 def reconstruction_pts(uv_true, unwrapv, c_mtx, c_dist, p_mtx, cp_rot_mtx, cp_trans_mtx, phase_st, pitch):
     '''
-    Function to reconstruct 3D point cordinates of 2D points. 
+    Function to reconstruct 3D point coordinates of 2D points.
 
     Parameters
     ----------
-    uv_true = type: float. 2D point cordinates
-    unwrapv = type: float array. Unwrapped phase map of object.
-    c_mtx = type: float array. Camera matrix from calibration.
-    c_dist = type: float array. Camera distortion matrix from calibration.
-    p_mtx = type: float array. Projector matrix from calibration.
-    cp_rot_mtx = type: float array. Projector distortion matrix from calibration.
-    cp_trans_mtx = type: float array. Camera-projector translational matrix from calibration.
-    phase_st = type:float. Initial phase to be subtracted for phase to coordinate conversion.
-    pitch  = type:float. Number of pixels per fringe period.
-
-    Returns
-    -------
-    Coordinates array for given 2D points
-    x = type: float. 
-    y = type: float. 
-    z = type: float. 
-
+    :param uv_true: 2D point coordinates
+    :param unwrapv: type: float array. Unwrapped phase map of object.
+    :param c_mtx: type: float array. Camera matrix from calibration.
+    :param c_dist: type: float array. Camera distortion matrix from calibration.
+    :param p_mtx: type: float array. Projector matrix from calibration.
+    :param cp_rot_mtx: type: float array. Projector distortion matrix from calibration.
+    :param cp_trans_mtx: type: float array. Camera-projector translational matrix from calibration.
+    :param phase_st: type:float. Initial phase to be subtracted for phase to coordinate conversion.
+    :param pitch: type:float. Number of pixels per fringe period.
+    :type uv_true: float
+    :type unwrapv: float array
+    :type c_mtx: float array
+    :type c_dist:float array
+    :type p_mtx:float array
+    :type cp_rot_mtx:float array
+    :type cp_trans_mtx:float array
+    :type phase_st:float
+    :type pitch:float
+    :return x,y,z: cordinate arrays
+    :rtype x,y,z: float
     '''
     no_pts = uv_true.shape[0]
     uv = cv2.undistortPoints(uv_true, c_mtx, c_dist, None, c_mtx )
@@ -140,8 +143,13 @@ def reconstruction_pts(uv_true, unwrapv, c_mtx, c_dist, p_mtx, cp_rot_mtx, cp_tr
 
 def point_error(cord1,cord2):
     '''
-    Function to plot error 
-
+    Function to plot error between two coordinate.
+    :param cord1: coordinate 1
+    :param cord2: coordinate 2
+    :type cord1: float array
+    :type cord2: float array
+    :return err_df: error dataframe
+    :rtype err_df: pandas dataframe
     '''
     
     delta = cord1 - cord2
@@ -161,24 +169,24 @@ def point_error(cord1,cord2):
 def reconstruction_obj(unwrapv, c_mtx, c_dist, p_mtx, cp_rot_mtx, cp_trans_mtx, phase_st, pitch):
     '''
     Sub function to reconstruct object from phase map
-
-    Parameters
-    ----------
-    unwrapv = type: float array. Unwrapped phase map of object.
-    c_mtx = type: float array. Camera matrix from calibration.
-    c_dist = type: float array. Camera distortion matrix from calibration.
-    p_mtx = type: float array. Projector matrix from calibration.
-    cp_rot_mtx = type: float array. Projector distortion matrix from calibration.
-    cp_trans_mtx = type: float array. Camera-projector translational matrix from calibration.
-    phase_st = type: float. Initial phase to be subtracted for phase to coordinate conversion.
-    pitch  = type:float. Number of pixels per fringe period.
-
-    Returns
-    -------
-    Coordinates array for all points
-    x = type: float array . 
-    y = type: float array. 
-    z = type: float array. 
+    unwrapv = Unwrapped phase map of object.
+    c_mtx = Camera matrix from calibration.
+    c_dist = Camera distortion matrix from calibration.
+    p_mtx = Projector matrix from calibration.
+    cp_rot_mtx = Projector distortion matrix from calibration.
+    cp_trans_mtx = Camera-projector translational matrix from calibration.
+    phase_st = Initial phase to be subtracted for phase to coordinate conversion.
+    pitch  = Number of pixels per fringe period.
+    :type unwrapv:float array.
+    :type c_mtx: float array.
+    :type c_dist:float array.
+    :type p_mtx:float array.
+    :type cp_rot_mtx:float array.
+    :type cp_trans_mtx:float array.
+    :type phase_st:float.
+    :type pitch:float.
+    :return x,y,z : coorninate arrays
+    :rtpe x,y,z : float array
     '''
     
     unwrap_dist = cv2.undistort(unwrapv, c_mtx, c_dist)
@@ -218,7 +226,21 @@ def reconstruction_obj(unwrapv, c_mtx, c_dist, p_mtx, cp_rot_mtx, cp_trans_mtx, 
 
 def diff_funs_x(hc_11, hc_13, hc_22, hc_23, hc_33, hp_11,hp_12, hp_13, hp_14, hp_31, hp_32, hp_33, hp_34, det, x_num, uc, vc, up):
     '''
-    Subfunction used to calculate x cordinate variance
+    Sub function used to calculate x coordinate variance.
+    Ref: S.Zhong, High-Speed 3D Imaging with Digital Fringe Projection Techniques, CRC Press, 2016.
+    Chapter 7 :Digital Fringe Projection System Calibration, section:7.3.6
+    :param hc_11, hc_13, hc_22, hc_23, hc_33: camera H matrix elements
+    :param hp_11,hp_12, hp_13, hp_14, hp_31, hp_32, hp_33, hp_34 : projector H matrix elements
+    :param det: determinate of inverse matrix to calculate coordinates.
+    :param x_num: x_num/det gives the x cordinate.
+    :param uc,vc : camera coordinates
+    :param up: projector coordinate.
+    :type hc_11, hc_13, hc_22, hc_23, hc_33: float
+    :type hp_11,hp_12, hp_13, hp_14, hp_31, hp_32, hp_33, hp_34: float
+    :type det:float array
+    :type x_num:float array
+    :type uc,vc: float array
+    :type up:float array
 
     '''
     df_dup = (det * (-hc_13 * hc_22 * hp_34 + uc * hc_22 * hc_33 * hp_34) - x_num * (-hc_11 * hc_22 * hp_33 + hc_13 * hc_22 * hp_31 - uc * hc_22 * hc_33 * hp_31 + hc_11 * hc_23 * hp_32 - vc * hc_11 * hc_33 * hp_32))/det**2
@@ -284,7 +306,7 @@ def diff_funs_z(hc_11, hc_13, hc_22, hc_23, hc_33, hp_11,hp_12, hp_13, hp_14, hp
 
 def sigma_random(modulation, limit,  pitch, N, phase_st, unwrap, sigma_path, source_folder):
     '''
-    Function to calculate variance of x,y,z cordinates
+    Function to calculate variance of x,y,z coordinates
 
     '''
     sigma = np.load(sigma_path)
@@ -467,8 +489,10 @@ def complete_recon(unwrap, inte_rgb, modulation, limit, calib_path, sigma_path, 
 def obj_reconst_wrapper(width, 
                         height, 
                         pitch_list, 
-                        N_list, limit,  
-                        phase_st, direc, 
+                        N_list,
+                        limit,
+                        phase_st,
+                        direc,
                         type_unwrap, 
                         calib_path, 
                         obj_path, 
@@ -491,9 +515,9 @@ def obj_reconst_wrapper(width,
     direc = type: string. Visually vertical (v) or horizontal(h) pattern.
     type_unwrap = type: string. Type of temporal unwrapping to be applied. 
                   'phase' = phase coded unwrapping method, 
-                  'multifreq' = multifrequency unwrapping method
-                  'multiwave' = multiwavelength unwrapping method.
-    calib_path = type: string. Path to read mean calibration paraneters. 
+                  'multifreq' = multi frequency unwrapping method
+                  'multiwave' = multi wavelength unwrapping method.
+    calib_path = type: string. Path to read mean calibration parameters.
     obj_path = type: string. Path to read captured images
     kernel = type: int. Kernel size for median filter. The default is 1.
 
