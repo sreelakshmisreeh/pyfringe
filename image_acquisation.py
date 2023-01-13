@@ -343,6 +343,7 @@ def proj_cam_acquire_images(cam,
     proj_preview_exp_period = proj_exposure_period + 230
     proj_preview_frame_period = proj_preview_exp_period
     result = True
+    ret = True
     # config camera
     result &= gspy.cam_configuration(nodemap=nodemap,
                                      s_node_map=s_node_map,
@@ -350,7 +351,7 @@ def proj_cam_acquire_images(cam,
                                      exposureTime=proj_exposure_period,
                                      gain=cam_gain,
                                      bufferCount=cam_bufferCount)
-    
+    cam_trig_reconfig = True
     if focus_image_index is not None:
         result &= proj_cam_preview(cam, 
                                    nodemap,
@@ -361,7 +362,7 @@ def proj_cam_acquire_images(cam,
                                    'focus',
                                    focus_image_index,
                                    pprint_status)
-    if not((focus_image_index is None) & (preview_option is None)):
+    if (focus_image_index is not None) or (preview_option is not None):
         cam_trig_reconfig = False
     if (number_scan == 1) & ((preview_option == 'Once') or (preview_option == 'Always')):
         result &= proj_cam_preview(cam,
@@ -523,9 +524,9 @@ def run_proj_single_camera(savedir,
     :type preview_image_index: int
     :type number_scan: int
     :type acquisition_index: int
-    :type pprint_proj_status: bool
-    :type preview_option: bool
-    :type focus_image_index: int
+    :type pprint_status: bool
+    :type preview_option: str
+    :type focus_image_index: int / None
     :return result: True if successful, False otherwise.
     :rtype :bool
     """
@@ -609,10 +610,10 @@ def gamm_curve(gamma_image_index_list,
         camera_captured = n_scanned_image_list[:,camy - half_cross_length : camy + half_cross_length, camx - half_cross_length : camx + half_cross_length]
         mean_intensity = np.mean(camera_captured.reshape((camera_captured.shape[0],-1)),axis=1)
         x_axis = np.arange(5,256,5)
-        a,b = np.polyfit(x_axis,mean_intensity,1)
+        y = np.polyfit(x_axis,mean_intensity,1)
         plt.figure(figsize=(16,9))
         plt.scatter(x_axis, mean_intensity, label = 'captured mean per frame')
-        plt.plot(x_axis,a*x_axis+b, label = 'linear fit', color = 'r')
+        plt.plot(x_axis,y[0]*x_axis+y[1], label = 'linear fit', color = 'r')
         plt.xlabel("Input Intensity",fontsize = 20)
         plt.ylabel("Output Intensity",fontsize = 20)
         plt.title("Projector gamma curve", fontsize = 20)
@@ -623,7 +624,7 @@ def gamm_curve(gamma_image_index_list,
         plt.savefig(os.path.join(savedir, 'gamma_curve.png'))
         np.save(os.path.join(savedir, 'gamma_curve.npy'),mean_intensity)
     else:
-        print('Capture failure')
+        print('ERROR: Capture failure')
     return result
 
 def calib_capture(image_index_list,
@@ -676,7 +677,9 @@ def mranpixel_std(savedir,
     :type cam_height: int
     :type half_cross_length: int
     :return mean_std_pixel: mean of std of each pixel within the given window.
+    :return std_pixel: temporal intensity std map for the window region
     :rtype mean_std_pixel:float
+    :rtype std_pixel: array of float
     """
     image_index_list = [image_index]*no_images
     pattern_num_list = [pattern_no]*no_images
@@ -684,8 +687,8 @@ def mranpixel_std(savedir,
                                     preview_option='Once',
                                     number_scan=1,
                                     acquisition_index=acquisition_index,
-                                    image_index_list = image_index_list,
-                                    pattern_num_list = pattern_num_list,
+                                    image_index_list=image_index_list,
+                                    pattern_num_list=pattern_num_list,
                                     cam_gain=0,
                                     cam_bufferCount=15,
                                     cam_capt_timeout=10,
@@ -695,15 +698,19 @@ def mranpixel_std(savedir,
                                     preview_image_index=21,
                                     focus_image_index=None,
                                     pprint_status=True)
+    mean_std_pixel = 0; std_pixel =0
     if result:
         n_scanned_image_list = np.load(os.path.join(savedir,'capt_%d.npy'%acquisition_index))
         camx = int(cam_width/2)
         camy =  int(cam_height/2)
         capt_cropped = n_scanned_image_list[:,camy - half_cross_length : camy + half_cross_length, camx - half_cross_length : camx + half_cross_length]
-        mean_std_pixel = np.mean(np.std(capt_cropped, axis = 0 ))
+        std_pixel = np.std(capt_cropped, axis = 0 )
+        mean_std_pixel = np.mean(std_pixel)
         np.save(os.path.join(savedir, 'mean_std_pixel.npy'),mean_std_pixel)
+    else:
+        print('ERROR: Capture failure ')
 
-    return mean_std_pixel
+    return mean_std_pixel, std_pixel
 
 def main():
     '''
@@ -735,8 +742,7 @@ def main():
 
 
 if __name__ == '__main__':
-    result = main()
-    if result:
+    if main():
         sys.exit(0)
     else:
         sys.exit(1)
