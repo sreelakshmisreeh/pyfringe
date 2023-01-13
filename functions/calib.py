@@ -57,9 +57,9 @@ class calibration:
 
         '''
         self.width = proj_width
-        self.height =  proj_height
+        self.height = proj_height
         self.limit = mask_limit
-        self.type_unwrap =  type_unwrap
+        self.type_unwrap = type_unwrap
         self.N = N_list
         self.pitch = pitch_list
         self.path = path
@@ -1490,7 +1490,6 @@ def plane_resid_plot(residual_lst):
     plt.xticks(fontsize = 20)
     plt.yticks(fontsize = 20)
     ax.set_xlim(-1,1)
-    
     return
     
         
