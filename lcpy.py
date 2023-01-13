@@ -629,9 +629,11 @@ class dlpc350(object):
                 print(f'Trigger Out1: {"invalid" if int(ans[-3]) else "valid"}\n')
                 print(f'Post sector settings: {"warning:invalid" if int(ans[-4]) else "valid"}\n')
                 print(f'DLPC350 is {"busy" if int(ans[-8]) else "valid"}\n')
+
+            return result
         else:
             print('ERROR: Cannot execute validate operation.')
-        return result
+            return result
         
     def open_mailbox(self, mbox_num):
         """
