@@ -29,10 +29,10 @@ def proj_cam_preview(cam,
                      pprint_status=True):
     """
     Function is used to show a preview of camera projector setting before scanning.There two options :
-    focus:  The projector projects the focus adjustment image at the given image index and the camera will be in free run vedio mode. 
+    focus:  The projector projects the focus adjustment image at the given image index and the camera will be in free run video mode.
             This can be used to adjust the projector and camera focus.
-    preview:The projector projects constant image at the given image index and the camera will be in free run vedio mode.
-            This option can be used to udjust camera exposure. If the camera is overexposed(255) those pixels will be flaged red.   
+    preview:The projector projects constant image at the given image index and the camera will be in free run video mode.
+            This option can be used to adjust camera exposure. If the camera is overexposed(255) those pixels will be flagged red.
     :param cam : camera to acquire images from.
     :param nodemap: camara nodemap.
     :param s_node_map:camera stream nodemap.
@@ -41,7 +41,7 @@ def proj_cam_preview(cam,
     :param proj_frame_period: projector frame period.
     :param preview_type: 'focus' or 'preview'.
     :param image_index: image index on projector flash.
-    :param cam_trig_reconfig: switch to reconfigure camera trigger. If consecutively the function is called its can be set False.
+    :param cam_trig_reconfig: switch to reconfigure camera trigger. If consecutively the function is called, it can be set to False.
     :pprint_status: pretty print projector and camera current parameters.
     :type cam: cameraPtr.
     :type nodemap:cNodemapPtr.
@@ -51,10 +51,10 @@ def proj_cam_preview(cam,
     :type proj_frame_period: int.
     :type preview_type: str.
     :type image_index: int.
-    :type cam_trig_reconfig:bool
-    :type pprint_status: bool
+    :type cam_trig_reconfig: bool.
+    :type pprint_status: bool.
     :return True if successful, False otherwise. 
-    :rtype: bool
+    :rtype: bool.
     """
     
     delta = 100      
@@ -144,7 +144,6 @@ def run_proj_cam_capt(cam,
                       do_insert_black=True,
                       pprint_status=True,
                       do_validation=True):
-    
     """
     This function projects and acquires images. Note that projector and camera must be initialized before 
     calling this function. The acquired images will be saved as np array in the given savedir path.
@@ -197,35 +196,35 @@ def run_proj_cam_capt(cam,
         # Configure projector
         if image_index_list and pattern_num_list:
             image_LUT_entries, swap_location_list = lcpy.get_image_LUT_swap_location(image_index_list)
-            result &= lcr.set_pattern_config(num_lut_entries= len(image_index_list),
-                                             do_repeat = False,  
-                                             num_pats_for_trig_out2 = len(image_index_list),
-                                             num_images = len(image_LUT_entries))
+            result &= lcr.set_pattern_config(num_lut_entries=len(image_index_list),
+                                             do_repeat=False,
+                                             num_pats_for_trig_out2=len(image_index_list),
+                                             num_images=len(image_LUT_entries))
             result &= lcr.set_exposure_frame_period(proj_exposure_period, 
                                                     proj_frame_period)
             # To set new image LUT
-            result &= lcr.send_img_lut(image_LUT_entries,0)
+            result &= lcr.send_img_lut(image_LUT_entries, 0)
             # To set pattern LUT table    
-            result &= lcr.send_pattern_lut(trig_type = 0, 
-                                           bit_depth = 8, 
-                                           led_select = 0b111,
-                                           swap_location_list = swap_location_list, 
-                                           image_index_list = image_index_list, 
-                                           pattern_num_list = pattern_num_list, 
-                                           starting_address = 0,
-                                           do_insert_black = do_insert_black)
-            if pprint_status:# Print all projector current attributes set
+            result &= lcr.send_pattern_lut(trig_type=0,
+                                           bit_depth=8,
+                                           led_select=0b111,
+                                           swap_location_list=swap_location_list,
+                                           image_index_list=image_index_list,
+                                           pattern_num_list=pattern_num_list,
+                                           starting_address=0,
+                                           do_insert_black=do_insert_black)
+            if pprint_status:  # Print all projector current attributes set
                 lcr.pretty_print_status()
                 gspy.print_trigger_config(nodemap, s_node_map)
-            result &=  lcr.start_pattern_lut_validate()
+            result &= lcr.start_pattern_lut_validate()
         elif not image_index_list:
             print('\n image_index_list cannot be empty')
             result &= False
         elif not pattern_num_list:
             print('\n pattern_num_list cannot be empty')
             result &= False
-        #configure camera trigger
-        # config trigger for image acquasition
+        # configure camera trigger
+        # config trigger for image acquisition
         result &= gspy.trigger_configuration(nodemap=nodemap,
                                              s_node_map=s_node_map,
                                              triggerType='hardware')
@@ -244,7 +243,7 @@ def run_proj_cam_capt(cam,
                 pass
                                 
             if ret:
-                print("extract successfull")
+                print("extract successful")
                 image_array_list.append(image_array)
                 count += 1
                 start = perf_counter_ns()
@@ -252,18 +251,18 @@ def run_proj_cam_capt(cam,
             else:
                 end = perf_counter_ns()
                 waiting_time = (end - start)/1e9
-                print('Capture failed, time spent %2.3f s before %2.3f s timeout'%(waiting_time,cam_capt_timeout))
+                print('Capture failed, time spent %2.3f s before %2.3f s timeout' % (waiting_time, cam_capt_timeout))
                 if waiting_time > cam_capt_timeout:
                     print('timeout is reached, stop capturing image ...')
                     break
-        save_path = os.path.join(savedir, 'capt_%d.npy' %(acquisition_index))
-        np.save(save_path,image_array_list)
+        save_path = os.path.join(savedir, 'capt_%d.npy' % acquisition_index)
+        np.save(save_path, image_array_list)
         print('scanned images saved as %s' % save_path)
         total_dual_time_end = perf_counter_ns()
         image_capture_time = (total_dual_time_end - capturing_time_start)/1e9
         total_dual_time = (total_dual_time_end - total_dual_time_start)/1e9
-        print('image capturing time:%.3f'%image_capture_time)
-        print('Total dual device time:%.3f'%total_dual_time)
+        print('image capturing time:%.3f' % image_capture_time)
+        print('Total dual device time:%.3f' % total_dual_time)
     else:
         result = False
     
@@ -287,9 +286,9 @@ def proj_cam_acquire_images(cam,
                             do_insert_black,
                             preview_image_index,
                             focus_image_index,
-                            do_validation = True,
-                            pprint_status = True):
-    '''
+                            do_validation=True,
+                            pprint_status=True):
+    """
     Wrapper function combining preview option and object scanning. 
     The projector configuration and camera trigger mode for each is diffrent.
     
@@ -329,21 +328,21 @@ def proj_cam_acquire_images(cam,
     :type do_insert_black: bool
     :type preview_image_index: int
     :type focus_image_index: int
-    :type pprint_proj_status: bool
+    :type pprint_status: bool
     :type do_validation: bool
     :return result :True if successful, False otherwise.
     :rtype: bool
-    '''
+    """
     nodemap = cam.GetNodeMap()
     nodemap_tldevice = cam.GetTLDeviceNodeMap()
     s_node_map = cam.GetTLStreamNodeMap()
     gspy.print_device_info(nodemap_tldevice)
-    frameRate = 1e6/proj_frame_period  #proj_frame_period is in μs
+    frameRate = 1e6/proj_frame_period  # proj_frame_period is in μs
     
     proj_preview_exp_period = proj_exposure_period + 230
     proj_preview_frame_period = proj_preview_exp_period
     result = True
-    #config camera
+    # config camera
     result &= gspy.cam_configuration(nodemap=nodemap,
                                      s_node_map=s_node_map,
                                      frameRate=frameRate,
@@ -351,8 +350,7 @@ def proj_cam_acquire_images(cam,
                                      gain=cam_gain,
                                      bufferCount=cam_bufferCount)
     
-    
-    if not (focus_image_index == None):
+    if focus_image_index is not None:
         result &= proj_cam_preview(cam, 
                                    nodemap,
                                    s_node_map,
@@ -362,7 +360,7 @@ def proj_cam_acquire_images(cam,
                                    'focus',
                                    focus_image_index,
                                    pprint_status)
-    if not((focus_image_index == None) & (preview_option==None)):
+    if not((focus_image_index is None) & (preview_option is None)):
         cam_trig_reconfig = False
     if (number_scan == 1) & ((preview_option == 'Once') or (preview_option == 'Always')):
         result &= proj_cam_preview(cam,
