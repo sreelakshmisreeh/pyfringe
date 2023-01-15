@@ -7,76 +7,80 @@ import scipy.ndimage
 import os
 import cupy as cp
 from cupyx.scipy import ndimage
+from typing import Tuple
 
-def delta_deck_gen(N, height, width):
-    ''' 
+
+def delta_deck_gen(N: int, height: int, width: int) -> np.ndarray:
+    """
     Function computes phase shift δ  values used in N-step phase shifting algorithm for each image pixel of given height and width. 
     δ_k  =  (2kπ)/N, where k = 1,2,3,... N and N is the number of steps.
     
     Parameters
     ----------
-    N = type: int. The number of steps in phase shifting algorithm.
-    height = type: float. Height of the pattern image.
-    width = type: float. Width of pattern image.
+    N : int.
+        The number of steps in phase shifting algorithm.
+    height : int.
+        Height of the pattern image.
+    width : int.
+        Width of pattern image.
     
     Returns
     -------
-    delta_deck = type:float. N delta images.
+    delta_deck :numpy.ndarray:float.
+        N delta images.
     
     Ref: J. H. Brunning, D. R. Herriott, J. E. Gallagher, D. P. Rosenfeld, A. D. White, and D. J. Brangaccio, Digital wavefront measuring interferometer for testing optical surfaces, lenses, Appl. Opt. 13(11), 2693–2703, 1974. 
-    '''
-    delta = 2 * np.pi * np.arange(1, N + 1) / N 
+    """
+    delta = 2 * np.pi * np.arange(1, N + 1) / N
     one_block = np.ones((N, height, width))
     delta_deck = np.einsum('ijk,i->ijk', one_block, delta)
     return delta_deck
 
-def delta_deck_gen_cp(N, height, width):
-    """
-    Cupy version of delta_deck_gen()
-    """
-    delta = 2 * cp.pi * cp.arange(1, N + 1) / N
-    one_block = cp.ones((N, height, width))
-    delta_deck = cp.einsum('ijk,i->ijk', one_block, delta)
-    return delta_deck
 
-def cos_func(inte_rang, pitch, direc, phase_st, delta_deck): #phase_st=datatype:float    
-    ''' 
+def cos_func(inte_rang: Tuple[int, int], pitch: int, direc: str, phase_st: float, delta_deck: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    """
     Function creates cosine fringe pattern according to N step phase shifting algorithm.
     The intensity of the kth images with a phase shift of δ_k can be represented as
     I_k(x, y) = I′(x, y) + I′′(x, y) cos(φ(x, y) + δ_k) where φ(x, y) is the phase at pixel (x,y).
     
     Parameters
     ----------
-    inte_rang = type: float. Operating intensity range or projector's linear operation region.
-    pitch = type:float. Number of pixels per fringe period.
-    direc = type: string. Visually vertical (v) or horizontal(h) pattern.
-    phase_st = type: float. Starting phase. To apply multifrequency and multiwavelength temporal unwraping starting phase should be zero. Whereas for phase coding trmporal unwrapping starting phase should be -π.
-    delta_deck =  type: float. Delta values at each pixel for each N step pattern.
+    inte_rang = type: Tuple[int, int]. Operating intensity range or projector's linear operation region.
+    pitch = type: int. Number of pixels per fringe period.
+    direc = type: str. Visually vertical (v) or horizontal(h) pattern.
+    phase_st = type: float. Starting phase. To apply multifrequency and multiwavelength temporal unwraping starting
+                            phase should be zero. Whereas for phase coding trmporal unwrapping starting phase
+                            should be -π.
+    delta_deck =  type: np.ndarray. Delta values at each pixel for each N step pattern.
     
     Returns
     -------
-    inte = type:float array.  N intensity patterns.
-    absolute_phi = absolute phase at each pixel. 
-    '''
+    inte = type:numpy.ndarray.  N intensity patterns.
+    absolute_phi = type:numpy.ndarray absolute phase at each pixel.
+    """
     height = delta_deck.shape[1]
     width = delta_deck.shape[2]
-    #I′′(x, y) average intensity
-    i1 = (inte_rang[1] - inte_rang[0])/2
+
     # I′(x, y) intensity modulation
+    i1 = (inte_rang[1] - inte_rang[0])/2
+
+    # I′′(x, y) average intensity
     i0 = i1 + inte_rang[0]
-    if direc == 'v': #vertical fringe pattern
-        array = np.ones((height,1)) * np.arange(0,width)
-    elif direc =='h': #horizontal fringe pattern
-        array = np.ones((width,1)) * np.arange(0,height)
-        array = np.rot90(array,3)
-    
+
+    if direc == 'v':  # vertical fringe pattern
+        array = np.ones((height, 1)) * np.arange(0, width)
+    elif direc == 'h':  # horizontal fringe pattern
+        array = np.ones((width, 1)) * np.arange(0, height)
+        array = np.rot90(array, 3)
+    else:
+        array = None
+        print("ERROR: direction parameter is invalid, must be one of {'v', 'h'}.")
     absolute_phi = array / pitch * 2*np.pi + phase_st
-    
     inte = i0 + i1 * np.cos(absolute_phi + delta_deck) 
     return inte, absolute_phi
 
 def step_func(inte_rang, pitch, direc, delta_deck):
-    '''
+    """
     Function generates stair phase coded images used for temporal phase unwrapping using phase coding.
     The stair phase function, φs(x, y)= −π + [x∕P] × 2π/n , where x∕Pk is the truncated integer representing fringe order.
     P the number of pixels per period; and n the total number of fringe periods.
@@ -85,36 +89,40 @@ def step_func(inte_rang, pitch, direc, delta_deck):
 
     Parameters
     ----------
-    inte_rang = type: float. Operating intensity range or projector's linear operation region.
+    inte_rang = type:tuple:float. Operating intensity range or projector's linear operation region.
     pitch = type:float. number of pixels per fringe period.
     direc = type: string. vertical (v) or horizontal(h) patterns.
-    delta_deck =  type: float. Delta values at each pixel for each N step pattern.
+    delta_deck =  type:numpy.ndarray:float. Delta values at each pixel for each N step pattern.
 
     Returns
     -------
     inte =  type:float array.  N intensity patterns
     
     Ref: Y. Wang and S.Zhang, Novel phase-coding method for absolute phase retrieval,Opt. Lett. 37(11), 2067–2069, 2012.
-    '''
+    """
     height = delta_deck.shape[1]
     width = delta_deck.shape[2]
     i1 = (inte_rang[1] - inte_rang[0]) / 2
     i0 = i1 + inte_rang[0]
     if direc == 'v':
-        n_fring = np.ceil(width / pitch) # number of fringes
+        n_fring = np.ceil(width / pitch)  # number of fringes
         ar = np.arange(0, width)
         ar_array = np.ones((height, 1)) * ar
     elif direc == 'h':
-        n_fring = np.ceil(height / pitch) # number of fringes
+        n_fring = np.ceil(height / pitch)  # number of fringes
         ar = np.arange(0, height)
         ar_array = np.ones((width, 1)) * ar
         ar_array = np.rot90(ar_array, 3)
+    else:
+        n_fring = None
+        ar_array = None
+        print("ERROR: direction parameter is invalid, must be one of {'v', 'h'}.")
     phi_s = -np.pi + (np.floor(ar_array / pitch) * (2 * np.pi / (n_fring-1)))
     inte = i0 + i1 * np.cos(phi_s + delta_deck) 
     return inte
 
 def calib_generate(width, height, type_unwrap, N_list, pitch_list, phase_st, inte_rang, path):
-    '''
+    """
     Function to generate fringe patterns based on type of unwrapping. 
     This function generates both vertically and horizontally varying fringe patterns which is usually required for system calibration.
 
@@ -130,8 +138,8 @@ def calib_generate(width, height, type_unwrap, N_list, pitch_list, phase_st, int
                                 For other methods corresponding to each pitch one element in the list.
     pitch_list = type: float. Number of pixels per fringe period.
     phase_st = type: float. Starting phase. To apply multifrequency and multiwavelength temporal unwraping starting phase should be zero. 
-                            Whereas for phase coding trmporal unwrapping starting phase should be -π.
-    inte_rang = type: float. Operating intensity range or projector's linear operation region.
+                            Whereas for phase coding temporal unwrapping starting phase should be -π.
+    inte_rang = type:tuple:float. Operating intensity range or projector's linear operation region.
     path = type: string. Path to which the generated pattern is to be saved.
 
     Returns
@@ -139,19 +147,20 @@ def calib_generate(width, height, type_unwrap, N_list, pitch_list, phase_st, int
     fringe_arr = type: Array of uint8. Array of generated fringe patterns in both directions.
     delta_deck_list = type:List of float. List of N delta images.
 
-    '''
-    
-    fringe_lst = []; delta_deck_list = []
+    """
+
     if type_unwrap == 'phase':
         delta_deck_list = delta_deck_gen(N_list[0], height, width)
         step_v = step_func(inte_rang, pitch_list[0], 'v', delta_deck_list)
         step_h = step_func(inte_rang, pitch_list[0], 'h', delta_deck_list)
         cos_v, absolute_phi_v = cos_func(inte_rang, pitch_list[0], 'v', phase_st, delta_deck_list)
         cos_h, absolute_phi_h = cos_func(inte_rang, pitch_list[0], 'h', phase_st, delta_deck_list)
-        fringe_lst = np.concatenate((cos_v, cos_h, step_v, step_h),axis=0)
+        fringe_lst = np.concatenate((cos_v, cos_h, step_v, step_h), axis=0)
         fringe_arr = np.ceil (fringe_lst).astype('uint8')  # for rounding to the next int number to avoid phase ambiguity
         
-    elif (type_unwrap == 'multifreq' or type_unwrap == 'multiwave'):
+    elif type_unwrap == 'multifreq' or type_unwrap == 'multiwave':
+        fringe_lst = []
+        delta_deck_list = []
         for p, n in zip(pitch_list, N_list): 
             delta_deck = delta_deck_gen(n, height, width)
             cos_v, absolute_phi_v = cos_func(inte_rang, p,'v', phase_st, delta_deck)
@@ -200,7 +209,7 @@ def recon_generate(width, height, type_unwrap, N_list, pitch_list, phase_st, int
             cos, absolute_phi_h = cos_func(inte_rang, pitch_list[0], 'h', phase_st, delta_deck_list)
         fringe_lst = np.concatenate((cos, step),axis = 0)
         fringe_arr = np.ceil (fringe_lst).astype('uint8') 
-    elif (type_unwrap == 'multifreq' or type_unwrap == 'multiwave'):
+    elif type_unwrap == 'multifreq' or type_unwrap == 'multiwave':
         for p, n in zip(pitch_list, N_list): 
             delta_deck = delta_deck_gen(n, height, width)
             if direc =='v':
@@ -230,8 +239,7 @@ def B_cutoff_limit(sigma_path, quantile_limit, N_list, pitch_list):
     '''
     sigma = np.load(sigma_path)
     sigma_sq_delta_phi = (np.pi / quantile_limit)**2
-    modulation_limit_sq = ((pitch_list[-1]**2 / pitch_list[-2]**2) + 1) * (2 * sigma**2) / (N_list[-1]* sigma_sq_delta_phi)
-    
+    modulation_limit_sq = ((pitch_list[-1]**2 / pitch_list[-2]**2) + 1) * (2 * sigma**2) / (N_list[-1] * sigma_sq_delta_phi)
     return np.sqrt(modulation_limit_sq)
 
 def phase_cal(images, limit ):
