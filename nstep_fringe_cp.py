@@ -44,6 +44,7 @@ def main():
     print(test_cparray)
     t = (end - start) / 1e9
     print('time spent: %1.6f s' % t)
+    print("array shape: ", test_cparray.shape)
 
 
 if __name__ == '__main__':
