@@ -260,40 +260,40 @@ def mask_img(images, limit ):
     delta_deck = delta_deck_gen(images.shape[0], images.shape[1], images.shape[2])
     N = delta_deck.shape[0]
     end = perf_counter_ns()
-    print('delta_dek:%.3f'%((end - start)/1e9))
+    print('npdelta_dek:%.3f'%((end - start)/1e9)) #0.030
     start = perf_counter_ns()
     masked_img = images.astype(np.float64)
     end = perf_counter_ns()
-    print('float:%.3f'%((end - start)/1e9))
+    print('npfloat:%.3f'%((end - start)/1e9)) #:0.011
     start = perf_counter_ns()
     sin_delta = np.sin(delta_deck)
     sin_delta[np.abs(sin_delta) < 1e-15] = 0 
     sin_lst = (np.sum(masked_img * sin_delta, axis = 0)) 
     end = perf_counter_ns()
-    print('sin:%.3f'%((end - start)/1e9))
+    print('npsin:%.3f'%((end - start)/1e9))#0.125
     start = perf_counter_ns()
     cos_delta = np.cos(delta_deck)
     cos_delta[np.abs(cos_delta)<1e-15] = 0
     cos_lst = (np.sum(masked_img * cos_delta, axis = 0)) 
     end = perf_counter_ns()
-    print('cosi:%.3f'%((end - start)/1e9))
+    print('npcosi:%.3f'%((end - start)/1e9))#0.122
     start = perf_counter_ns()
     modulation = 2 * np.sqrt(sin_lst**2 + cos_lst**2) / N
     avg = np.sum(masked_img, axis = 0) / N
     end = perf_counter_ns()
-    print('mod,avg:%.3f'%((end - start)/1e9))
+    print('npmod,avg:%.3f'%((end - start)/1e9))#0.049
     start = perf_counter_ns()
     mask = np.full(modulation.shape,True)
     mask[ modulation > limit] = False
     mask_deck = np.repeat(mask[np.newaxis,:,:],masked_img.shape[0],axis = 0)
     masked_img[mask_deck]=np.nan
     end = perf_counter_ns()
-    print('apply mask:%.3f'%((end - start)/1e9))
+    print('npapply mask:%.3f'%((end - start)/1e9))#0.011
     start = perf_counter_ns()
     #wrapped phase
     phase = -np.arctan2(sin_lst,cos_lst)# wraped phase;  
     end = perf_counter_ns()
-    print('phase map:%.3f'%((end - start)/1e9))
+    print('npphase map:%.3f'%((end - start)/1e9))#0.063
     return masked_img, modulation, avg , phase
 
 def mask_img_cp(images, limit ):
@@ -304,41 +304,41 @@ def mask_img_cp(images, limit ):
     delta_deck = delta_deck_gen_cp(images.shape[0], images.shape[1], images.shape[2])
     N = delta_deck.shape[0]
     end = perf_counter_ns()
-    print('delta_dek:%.3f'%((end - start)/1e9))
+    print('delta_dek:%.3f'%((end - start)/1e9)) #0.001
     start = perf_counter_ns()
     images_numpy = images.astype(np.float64)
     images_cupy = cp.asarray(images_numpy)
     end = perf_counter_ns()
-    print('cupy:%.3f'%((end - start)/1e9))
+    print('cupy:%.3f'%((end - start)/1e9)) #0.021
     start = perf_counter_ns()
     sin_delta = cp.sin(delta_deck)
     sin_delta[cp.abs(sin_delta) < 1e-15] = 0
     sin_lst = (cp.sum(images_cupy * sin_delta, axis = 0)) 
     end = perf_counter_ns()
-    print('sin:%.3f'%((end - start)/1e9))
+    print('sin:%.3f'%((end - start)/1e9)) #0.008
     start = perf_counter_ns()
     cos_delta = cp.cos(delta_deck)
-    cos_delta[cp.abs(cos_delta)<1e-15] = 0
+    cos_delta[cp.abs(cos_delta)<1e-15] = 0 
     cos_lst = (cp.sum(images_cupy * cos_delta, axis = 0)) 
     end = perf_counter_ns()
-    print('cosi:%.3f'%((end - start)/1e9))
+    print('cosi:%.3f'%((end - start)/1e9))#0.004
     start = perf_counter_ns()
     modulation = 2 * cp.sqrt(sin_lst**2 + cos_lst**2) / N
     avg = cp.sum(images_cupy, axis = 0) / N
     end = perf_counter_ns()
-    print('mod,avg:%.3f'%((end - start)/1e9))
+    print('mod,avg:%.3f'%((end - start)/1e9))#0.001
     start = perf_counter_ns()
     mask = cp.full(modulation.shape,True)
     mask[ modulation > limit] = False
     mask_deck = cp.repeat(mask[cp.newaxis,:,:],images_cupy.shape[0],axis = 0)
     images_cupy[mask_deck]=cp.nan
     end = perf_counter_ns()
-    print('apply mask:%.3f'%((end - start)/1e9))
+    print('apply mask:%.3f'%((end - start)/1e9))#0.007
     start = perf_counter_ns()
     #wrapped phase
     phase = -cp.arctan2(sin_lst,cos_lst)# wraped phase; 
     end = perf_counter_ns()
-    print('phase map:%.3f'%((end - start)/1e9))
+    print('phase map:%.3f'%((end - start)/1e9))#0.000
     
     return images_cupy, modulation, avg , phase
 
