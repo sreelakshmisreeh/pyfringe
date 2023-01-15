@@ -20,7 +20,7 @@ from copy import deepcopy
 
 EPSILON = -0.5
 TAU = 5.5
-#TODO: modify to compute directly from list of images 
+#TODO: Set up to calculate phase map from images, npy files and both using cpu and gpu 
 class calibration:
     '''
     Calibration class is used to calibrate camera and projector setting. User can choose between phase coded , multifrequency and multiwavelength temporal unwrapping.
@@ -35,7 +35,9 @@ class calibration:
                  board_gridrows, 
                  board_gridcolumns, 
                  dist_betw_circle, 
-                 path):
+                 path,
+                 data_type,
+                 processing):
         '''
         Parameters
         ----------
@@ -54,6 +56,8 @@ class calibration:
         board_gridcolumns = type: int. Number of columns in the asymmetric circle pattern.
         dist_betw_circle = type: float. Distance between circle centers.
         path = type: string. Path to read captured calibration images and save calibration results.
+        data_type = images, npy
+        processing = 'cpu' for desktop computation and 'cuda' for gpu.
 
         '''
         self.width = proj_width
@@ -66,6 +70,8 @@ class calibration:
         self.board_gridrows = board_gridrows
         self.board_gridcolumns = board_gridcolumns
         self.dist_betw_circle = dist_betw_circle
+        self.data_type = data_type
+        self.processing = processing
         
     def calib(self, no_pose,  bobdetect_areamin, bobdetect_convexity,  kernel_v = 1, kernel_h=1):
         '''
@@ -109,7 +115,9 @@ class calibration:
             unwrapv_lst, unwraph_lst, white_lst, avg_lst, mod_lst, gamma_lst, wrapped_phase_lst = self.projcam_calib_img_multifreq(no_pose, self.limit, 
                                                                                                                                    self.N, self.pitch, 
                                                                                                                                    self.width, self.height, 
-                                                                                                                                   kernel_v, kernel_h, self.path)
+                                                                                                                                   kernel_v, kernel_h, 
+                                                                                                                                   self.path,self.data_type,
+                                                                                                                                   self.processing)
         elif self.type_unwrap == 'multiwave':
             phase_st = 0
             unwrapv_lst, unwraph_lst, white_lst, avg_lst, mod_lst, gamma_lst, wrapped_phase_lst = self.projcam_calib_img_multiwave(no_pose,self.limit, 
@@ -417,8 +425,45 @@ class calibration:
                     }
                 
         return unwrap_v_lst, unwrap_h_lst, white_lst, avg_lst, mod_lst, gamma_lst, wrapped_phase_lst
+    def multifreq_analysis(self, data_array,limit, kernel_v,kernel_h):
+        
+        multi_cos_v_int1, multi_mod_v1, multi_avg_v1, multi_gamma_v1 , multi_delta_deck_v1 = nstep.mask_img(data_array[0:self.N_list[0]], limit)
+        multi_cos_h_int1, multi_mod_h1, multi_avg_h1, multi_gamma_h1, multi_delta_deck_h1 = nstep.mask_img(data_array[self.N_list[0]:2 * self.N_list[0]], limit)
+        multi_cos_v_int2, multi_mod_v2, multi_avg_v2, multi_gamma_v2, multi_delta_deck_v2 = nstep.mask_img(data_array[2 * self.N_list[0]:2 * self.N_list[0] + self.N_list[1]], limit)
+        multi_cos_h_int2, multi_mod_h2, multi_avg_h2, multi_gamma_h2, multi_delta_deck_h2 = nstep.mask_img(data_array[2 * self.N_list[0] + self.N_list[1]:2 * self.N_list[0] + 2 * self.N_list[1]], limit)
+        multi_cos_v_int3, multi_mod_v3, multi_avg_v3, multi_gamma_v3, multi_delta_deck_v3 = nstep.mask_img(data_array[2 * self.N_list[0] + 2 * self.N_list[1] :2 * self.N_list[0] + 2 * self.N_list[1] + self.N_list[2]], limit)
+        multi_cos_h_int3, multi_mod_h3, multi_avg_h3, multi_gamma_h3, multi_delta_deck_h3 = nstep.mask_img(data_array[2 * self.N_list[0] + 2 * self.N_list[1] + self.N_list[2]:2 * self.N_list[0] + 2 * self.N_list[1] + 2* self.N_list[2]], limit)
+        multi_cos_v_int4, multi_mod_v4, multi_avg_v4, multi_gamma_v4, multi_delta_deck_v4 = nstep.mask_img(data_array[2 * self.N_list[0] + 2 * self.N_list[1] + 2 * self.N_list[2]:2 * self.N_list[0] + 2 * self.N_list[1] + 2*self.N_list[2]+self.N_list[3]], limit)
+        multi_cos_h_int4, multi_mod_h4, multi_avg_h4, multi_gamma_h4, multi_delta_deck_h4 = nstep.mask_img(data_array[2 * self.N_list[0] + 2 * self.N_list[1] + 2*self.N_list[2] + self.N_list[3]: 2 * self.N_list[0] + 2 * self.N_list[1] + 2*self.N_list[2] + 2 * self.N_list[3]], limit)
+        
+        orig_img = (multi_avg_h4 ) + (multi_mod_h4 )
+        
+        multi_phase_v1 = nstep.phase_cal(multi_cos_v_int1, self.N_list[0], multi_delta_deck_v1 )
+        multi_phase_h1 = nstep.phase_cal(multi_cos_h_int1, self.N_list[0], multi_delta_deck_h1 )
+        multi_phase_v2 = nstep.phase_cal(multi_cos_v_int2, self.N_list[1], multi_delta_deck_v2 )
+        multi_phase_h2 = nstep.phase_cal(multi_cos_h_int2, self.N_list[1], multi_delta_deck_h2 )
+        multi_phase_v3 = nstep.phase_cal(multi_cos_v_int3, self.N_list[2], multi_delta_deck_v3 )
+        multi_phase_h3 = nstep.phase_cal(multi_cos_h_int3, self.N_list[2], multi_delta_deck_h3 )
+        multi_phase_v4 = nstep.phase_cal(multi_cos_v_int4, self.N_list[3], multi_delta_deck_v4 )
+        multi_phase_h4 = nstep.phase_cal(multi_cos_h_int4, self.N_list[3], multi_delta_deck_h4 )                    
 
-    def projcam_calib_img_multifreq(self, no_pose, limit, N_list, pitch_list, width, height, kernel_v, kernel_h, path):
+        multi_phase_v1[multi_phase_v1< EPSILON] = multi_phase_v1[multi_phase_v1 < EPSILON ] + 2 * np.pi
+        multi_phase_h1[multi_phase_h1< EPSILON] = multi_phase_h1[multi_phase_h1 < EPSILON ] + 2 * np.pi 
+        
+        phase_arr_v = [multi_phase_v1, multi_phase_v2, multi_phase_v3, multi_phase_v4]
+        phase_arr_h = [multi_phase_h1, multi_phase_h2, multi_phase_h3, multi_phase_h4]
+        
+        multifreq_unwrap_v, k_arr_v = nstep.multifreq_unwrap(self.pitch_list, phase_arr_v, kernel_v, 'v')
+        multifreq_unwrap_h, k_arr_h = nstep.multifreq_unwrap(self.pitch_list, phase_arr_h, kernel_h, 'h')                
+       
+        avg_arr = np.array([multi_avg_v1, multi_avg_v2, multi_avg_v3, multi_avg_v4,multi_avg_h1, multi_avg_h2, multi_avg_h3, multi_avg_h4])
+        mod_arr = np.array([multi_mod_v1, multi_mod_v2, multi_mod_v3, multi_mod_v4, multi_mod_h1, multi_mod_h2, multi_mod_h3, multi_mod_h4])
+        gamma_arr = np.array([multi_gamma_v1, multi_gamma_v2, multi_gamma_v3, multi_gamma_v4, multi_gamma_h1, multi_gamma_h2, multi_gamma_h3, multi_gamma_h4])
+        
+       
+        return multifreq_unwrap_v,multifreq_unwrap_h,k_arr_v,k_arr_h,phase_arr_v,phase_arr_h,orig_img,avg_arr,mod_arr,gamma_arr
+
+    def projcam_calib_img_multifreq(self, no_pose, limit, N_list, pitch_list, width, height, kernel_v, kernel_h, path, data_type, processing):
         '''
         Function is used to generate absolute phase map and true (single channel gray) images 
         (object image without fringe patterns)from fringe image for camera and projector calibration from raw captured images 
@@ -468,63 +513,32 @@ class calibration:
         wraph_lst = []
         unwrapv_lst = []
         unwraph_lst = []
-        
-        prefix=path
-        for x in tqdm(range (0,no_pose),desc='generating unwrapped phases map for {} images'.format(no_pose)):  
-            if os.path.exists(os.path.join(prefix,'capt%d_0.jpg'%x)):
-                multi_cos_v_int1, multi_mod_v1, multi_avg_v1, multi_gamma_v1 , multi_delta_deck_v1 = nstep.mask_img(np.array([cv2.imread(os.path.join(path,'capt%d_%d.jpg'%(x,i)),0) for i in range(0, N_list[0])]), limit)
-                multi_cos_h_int1, multi_mod_h1, multi_avg_h1, multi_gamma_h1, multi_delta_deck_h1 = nstep.mask_img(np.array([cv2.imread(os.path.join(path,'capt%d_%d.jpg'%(x,i)),0) for i in range(N_list[0],2 * N_list[0])]), limit)
-                multi_cos_v_int2, multi_mod_v2, multi_avg_v2, multi_gamma_v2, multi_delta_deck_v2 = nstep.mask_img(np.array([cv2.imread(os.path.join(path,'capt%d_%d.jpg'%(x,i)),0) for i in range(2 * N_list[0],2 * N_list[0] + N_list[1])]), limit)
-                multi_cos_h_int2, multi_mod_h2, multi_avg_h2, multi_gamma_h2, multi_delta_deck_h2 = nstep.mask_img(np.array([cv2.imread(os.path.join(path,'capt%d_%d.jpg'%(x,i)),0) for i in range(2 * N_list[0] + N_list[1],2 * N_list[0] + 2 * N_list[1])]), limit)
-                multi_cos_v_int3, multi_mod_v3, multi_avg_v3, multi_gamma_v3, multi_delta_deck_v3 = nstep.mask_img(np.array([cv2.imread(os.path.join(path,'capt%d_%d.jpg'%(x,i)),0) for i in range(2 * N_list[0] + 2 * N_list[1] ,2 * N_list[0] + 2 * N_list[1] + N_list[2])]), limit)
-                multi_cos_h_int3, multi_mod_h3, multi_avg_h3, multi_gamma_h3, multi_delta_deck_h3 = nstep.mask_img(np.array([cv2.imread(os.path.join(path,'capt%d_%d.jpg'%(x,i)),0) for i in range(2 * N_list[0] + 2 * N_list[1] + N_list[2],2 * N_list[0] + 2 * N_list[1] + 2 * N_list[2])]), limit)
-                multi_cos_v_int4, multi_mod_v4, multi_avg_v4, multi_gamma_v4, multi_delta_deck_v4 = nstep.mask_img(np.array([cv2.imread(os.path.join(path,'capt%d_%d.jpg'%(x,i)),0) for i in range(2 * N_list[0] + 2 * N_list[1] + 2 * N_list[2],2 * N_list[0] + 2 * N_list[1] +2 *  N_list[2]+ N_list[3])]), limit)
-                multi_cos_h_int4, multi_mod_h4, multi_avg_h4, multi_gamma_h4, multi_delta_deck_h4 = nstep.mask_img(np.array([cv2.imread(os.path.join(path,'capt%d_%d.jpg'%(x,i)),0) for i in range(2 * N_list[0] + 2 * N_list[1] +2 *  N_list[2]+ N_list[3],2 * N_list[0] + 2 * N_list[1] +2 *  N_list[2]+ 2 * N_list[3])]), limit)
-                
-                orig_img = (multi_avg_h4 ) + (multi_mod_h4 )
-                
-                multi_phase_v1 = nstep.phase_cal(multi_cos_v_int1, N_list[0], multi_delta_deck_v1 )
-                multi_phase_h1 = nstep.phase_cal(multi_cos_h_int1, N_list[0], multi_delta_deck_h1 )
-                multi_phase_v2 = nstep.phase_cal(multi_cos_v_int2, N_list[1], multi_delta_deck_v2 )
-                multi_phase_h2 = nstep.phase_cal(multi_cos_h_int2, N_list[1], multi_delta_deck_h2 )
-                multi_phase_v3 = nstep.phase_cal(multi_cos_v_int3, N_list[2], multi_delta_deck_v3 )
-                multi_phase_h3 = nstep.phase_cal(multi_cos_h_int3, N_list[2], multi_delta_deck_h3 )
-                multi_phase_v4 = nstep.phase_cal(multi_cos_v_int4, N_list[3], multi_delta_deck_v4 )
-                multi_phase_h4 = nstep.phase_cal(multi_cos_h_int4, N_list[3], multi_delta_deck_h4 )                    
-
-                #index_v = np.argmax(abs(np.diff(multi_phase_v1, axis = 0)))
-                #index_h = np.argmax(abs(np.diff(multi_phase_h1, axis = 1)))
-                #multi_phase_v1[:,index_v:] = multi_phase_v1[:,index_v:] + 2 * np.pi
-                #multi_phase_h1[index_h:] = multi_phase_h1[index_h:] + 2 * np.pi
-                multi_phase_v1[multi_phase_v1< EPSILON] = multi_phase_v1[multi_phase_v1 < EPSILON ] + 2 * np.pi
-                multi_phase_h1[multi_phase_h1< EPSILON] = multi_phase_h1[multi_phase_h1 < EPSILON ] + 2 * np.pi 
-                
-                phase_arr_v = [multi_phase_v1, multi_phase_v2, multi_phase_v3, multi_phase_v4]
-                phase_arr_h = [multi_phase_h1, multi_phase_h2, multi_phase_h3, multi_phase_h4]
-                
-                multifreq_unwrap_v, k_arr_v = nstep.multifreq_unwrap(pitch_list, phase_arr_v, kernel_v, 'v')
-                multifreq_unwrap_h, k_arr_h = nstep.multifreq_unwrap(pitch_list, phase_arr_h, kernel_h, 'h')                
-               
-                avg_lst.append(np.array([multi_avg_v1, multi_avg_v2, multi_avg_v3, multi_avg_v4,multi_avg_h1, multi_avg_h2, multi_avg_h3, multi_avg_h4]))
-                mod_lst.append(np.array([multi_mod_v1, multi_mod_v2, multi_mod_v3, multi_mod_v4, multi_mod_h1, multi_mod_h2, multi_mod_h3, multi_mod_h4]))
-                gamma_lst.append(np.array([multi_gamma_v1, multi_gamma_v2, multi_gamma_v3, multi_gamma_v4, multi_gamma_h1, multi_gamma_h2, multi_gamma_h3, multi_gamma_h4]))
-                
-                white_lst.append(orig_img)
-                
-                wrapv_lst.append(phase_arr_v)
-                wraph_lst.append(phase_arr_h)
-                
-                wrapped_phase_lst = {"wrapv":wrapv_lst,
-                                    "wraph":wraph_lst
-                                    }
-                
-                kv_lst.append(k_arr_v)
-                kh_lst.append(k_arr_h)
-                
-                unwrapv_lst.append(multifreq_unwrap_v)
-                unwraph_lst.append(multifreq_unwrap_h)
-                
-        return unwrapv_lst, unwraph_lst, white_lst, avg_lst, mod_lst,  gamma_lst, wrapped_phase_lst
+        if (data_type == 'images') and (processing == 'cpu') :
+            for x in tqdm(range (0,no_pose),desc='generating unwrapped phases map for {} pose'.format(no_pose)):  
+                if os.path.exists(os.path.join(path,'capt%d_0.jpg'%x)):
+                    imges_arr = np.array([cv2.imread(os.path.join(path,'capt%d_%d.jpg'%(x,i)),0) for i in range(0, 2 * N_list[0] + 2 * N_list[1] +2 *  N_list[2]+ 2 * N_list[3])])   
+                    multifreq_unwrap_v,multifreq_unwrap_h,k_arr_v,k_arr_h,phase_arr_v,phase_arr_h,orig_img,avg_arr,mod_arr,gamma_arr = self.multifreq_analysis(imges_arr, limit, kernel_v,kernel_h)
+                    avg_lst.append(avg_arr)
+                    mod_lst.append(mod_arr)
+                    gamma_lst.append(gamma_arr)
+                    white_lst.append(orig_img)
+                    wrapv_lst.append(phase_arr_v)
+                    wraph_lst.append(phase_arr_h)
+                    wrapped_phase_lst = {"wrapv":wrapv_lst,
+                                        "wraph":wraph_lst
+                                        }
+                    kv_lst.append(k_arr_v)
+                    kh_lst.append(k_arr_h)
+                    
+                    unwrapv_lst.append(multifreq_unwrap_v)
+                    unwraph_lst.append(multifreq_unwrap_h)
+            return unwrapv_lst, unwraph_lst, white_lst, avg_lst, mod_lst,  gamma_lst, wrapped_phase_lst
+        elif (data_type == 'npy') & (processing =='cpu'):
+            img_data = [np.load(os.path.join(path,'capt_%d.npy'%acquisition_index)) for acquisition_index in range(no_pose)]
+            multifreq_unwrap_v,multifreq_unwrap_h,k_arr_v,k_arr_h,phase_arr_v,phase_arr_h,orig_img,avg_arr,mod_arr,gamma_arr = map(list, zip(*[self.multifreq_analysis(imges_arr, limit, kernel_v,kernel_h) for imges_arr in img_data]))
+            
+            return multifreq_unwrap_v,multifreq_unwrap_h,k_arr_v,k_arr_h,phase_arr_v,phase_arr_h,orig_img,avg_arr,mod_arr,gamma_arr
+            
 
     def projcam_calib_img_multiwave(self,no_pose, limit, N_arr, pitch_arr, width, height, kernel_v, kernel_h, path):
         '''
