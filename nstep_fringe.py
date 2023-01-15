@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 from copy import deepcopy
 import cupy as cp
 from cupyx.scipy import ndimage
+from time import perf_counter_ns
 
 def delta_deck_gen(N, height, width):
     ''' 
@@ -255,51 +256,91 @@ def mask_img(images, limit ):
     delta_deck = type: float. Delta values at each pixel for each captured image
 
     '''
+    start = perf_counter_ns()
     delta_deck = delta_deck_gen(images.shape[0], images.shape[1], images.shape[2])
     N = delta_deck.shape[0]
-    masked_img = deepcopy(images)
-    masked_img = masked_img.astype(np.float64)
+    end = perf_counter_ns()
+    print('delta_dek:%.3f'%((end - start)/1e9))
+    start = perf_counter_ns()
+    masked_img = images.astype(np.float64)
+    end = perf_counter_ns()
+    print('float:%.3f'%((end - start)/1e9))
+    start = perf_counter_ns()
     sin_delta = np.sin(delta_deck)
     sin_delta[np.abs(sin_delta) < 1e-15] = 0 
-    sin_lst = (np.sum(masked_img * sin_delta, axis = 0)) ** 2
+    sin_lst = (np.sum(masked_img * sin_delta, axis = 0)) 
+    end = perf_counter_ns()
+    print('sin:%.3f'%((end - start)/1e9))
+    start = perf_counter_ns()
     cos_delta = np.cos(delta_deck)
     cos_delta[np.abs(cos_delta)<1e-15] = 0
-    cos_lst = (np.sum(masked_img * cos_delta, axis = 0)) ** 2
-    modulation = 2 * np.sqrt(sin_lst + cos_lst) / N
+    cos_lst = (np.sum(masked_img * cos_delta, axis = 0)) 
+    end = perf_counter_ns()
+    print('cosi:%.3f'%((end - start)/1e9))
+    start = perf_counter_ns()
+    modulation = 2 * np.sqrt(sin_lst**2 + cos_lst**2) / N
     avg = np.sum(masked_img, axis = 0) / N
-    gamma = modulation / avg
+    end = perf_counter_ns()
+    print('mod,avg:%.3f'%((end - start)/1e9))
+    start = perf_counter_ns()
     mask = np.full(modulation.shape,True)
     mask[ modulation > limit] = False
     mask_deck = np.repeat(mask[np.newaxis,:,:],masked_img.shape[0],axis = 0)
     masked_img[mask_deck]=np.nan
-    #masked_img = np.ma.masked_array(images, np.repeat(mask[np.newaxis,:,:], N, axis = 0),fill_value=np.nan)
-   
-    return masked_img, modulation, avg, gamma , delta_deck
+    end = perf_counter_ns()
+    print('apply mask:%.3f'%((end - start)/1e9))
+    start = perf_counter_ns()
+    #wrapped phase
+    phase = -np.arctan2(sin_lst,cos_lst)# wraped phase;  
+    end = perf_counter_ns()
+    print('phase map:%.3f'%((end - start)/1e9))
+    return masked_img, modulation, avg , phase
 
 def mask_img_cp(images, limit ):
     """
     Cupy version of mask_img()
     """
-    
+    start = perf_counter_ns()
     delta_deck = delta_deck_gen_cp(images.shape[0], images.shape[1], images.shape[2])
     N = delta_deck.shape[0]
-    images_cupy = deepcopy(images)
-    images_cupy = cp.array(images_cupy.astype(cp.float64))
+    end = perf_counter_ns()
+    print('delta_dek:%.3f'%((end - start)/1e9))
+    start = perf_counter_ns()
+    images_numpy = images.astype(np.float64)
+    images_cupy = cp.asarray(images_numpy)
+    end = perf_counter_ns()
+    print('cupy:%.3f'%((end - start)/1e9))
+    start = perf_counter_ns()
     sin_delta = cp.sin(delta_deck)
     sin_delta[cp.abs(sin_delta) < 1e-15] = 0
-    sin_lst = (cp.sum(images_cupy * sin_delta, axis = 0)) ** 2
+    sin_lst = (cp.sum(images_cupy * sin_delta, axis = 0)) 
+    end = perf_counter_ns()
+    print('sin:%.3f'%((end - start)/1e9))
+    start = perf_counter_ns()
     cos_delta = cp.cos(delta_deck)
     cos_delta[cp.abs(cos_delta)<1e-15] = 0
-    cos_lst = (cp.sum(images_cupy * cos_delta, axis = 0)) ** 2
-    modulation = 2 * cp.sqrt(sin_lst + cos_lst) / N
+    cos_lst = (cp.sum(images_cupy * cos_delta, axis = 0)) 
+    end = perf_counter_ns()
+    print('cosi:%.3f'%((end - start)/1e9))
+    start = perf_counter_ns()
+    modulation = 2 * cp.sqrt(sin_lst**2 + cos_lst**2) / N
     avg = cp.sum(images_cupy, axis = 0) / N
-    gamma = modulation / avg
+    end = perf_counter_ns()
+    print('mod,avg:%.3f'%((end - start)/1e9))
+    start = perf_counter_ns()
     mask = cp.full(modulation.shape,True)
     mask[ modulation > limit] = False
     mask_deck = cp.repeat(mask[cp.newaxis,:,:],images_cupy.shape[0],axis = 0)
-    images_cupy[mask_deck]=np.nan
-   
-    return images_cupy, modulation, avg, gamma , delta_deck
+    images_cupy[mask_deck]=cp.nan
+    end = perf_counter_ns()
+    print('apply mask:%.3f'%((end - start)/1e9))
+    start = perf_counter_ns()
+    #wrapped phase
+    phase = -cp.arctan2(sin_lst,cos_lst)# wraped phase; 
+    end = perf_counter_ns()
+    print('phase map:%.3f'%((end - start)/1e9))
+    
+    return images_cupy, modulation, avg , phase
 
 #Wrap phase calculation
 def phase_cal(images, N, delta_deck):
@@ -434,7 +475,7 @@ def filt_cp(unwrap, kernel ,direc):
     elif direc == 'h':
         k = (kernel,1)
     med_fil = ndimage.median_filter(dup_img, k)
-    k_array = cp.round((dup_img - med_fil) / (2 * np.pi))
+    k_array = cp.round((dup_img - med_fil) / (2 * cp.pi))
     correct_unwrap = dup_img - (k_array * 2 * cp.pi)
     return correct_unwrap, k_array
 
@@ -544,7 +585,7 @@ def multifreq_unwrap_cp(wavelength_arr, phase_arr, kernel, direc):
     absolute_ph,k = multi_kunwrap_cp(wavelength_arr[0:2], phase_arr[0:2])   
     for i in range(1,len(wavelength_arr)-1):
         absolute_ph,k = multi_kunwrap_cp(wavelength_arr[i:i+2], [absolute_ph, phase_arr[i+1]])    
-    absolute_ph, k0 = filt(absolute_ph, kernel, direc)    
+    absolute_ph, k0 = filt_cp(absolute_ph, kernel, direc)    
     return absolute_ph, k 
 
 def multiwave_unwrap(wavelength_arr, phase_arr, kernel, direc):
