@@ -5,11 +5,8 @@
 import numpy as np
 import scipy.ndimage
 import os
-import matplotlib.pyplot as plt
-from copy import deepcopy
 import cupy as cp
 from cupyx.scipy import ndimage
-from time import perf_counter_ns
 
 def delta_deck_gen(N, height, width):
     ''' 
@@ -237,9 +234,10 @@ def B_cutoff_limit(sigma_path, quantile_limit, N_list, pitch_list):
     
     return np.sqrt(modulation_limit_sq)
 
-def mask_img(images, limit ):
+def phase_cal(images, limit ):
     '''
-    Function computes and applies mask to captured image based on data modulation (relative modulation) of each pixel.
+    Function computes and applies mask to captured image based on data modulation (relative modulation) of each pixel
+    and computes phase map.
     data modulation = I''(x,y)/I'(x,y). 
 
     Parameters
@@ -256,131 +254,54 @@ def mask_img(images, limit ):
     delta_deck = type: float. Delta values at each pixel for each captured image
 
     '''
-    start = perf_counter_ns()
     delta_deck = delta_deck_gen(images.shape[0], images.shape[1], images.shape[2])
     N = delta_deck.shape[0]
-    end = perf_counter_ns()
-    print('npdelta_dek:%.3f'%((end - start)/1e9)) #0.030
-    start = perf_counter_ns()
     masked_img = images.astype(np.float64)
-    end = perf_counter_ns()
-    print('npfloat:%.3f'%((end - start)/1e9)) #:0.011
-    start = perf_counter_ns()
     sin_delta = np.sin(delta_deck)
     sin_delta[np.abs(sin_delta) < 1e-15] = 0 
     sin_lst = (np.sum(masked_img * sin_delta, axis = 0)) 
-    end = perf_counter_ns()
-    print('npsin:%.3f'%((end - start)/1e9))#0.125
-    start = perf_counter_ns()
     cos_delta = np.cos(delta_deck)
     cos_delta[np.abs(cos_delta)<1e-15] = 0
     cos_lst = (np.sum(masked_img * cos_delta, axis = 0)) 
-    end = perf_counter_ns()
-    print('npcosi:%.3f'%((end - start)/1e9))#0.122
-    start = perf_counter_ns()
     modulation = 2 * np.sqrt(sin_lst**2 + cos_lst**2) / N
     avg = np.sum(masked_img, axis = 0) / N
-    end = perf_counter_ns()
-    print('npmod,avg:%.3f'%((end - start)/1e9))#0.049
-    start = perf_counter_ns()
     mask = np.full(modulation.shape,True)
     mask[ modulation > limit] = False
     mask_deck = np.repeat(mask[np.newaxis,:,:],masked_img.shape[0],axis = 0)
     masked_img[mask_deck]=np.nan
-    end = perf_counter_ns()
-    print('npapply mask:%.3f'%((end - start)/1e9))#0.011
-    start = perf_counter_ns()
     #wrapped phase
+    sin_lst[mask] = np.nan
+    cos_lst[mask] = np.nan
     phase = -np.arctan2(sin_lst,cos_lst)# wraped phase;  
-    end = perf_counter_ns()
-    print('npphase map:%.3f'%((end - start)/1e9))#0.063
     return masked_img, modulation, avg , phase
 
-def mask_img_cp(images, limit ):
+def phase_cal_cp(images, limit ):
     """
-    Cupy version of mask_img()
+    Cupy version of phase_cal()
     """
-    start = perf_counter_ns()
+    
     delta_deck = delta_deck_gen_cp(images.shape[0], images.shape[1], images.shape[2])
     N = delta_deck.shape[0]
-    end = perf_counter_ns()
-    print('delta_dek:%.3f'%((end - start)/1e9)) #0.001
-    start = perf_counter_ns()
     images_numpy = images.astype(np.float64)
     images_cupy = cp.asarray(images_numpy)
-    end = perf_counter_ns()
-    print('cupy:%.3f'%((end - start)/1e9)) #0.021
-    start = perf_counter_ns()
     sin_delta = cp.sin(delta_deck)
     sin_delta[cp.abs(sin_delta) < 1e-15] = 0
     sin_lst = (cp.sum(images_cupy * sin_delta, axis = 0)) 
-    end = perf_counter_ns()
-    print('sin:%.3f'%((end - start)/1e9)) #0.008
-    start = perf_counter_ns()
     cos_delta = cp.cos(delta_deck)
     cos_delta[cp.abs(cos_delta)<1e-15] = 0 
     cos_lst = (cp.sum(images_cupy * cos_delta, axis = 0)) 
-    end = perf_counter_ns()
-    print('cosi:%.3f'%((end - start)/1e9))#0.004
-    start = perf_counter_ns()
     modulation = 2 * cp.sqrt(sin_lst**2 + cos_lst**2) / N
     avg = cp.sum(images_cupy, axis = 0) / N
-    end = perf_counter_ns()
-    print('mod,avg:%.3f'%((end - start)/1e9))#0.001
-    start = perf_counter_ns()
     mask = cp.full(modulation.shape,True)
     mask[ modulation > limit] = False
     mask_deck = cp.repeat(mask[cp.newaxis,:,:],images_cupy.shape[0],axis = 0)
     images_cupy[mask_deck]=cp.nan
-    end = perf_counter_ns()
-    print('apply mask:%.3f'%((end - start)/1e9))#0.007
-    start = perf_counter_ns()
     #wrapped phase
+    sin_lst[mask] = cp.nan
+    cos_lst[mask] = cp.nan
     phase = -cp.arctan2(sin_lst,cos_lst)# wraped phase; 
-    end = perf_counter_ns()
-    print('phase map:%.3f'%((end - start)/1e9))#0.000
-    
     return images_cupy, modulation, avg , phase
 
-#Wrap phase calculation
-def phase_cal(images, N, delta_deck):
-    '''
-    Function computes the wrapped phase map from captured N step fringe pattern images.
-
-    Parameters
-    ----------
-    images = type: float. Captured fringe pattern images
-    N = type:mint.  The number of steps in phase shifting algorithm
-    delta_deck = type: float. Delta values at each pixel for each captured image
-
-    Returns
-    -------
-    ph = type: float. Wrapped phase map
-
-    '''
-    sin_delta = np.sin(delta_deck)
-    sin_delta[np.abs(sin_delta) < 1e-15] = 0 
-    sin_lst = (np.sum(images * sin_delta, axis = 0))   
-    cos_delta = np.cos(delta_deck)
-    cos_delta[np.abs(cos_delta) < 1e-15] = 0
-    cos_lst = (np.sum(images * cos_delta, axis = 0))
-    #wrapped phase
-    ph = -np.arctan2(sin_lst,cos_lst)# wraped phase;  
-    
-    return ph 
-def phase_cal_cp(images, N, delta_deck):
-    """
-    Cupy version of phase_cal()
-    """
-    sin_delta = cp.sin(delta_deck)
-    sin_delta[cp.abs(sin_delta) < 1e-15] = 0 
-    sin_lst = (cp.sum(images * sin_delta, axis = 0))   
-    cos_delta = cp.cos(delta_deck)
-    cos_delta[cp.abs(cos_delta) < 1e-15] = 0
-    cos_lst = (cp.sum(images * cos_delta, axis = 0))
-    #wrapped phase
-    ph = -cp.arctan2(sin_lst,cos_lst)# wraped phase;  
-    return ph
 
 def step_rectification(step_ph,direc):
     '''
@@ -479,17 +400,17 @@ def filt_cp(unwrap, kernel ,direc):
     correct_unwrap = dup_img - (k_array * 2 * cp.pi)
     return correct_unwrap, k_array
 
-def ph_temp_unwrap(mask_cos_v, mask_cos_h, mask_step_v, mask_step_h, pitch, height,width, capt_delta_deck, kernel_v, kernel_h):
+def ph_temp_unwrap(mask_cos_v, mask_cos_h, mask_step_v, mask_step_h, pitch, height,width, kernel_v, kernel_h):
     '''
     Wrapper function for phase coded temporal unwrapping. This function takes masked cosine and stair phase shifted images as input and computes wrapped phase maps. 
     Wrapped phase maps are used to unwrap and obtain absolute phase map which is then further processed to remove spike noise using median filter rectification.
 
     Parameters
     ----------
-    mask_cos_v = type: float. Masked numpy array of cosine fringe pattern variation in the horizontal direction
-    mask_cos_h = type: float. Masked numpy array of cosine fringe pattern variation in the vertical direction
-    mask_step_v = type: float. Masked numpy array of stair fringe pattern variation in the horizontal direction
-    mask_step_h = type: float. Masked numpy array of stair fringe pattern variation in the vertical direction
+    mask_cos_v = type: float.cosine fringe pattern variation in the horizontal direction
+    mask_cos_h = type: float.cosine fringe pattern variation in the vertical direction
+    mask_step_v = type: float.stair fringe pattern variation in the horizontal direction
+    mask_step_h = type: float.stair fringe pattern variation in the vertical direction
     pitch = type:float. number of pixels per fringe period.
     height = type: float. Height of projector image.
     width = type: float. Width of projector image.
@@ -509,13 +430,12 @@ def ph_temp_unwrap(mask_cos_v, mask_cos_h, mask_step_v, mask_step_h, pitch, heig
     step_wrap_h = type: float.  Wrapped phase map of stair intensity pattern varying in the vertical direction.
 
     '''
-    N = capt_delta_deck.shape[0]
     
     #Wrapped phases
-    cos_wrap_v = phase_cal(mask_cos_v, N, capt_delta_deck)
-    cos_wrap_h = phase_cal(mask_cos_h, N, capt_delta_deck)
-    step_wrap_v = phase_cal(mask_step_v, N, capt_delta_deck)
-    step_wrap_h = phase_cal(mask_step_h, N, capt_delta_deck)
+    cos_wrap_v = phase_cal(mask_cos_v)
+    cos_wrap_h = phase_cal(mask_cos_h)
+    step_wrap_v = phase_cal(mask_step_v)
+    step_wrap_h = phase_cal(mask_step_h)
     
     #step rectification for border jumps
     step_wrap_v = step_rectification(step_wrap_v, 'v')
