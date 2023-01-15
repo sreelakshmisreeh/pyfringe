@@ -6,6 +6,9 @@ import numpy as np
 import scipy.ndimage
 import os
 import matplotlib.pyplot as plt
+from copy import deepcopy
+import cupy as cp
+from cupyx.scipy import ndimage
 
 def delta_deck_gen(N, height, width):
     ''' 
@@ -27,6 +30,15 @@ def delta_deck_gen(N, height, width):
     delta = 2 * np.pi * np.arange(1, N + 1) / N 
     one_block = np.ones((N, height, width))
     delta_deck = np.einsum('ijk,i->ijk', one_block, delta)
+    return delta_deck
+
+def delta_deck_gen_cp(N, height, width):
+    """
+    Cupy version of delta_deck_gen()
+    """
+    delta = 2 * cp.pi * cp.arange(1, N + 1) / N
+    one_block = cp.ones((N, height, width))
+    delta_deck = cp.einsum('ijk,i->ijk', one_block, delta)
     return delta_deck
 
 def cos_func(inte_rang, pitch, direc, phase_st, delta_deck): #phase_st=datatype:float    
@@ -245,22 +257,49 @@ def mask_img(images, limit ):
     '''
     delta_deck = delta_deck_gen(images.shape[0], images.shape[1], images.shape[2])
     N = delta_deck.shape[0]
-    images = images.astype(np.float64)
+    masked_img = deepcopy(images)
+    masked_img = masked_img.astype(np.float64)
     sin_delta = np.sin(delta_deck)
     sin_delta[np.abs(sin_delta) < 1e-15] = 0 
-    sin_lst = (np.sum(images * sin_delta, axis = 0)) ** 2
+    sin_lst = (np.sum(masked_img * sin_delta, axis = 0)) ** 2
     cos_delta = np.cos(delta_deck)
     cos_delta[np.abs(cos_delta)<1e-15] = 0
-    cos_lst = (np.sum(images * cos_delta, axis = 0)) ** 2
+    cos_lst = (np.sum(masked_img * cos_delta, axis = 0)) ** 2
     modulation = 2 * np.sqrt(sin_lst + cos_lst) / N
-    avg = np.sum(images, axis = 0) / N
+    avg = np.sum(masked_img, axis = 0) / N
     gamma = modulation / avg
     mask = np.full(modulation.shape,True)
     mask[ modulation > limit] = False
-    masked_img = np.ma.masked_array(images, np.repeat(mask[np.newaxis,:,:], N, axis = 0),fill_value=np.nan)
+    mask_deck = np.repeat(mask[np.newaxis,:,:],masked_img.shape[0],axis = 0)
+    masked_img[mask_deck]=np.nan
+    #masked_img = np.ma.masked_array(images, np.repeat(mask[np.newaxis,:,:], N, axis = 0),fill_value=np.nan)
    
     return masked_img, modulation, avg, gamma , delta_deck
 
+def mask_img_cp(images, limit ):
+    """
+    Cupy version of mask_img()
+    """
+    
+    delta_deck = delta_deck_gen_cp(images.shape[0], images.shape[1], images.shape[2])
+    N = delta_deck.shape[0]
+    images_cupy = deepcopy(images)
+    images_cupy = cp.array(images_cupy.astype(cp.float64))
+    sin_delta = cp.sin(delta_deck)
+    sin_delta[cp.abs(sin_delta) < 1e-15] = 0
+    sin_lst = (cp.sum(images_cupy * sin_delta, axis = 0)) ** 2
+    cos_delta = cp.cos(delta_deck)
+    cos_delta[cp.abs(cos_delta)<1e-15] = 0
+    cos_lst = (cp.sum(images_cupy * cos_delta, axis = 0)) ** 2
+    modulation = 2 * cp.sqrt(sin_lst + cos_lst) / N
+    avg = cp.sum(images_cupy, axis = 0) / N
+    gamma = modulation / avg
+    mask = cp.full(modulation.shape,True)
+    mask[ modulation > limit] = False
+    mask_deck = cp.repeat(mask[cp.newaxis,:,:],images_cupy.shape[0],axis = 0)
+    images_cupy[mask_deck]=np.nan
+   
+    return images_cupy, modulation, avg, gamma , delta_deck
 
 #Wrap phase calculation
 def phase_cal(images, N, delta_deck):
@@ -288,6 +327,19 @@ def phase_cal(images, N, delta_deck):
     ph = -np.arctan2(sin_lst,cos_lst)# wraped phase;  
     
     return ph 
+def phase_cal_cp(images, N, delta_deck):
+    """
+    Cupy version of phase_cal()
+    """
+    sin_delta = cp.sin(delta_deck)
+    sin_delta[cp.abs(sin_delta) < 1e-15] = 0 
+    sin_lst = (cp.sum(images * sin_delta, axis = 0))   
+    cos_delta = cp.cos(delta_deck)
+    cos_delta[cp.abs(cos_delta) < 1e-15] = 0
+    cos_lst = (cp.sum(images * cos_delta, axis = 0))
+    #wrapped phase
+    ph = -cp.arctan2(sin_lst,cos_lst)# wraped phase;  
+    return ph
 
 def step_rectification(step_ph,direc):
     '''
@@ -372,6 +424,20 @@ def filt(unwrap, kernel ,direc):
     correct_unwrap = dup_img - (k_array * 2 * np.pi)
     return correct_unwrap, k_array
 
+def filt_cp(unwrap, kernel ,direc):
+    """
+    Cupy version of filt()
+    """
+    dup_img = unwrap.copy()
+    if direc == 'v':
+        k = (1,kernel) #kernel size
+    elif direc == 'h':
+        k = (kernel,1)
+    med_fil = ndimage.median_filter(dup_img, k)
+    k_array = cp.round((dup_img - med_fil) / (2 * np.pi))
+    correct_unwrap = dup_img - (k_array * 2 * cp.pi)
+    return correct_unwrap, k_array
+
 def ph_temp_unwrap(mask_cos_v, mask_cos_h, mask_step_v, mask_step_h, pitch, height,width, capt_delta_deck, kernel_v, kernel_h):
     '''
     Wrapper function for phase coded temporal unwrapping. This function takes masked cosine and stair phase shifted images as input and computes wrapped phase maps. 
@@ -442,6 +508,14 @@ def multi_kunwrap(wavelength, ph):
     unwrap = ph[1] + 2 * np.pi * k
     return unwrap, k
 
+def multi_kunwrap_cp(wavelength, ph):
+    """
+    Cupy version of multi_kunwrap()
+    """
+    k = cp.round(((wavelength[0] / wavelength[1]) * ph[0] - ph[1])/ (2 * cp.pi))
+    unwrap = ph[1] + 2 * cp.pi * k
+    return unwrap, k
+
 def multifreq_unwrap(wavelength_arr, phase_arr, kernel, direc):
     '''
     Function performs sequential temporal multifrequency phase unwrapping from high wavelength (low frequency) wrapped phase map to low wavelength (high frequency) wrapped phase map.
@@ -462,6 +536,16 @@ def multifreq_unwrap(wavelength_arr, phase_arr, kernel, direc):
         absolute_ph,k = multi_kunwrap(wavelength_arr[i:i+2], [absolute_ph, phase_arr[i+1]])    
     absolute_ph, k0 = filt(absolute_ph, kernel, direc)    
     return absolute_ph, k
+
+def multifreq_unwrap_cp(wavelength_arr, phase_arr, kernel, direc):
+    """
+    Cupy version of multifreq_unwrap()
+    """
+    absolute_ph,k = multi_kunwrap_cp(wavelength_arr[0:2], phase_arr[0:2])   
+    for i in range(1,len(wavelength_arr)-1):
+        absolute_ph,k = multi_kunwrap_cp(wavelength_arr[i:i+2], [absolute_ph, phase_arr[i+1]])    
+    absolute_ph, k0 = filt(absolute_ph, kernel, direc)    
+    return absolute_ph, k 
 
 def multiwave_unwrap(wavelength_arr, phase_arr, kernel, direc):
     '''
