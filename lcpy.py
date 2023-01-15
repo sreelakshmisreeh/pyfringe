@@ -5,6 +5,7 @@ Created on Sat Dec 24 13:27:49 2022
 @author: kl001
 """
 # TODO: Assemble files and set root directory
+#TODO: Time image loading. pattern period * no.of patterns per image > image load time
 import numpy as np
 import os
 import sys
