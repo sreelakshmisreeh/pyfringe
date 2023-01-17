@@ -551,6 +551,12 @@ def disableExposureCompensationAuto(nodemap):
     print('ExposureCompensationAuto mode is set to "off"')
     return True
 
+# TODO: disable Gamma, By default, Gamma is enabled and has a value of 1.25. To obtain a linear response, disable gamma.
+#  White balance is applicable to color models only.
+#  Hue is applicable to color models only.
+#  Saturation is applicable to color models only.
+#  sharpness is applicable to color models only.
+# TODO: disable Black Level Auto, set BlackLevelEnabled to True and manually set BlackLevel (similar as framerate)
 
 def setExposureMode(nodemap, exposureModeToSet):
     """
