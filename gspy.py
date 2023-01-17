@@ -556,7 +556,7 @@ def disableExposureCompensationAuto(nodemap):
 #  Hue is applicable to color models only.
 #  Saturation is applicable to color models only.
 #  sharpness is applicable to color models only.
-# TODO: disable Black Level Auto, set BlackLevelEnabled to True and manually set BlackLevel (similar as framerate)
+# TODO: disable Black Level Auto, set BlackLevelEnabled to True and manually set BlackLevel to 0 (similar as setting framerate)
 
 def setExposureMode(nodemap, exposureModeToSet):
     """
