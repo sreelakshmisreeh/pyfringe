@@ -46,8 +46,10 @@ def capture_image(cam, timeout=1000):
 def cam_configuration(nodemap,
                       s_node_map,
                       frameRate=30,
+                      pgrExposureCompensation=0,
                       exposureTime=27084,
                       gain=0,
+                      blackLevel=0,
                       bufferCount=15,
                       verbose=True):
     """
@@ -61,13 +63,17 @@ def cam_configuration(nodemap,
     s_node_map: CNodemapPtr
         camera stream nodemap
     frameRate : float
-        Framerate
+        Framerate, if given None, it will not be configured.
+    pgrExposureCompensation: float
+        Exposure compensation, if given None, it will not be configured.
     exposureTime : float
-        Exposure time in microseconds
+        Exposure time in microseconds, if given None, it will not be configured.
     gain : float
-        Gain
+        Gain, if given None, it will not be configured.
+    blackLevel : float
+        black level, if given None, it will not be configured.
     bufferCount : int
-        Buffer count.
+        Buffer count, if given None, it will not be configured.
     verbose : bool
         If information should be printed out
     Returns
@@ -82,15 +88,22 @@ def cam_configuration(nodemap,
     AcquisitionMode = get_IEnumeration_node_current_entry_name(nodemap, 'AcquisitionMode', verbose=False)
     if not (AcquisitionMode == 'Continuous'):
         result &= setAcquisitionMode(nodemap, AcquisitionModeName='Continuous')
+    OnBoardColorProcessEnabled = get_IBoolean_node_current_val(nodemap, 'OnBoardColorProcessEnabled', verbose=False)
+    if OnBoardColorProcessEnabled:
+        result &= disableOnBoardColorProcess(nodemap)
     if frameRate is not None:
         result &= setFrameRate(nodemap, frameRate=frameRate)
     ExposureCompensationAuto = get_IEnumeration_node_current_entry_name(nodemap, 'pgrExposureCompensationAuto', verbose=False)
     if not (ExposureCompensationAuto == 'Off'):
         result &= disableExposureCompensationAuto(nodemap)
+    if pgrExposureCompensation is not None:
+        result &= setExposureCompensation(nodemap, pgrExposureCompensation=pgrExposureCompensation)
     if exposureTime is not None:
         result &= setExposureTime(nodemap, exposureTime=exposureTime)
     if gain is not None:
         result &= setGain(nodemap, gain=gain)
+    if blackLevel is not None:
+        result &= setBlackLevel(nodemap, blackLevel=blackLevel)
     if bufferCount is not None:
         result &= setBufferCount(s_node_map, bufferCount=bufferCount)
 
@@ -106,8 +119,10 @@ def acquire_images(cam,
                    savedir,
                    triggerType,
                    frameRate=30,
+                   pgrExposureCompensation=0,
                    exposureTime=27084,
                    gain=0,
+                   blackLevel=0,
                    bufferCount=15,
                    timeout=10,
                    verbose=True):
@@ -124,20 +139,26 @@ def acquire_images(cam,
     :param triggerType: Must be one of {"software", "hardware", "off"}.
                         If triggerType is "off", camera is configurated for live view.
     :param frameRate: frame rate.
+    :param pgrExposureCompensation: Exposure compensation
     :param exposureTime: exposure time in microseconds.
     :param gain: gain
+    :param blackLevel: black level
     :param bufferCount: buffer count in RAM
     :param timeout: the maximum waiting time in seconds before termination.
+    :param verbose: verbose print camera config status
     :type cam: CameraPtr
     :type acquisition_index: int
     :type num_images: int
     :type savedir: str
     :type triggerType: str
     :type frameRate: float
+    :type pgrExposureCompensation: float
     :type exposureTime: int
     :type gain: float
+    :type blackLevel: float
     :type bufferCount: int
     :type timeout: float
+    :type verbose: bool
     :return: True if successful, False otherwise.
     :rtype: bool
     """
@@ -157,8 +178,10 @@ def acquire_images(cam,
     result &= cam_configuration(nodemap=nodemap,
                                 s_node_map=s_node_map,
                                 frameRate=frameRate,
+                                pgrExposureCompensation=pgrExposureCompensation,
                                 exposureTime=exposureTime,
                                 gain=gain,
+                                blackLevel=blackLevel,
                                 bufferCount=bufferCount,
                                 verbose=verbose)
 
@@ -464,6 +487,16 @@ def get_IBoolean_node_current_val(nodemap, nodename, verbose=True):
     return node_val
 
 
+def disableOnBoardColorProcess(nodemap):
+    OnBoardColorProcessEnabledptr = PySpin.CBooleanPtr(nodemap.GetNode("OnBoardColorProcessEnabled"))
+    if (not PySpin.IsAvailable(OnBoardColorProcessEnabledptr)) or (not PySpin.IsWritable(OnBoardColorProcessEnabledptr)):
+        print('Unable to retrieve OnBoardColorProcessEnabled. Aborting...')
+        return False
+    OnBoardColorProcessEnabledptr.SetValue(False)
+    print('Set OnBoardColorProcessEnabled to False')
+    return True
+
+
 def enableFrameRateSetting(nodemap):
     # Turn off "AcquisitionFrameRateAuto"    
     acqFrameRateAuto = PySpin.CEnumerationPtr(nodemap.GetNode("AcquisitionFrameRateAuto"))
@@ -551,12 +584,6 @@ def disableExposureCompensationAuto(nodemap):
     print('ExposureCompensationAuto mode is set to "off"')
     return True
 
-# TODO: disable Gamma, By default, Gamma is enabled and has a value of 1.25. To obtain a linear response, disable gamma.
-#  White balance is applicable to color models only.
-#  Hue is applicable to color models only.
-#  Saturation is applicable to color models only.
-#  sharpness is applicable to color models only.
-# TODO: disable Black Level Auto, set BlackLevelEnabled to True and manually set BlackLevel to 0 (similar as setting framerate)
 
 def setExposureMode(nodemap, exposureModeToSet):
     """
@@ -883,6 +910,30 @@ def setGain(nodemap, gain):
     return True
 
 
+def setBlackLevel(nodemap, blackLevel):
+    # Get the node "BlackLevel" and check the availability
+    blackLevelValue = PySpin.CFloatPtr(nodemap.GetNode("BlackLevel"))
+    if (not PySpin.IsAvailable(blackLevelValue)) or (not PySpin.IsWritable(blackLevelValue)):
+        print('Unable to retrieve BlackLevel. Aborting...')
+        return False
+    # Set the BlackLevel value
+    blackLevelValue.SetValue(blackLevel)
+    print('Set BlackLevel to %2.3f' % blackLevel)
+    return True
+
+
+def setExposureCompensation(nodemap, pgrExposureCompensation):
+    # Get the node "pgrExposureCompensation" and check the availability
+    ExposureCompensationValue = PySpin.CFloatPtr(nodemap.GetNode("pgrExposureCompensation"))
+    if (not PySpin.IsAvailable(ExposureCompensationValue)) or (not PySpin.IsWritable(ExposureCompensationValue)):
+        print('Unable to retrieve pgrExposureCompensation. Aborting...')
+        return False
+    # Set the pgrExposureCompensation value
+    ExposureCompensationValue.SetValue(pgrExposureCompensation)
+    print('Set pgrExposureCompensation to %2.3f' % pgrExposureCompensation)
+    return True
+
+
 def trigger_configuration(nodemap, s_node_map, triggerType, verbose=True):
     """
     This function configures the camera to use a trigger. First, trigger mode is
@@ -965,14 +1016,17 @@ def deactivate_trigger(nodemap):
 
 def print_camera_config(nodemap, s_node_map):
     get_IEnumeration_node_current_entry_name(nodemap, 'AcquisitionMode')
+    get_IBoolean_node_current_val(nodemap, 'OnBoardColorProcessEnabled')
     get_IEnumeration_node_current_entry_name(nodemap, 'AcquisitionFrameRateAuto')
     get_IBoolean_node_current_val(nodemap, 'AcquisitionFrameRateEnabled')
     get_IFloat_node_current_val(nodemap, 'AcquisitionFrameRate')
     get_IEnumeration_node_current_entry_name(nodemap, 'pgrExposureCompensationAuto')
+    get_IFloat_node_current_val(nodemap, 'pgrExposureCompensation')
     get_IEnumeration_node_current_entry_name(nodemap, 'ExposureAuto')
     get_IFloat_node_current_val(nodemap, 'ExposureTime')
     get_IEnumeration_node_current_entry_name(nodemap, 'GainAuto')
     get_IFloat_node_current_val(nodemap, 'Gain')
+    get_IFloat_node_current_val(nodemap, 'BlackLevel')
     get_IEnumeration_node_current_entry_name(s_node_map, 'StreamBufferCountMode')
     get_IInteger_node_current_val(s_node_map, 'StreamBufferCountManual')
 
