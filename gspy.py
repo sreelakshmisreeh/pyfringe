@@ -488,11 +488,11 @@ def get_IBoolean_node_current_val(nodemap, nodename, verbose=True):
 
 
 def disableOnBoardColorProcess(nodemap):
-    OnBoardColorProcessEnabledptr = PySpin.CBooleanPtr(nodemap.GetNode("OnBoardColorProcessEnabled"))
-    if (not PySpin.IsAvailable(OnBoardColorProcessEnabledptr)) or (not PySpin.IsWritable(OnBoardColorProcessEnabledptr)):
+    ptrOnBoardColorProcessEnabled = PySpin.CBooleanPtr(nodemap.GetNode("OnBoardColorProcessEnabled"))
+    if (not PySpin.IsAvailable(ptrOnBoardColorProcessEnabled)) or (not PySpin.IsWritable(ptrOnBoardColorProcessEnabled)):
         print('Unable to retrieve OnBoardColorProcessEnabled. Aborting...')
         return False
-    OnBoardColorProcessEnabledptr.SetValue(False)
+    ptrOnBoardColorProcessEnabled.SetValue(False)
     print('Set OnBoardColorProcessEnabled to False')
     return True
 
