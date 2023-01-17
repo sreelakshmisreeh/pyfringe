@@ -8,7 +8,9 @@ from cupyx.scipy import ndimage
 # TODO: write test main to test all functions
 # TODO: Generate 128 x 128 test image with margin nan values as test data. Check with manual calculation(ground truth).
 # TODO: Compare the results from cupy and numpy
-def delta_deck_gen_cp(N: int, height: int, width: int) -> cp.ndarray:
+def delta_deck_gen_cp(N: int,
+                      height: int,
+                      width: int) -> cp.ndarray:
     """
     Function computes phase shift δ  values used in N-step phase shifting algorithm for each image pixel of
     given height and width.
@@ -36,7 +38,9 @@ def delta_deck_gen_cp(N: int, height: int, width: int) -> cp.ndarray:
     delta_deck_cp = cp.einsum('ijk,i->ijk', one_block_cp, delta_cp)
     return delta_deck_cp
 
-def phase_cal_cp(images_cp: cp.ndarray, delta_deck_cp: cp.ndarray, limit: float) -> Tuple[cp.ndarray, cp.ndarray, cp.ndarray, cp.ndarray]:
+def phase_cal_cp(images_cp: cp.ndarray,
+                 delta_deck_cp: cp.ndarray,
+                 limit: float) -> Tuple[cp.ndarray, cp.ndarray, cp.ndarray, cp.ndarray]:
     """
     Function that computes and applies mask to captured image based on data modulation_cp (relative modulation_cp) of each pixel
     and computes phase map.
@@ -81,7 +85,9 @@ def phase_cal_cp(images_cp: cp.ndarray, delta_deck_cp: cp.ndarray, limit: float)
     phase_map_cp = -cp.arctan2(sin_lst, cos_lst)  # wrapped phase;
     return images_cp, modulation_cp, average_int_cp, phase_map_cp
 
-def filt_cp(unwrap_cp: cp.ndarray, kernel_size: int, direc: str) -> Tuple[cp.ndarray, cp.ndarray]:
+def filt_cp(unwrap_cp: cp.ndarray,
+            kernel_size: int,
+            direc: str) -> Tuple[cp.ndarray, cp.ndarray]:
     """
     Function is used to remove artifacts generated in the temporal unwrapped phase map.
     A median filter is applied to locate incorrectly unwrapped points, and those point phase is corrected by adding or
@@ -114,7 +120,8 @@ def filt_cp(unwrap_cp: cp.ndarray, kernel_size: int, direc: str) -> Tuple[cp.nda
     correct_unwrap_cp = unwrap_cp - (k0_array_cp * 2 * cp.pi)
     return correct_unwrap_cp, k0_array_cp
 
-def multi_kunwrap_cp(wavelength_cp: cp.ndarray, ph: list) -> Tuple[cp.ndarray, cp.ndarray]:
+def multi_kunwrap_cp(wavelength_cp: cp.ndarray,
+                     ph: list) -> Tuple[cp.ndarray, cp.ndarray]:
     """
     Function performs temporal phase unwrapping using the low and high wavelength wrapped phase maps.
     Parameters
@@ -135,7 +142,10 @@ def multi_kunwrap_cp(wavelength_cp: cp.ndarray, ph: list) -> Tuple[cp.ndarray, c
     unwrap_cp = ph[1] + 2 * cp.pi * k_array_cp
     return unwrap_cp, k_array_cp
 
-def multifreq_unwrap_cp(wavelength_arr_cp: cp.ndarray, phase_arr_cp: cp.ndarray, kernel_size: int, direc: str) -> Tuple[cp.ndarray, cp.ndarray]:
+def multifreq_unwrap_cp(wavelength_arr_cp: cp.ndarray,
+                        phase_arr_cp: cp.ndarray,
+                        kernel_size: int,
+                        direc: str) -> Tuple[cp.ndarray, cp.ndarray]:
     """
     Function performs sequential temporal multi-frequency phase unwrapping from high wavelength (low frequency)
     wrapped phase map to low wavelength (high frequency) wrapped phase map.
