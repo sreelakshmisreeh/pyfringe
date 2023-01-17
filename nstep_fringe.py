@@ -5,11 +5,9 @@
 import numpy as np
 import scipy.ndimage
 import os
-import cupy as cp
-from cupyx.scipy import ndimage
 from typing import Tuple
 
-
+#TODO: write test main to test all functions
 def delta_deck_gen(N: int, height: int, width: int) -> np.ndarray:
     """
     Function computes phase shift δ  values used in N-step phase shifting algorithm for each image pixel of given height and width. 
@@ -20,14 +18,14 @@ def delta_deck_gen(N: int, height: int, width: int) -> np.ndarray:
     N : int.
         The number of steps in phase shifting algorithm.
     height : int.
-        Height of the pattern image.
+            Height of the pattern image.
     width : int.
-        Width of pattern image.
+            Width of pattern image.
     
     Returns
     -------
     delta_deck :numpy.ndarray:float.
-        N delta images.
+                N delta images.
     
     Ref: J. H. Brunning, D. R. Herriott, J. E. Gallagher, D. P. Rosenfeld, A. D. White, and D. J. Brangaccio, Digital wavefront measuring interferometer for testing optical surfaces, lenses, Appl. Opt. 13(11), 2693–2703, 1974. 
     """
@@ -174,7 +172,7 @@ def calib_generate(width, height, type_unwrap, N_list, pitch_list, phase_st, int
     return fringe_arr, delta_deck_list 
 
 def recon_generate(width, height, type_unwrap, N_list, pitch_list, phase_st, inte_rang, direc, path):
-    '''
+    """
     Function is used to generate fringe pattern in a specified direction.
 
     width = type: float. Width of pattern image.
@@ -197,7 +195,7 @@ def recon_generate(width, height, type_unwrap, N_list, pitch_list, phase_st, int
     fringe_arr = type: Array of uint8. Array of generated fringe patterns in single direction.
     delta_deck_list = type:List of float. List of N delta images.
 
-    '''
+    """
     fringe_lst = []; delta_deck_list = []
     if type_unwrap == 'phase':
         delta_deck_list = delta_deck_gen(N_list[0], height, width)
@@ -223,7 +221,7 @@ def recon_generate(width, height, type_unwrap, N_list, pitch_list, phase_st, int
     return fringe_arr, delta_deck_list
 
 def B_cutoff_limit(sigma_path, quantile_limit, N_list, pitch_list):
-    '''
+    """
     Function to calculate modulation minimum based on success rate.
     :param sigma_path:  Path to read variance of noise model (sigma)
     :param quantile_limit:  Sigma level upto which all pixels can be successfully unwrapped.
@@ -236,32 +234,37 @@ def B_cutoff_limit(sigma_path, quantile_limit, N_list, pitch_list):
     :return Lower limit of modulation. Pixels above this value is used for reconstruction.
     :rtype:float
 
-    '''
+    """
     sigma = np.load(sigma_path)
     sigma_sq_delta_phi = (np.pi / quantile_limit)**2
     modulation_limit_sq = ((pitch_list[-1]**2 / pitch_list[-2]**2) + 1) * (2 * sigma**2) / (N_list[-1] * sigma_sq_delta_phi)
     return np.sqrt(modulation_limit_sq)
 
-def phase_cal(images, limit ):
-    '''
-    Function computes and applies mask to captured image based on data modulation (relative modulation) of each pixel
+def phase_cal(images : np.ndarray, limit : float )->Tuple[np.ndarray,np.ndarray,np.ndarray,np.ndarray]:
+    """
+    Function that computes and applies mask to captured image based on data modulation (relative modulation) of each pixel
     and computes phase map.
     data modulation = I''(x,y)/I'(x,y). 
 
     Parameters
     ----------
-    images = type:uint. Captured fringe images. 
-    limit = type: float. Data modulation limit. Regions with data modulation lower than limit will be masked out.
+    images: np.ndarray:uint8.
+            Captured fringe images.
+    limit: float.
+           Data modulation limit. Regions with data modulation lower than limit will be masked out.
 
     Returns
     -------
-    masked_img = type: numpy masked array of floats. Images after applying mask
-    modulation : type:float. Intensity modulation array(image) for each captured image 
-    avg = type: float. Average intensity array(image) for each captured image.
-    gamma = type: float. Data modulation (relative modulation) array for each captured image
-    delta_deck = type: float. Delta values at each pixel for each captured image
+    masked_img: np.ndarray:float.
+                Images after applying mask
+    modulation :np.ndarray:float.
+                Intensity modulation array(image) for each captured image
+    average_int: np.ndarray:float.
+                 Average intensity array(image) for each captured image
+    phase_map: np.ndarray:float.
+           Delta values at each pixel for each captured image
 
-    '''
+    """
     delta_deck = delta_deck_gen(images.shape[0], images.shape[1], images.shape[2])
     N = delta_deck.shape[0]
     masked_img = images.astype(np.float64)
@@ -272,7 +275,7 @@ def phase_cal(images, limit ):
     cos_delta[np.abs(cos_delta)<1e-15] = 0
     cos_lst = (np.sum(masked_img * cos_delta, axis = 0)) 
     modulation = 2 * np.sqrt(sin_lst**2 + cos_lst**2) / N
-    avg = np.sum(masked_img, axis = 0) / N
+    average_int = np.sum(masked_img, axis = 0) / N
     mask = np.full(modulation.shape,True)
     mask[ modulation > limit] = False
     mask_deck = np.repeat(mask[np.newaxis,:,:],masked_img.shape[0],axis = 0)
@@ -280,35 +283,8 @@ def phase_cal(images, limit ):
     #wrapped phase
     sin_lst[mask] = np.nan
     cos_lst[mask] = np.nan
-    phase = -np.arctan2(sin_lst,cos_lst)# wraped phase;  
-    return masked_img, modulation, avg , phase
-
-def phase_cal_cp(images, limit ):
-    """
-    Cupy version of phase_cal()
-    """
-    
-    delta_deck = delta_deck_gen_cp(images.shape[0], images.shape[1], images.shape[2])
-    N = delta_deck.shape[0]
-    images_numpy = images.astype(np.float64)
-    images_cupy = cp.asarray(images_numpy)
-    sin_delta = cp.sin(delta_deck)
-    sin_delta[cp.abs(sin_delta) < 1e-15] = 0
-    sin_lst = (cp.sum(images_cupy * sin_delta, axis = 0)) 
-    cos_delta = cp.cos(delta_deck)
-    cos_delta[cp.abs(cos_delta)<1e-15] = 0 
-    cos_lst = (cp.sum(images_cupy * cos_delta, axis = 0)) 
-    modulation = 2 * cp.sqrt(sin_lst**2 + cos_lst**2) / N
-    avg = cp.sum(images_cupy, axis = 0) / N
-    mask = cp.full(modulation.shape,True)
-    mask[ modulation > limit] = False
-    mask_deck = cp.repeat(mask[cp.newaxis,:,:],images_cupy.shape[0],axis = 0)
-    images_cupy[mask_deck]=cp.nan
-    #wrapped phase
-    sin_lst[mask] = cp.nan
-    cos_lst[mask] = cp.nan
-    phase = -cp.arctan2(sin_lst,cos_lst)# wraped phase; 
-    return images_cupy, modulation, avg , phase
+    phase_map = -np.arctan2(sin_lst,cos_lst)# wraped phase;
+    return masked_img, modulation, average_int , phase_map
 
 
 def step_rectification(step_ph,direc):
@@ -367,23 +343,28 @@ def unwrap_cal(step_wrap,cos_wrap,pitch,width,height,direc):
     return cos_unwrap, k
 
 #median filter 
-def filt(unwrap, kernel ,direc):
-    '''
+def filt(unwrap: np.ndarray , kernel:int  ,direc: str )->Tuple[np.ndarray,np.ndarray]:
+    """
     Function is used to remove artifacts generated in the temporal unwrapped phase map. 
-    A median filter is applied to locate incorrectly unwrapped points, and those point phase is corrected by adding or subtracting a integer number of 2π.
+    A median filter is applied to locate incorrectly unwrapped points, and those point phase is corrected by adding or
+    subtracting an integer number of 2π.
 
     Parameters
     ----------
-    unwrap = type: float. Unwrapped phase map with spike noise.
-    kernel = type: int. Kernel size for median filter.
-    direc = type: string. vertical (v) or horizontal(h) pattern.
-
+    unwrap: np.ndarray:float.
+            Unwrapped phase map with spike noise.
+    kernel: int.
+            Kernel size for median filter.
+    direc: str.
+           Vertical (v) or horizontal(h) pattern.
     Returns
     -------
-    correct_unwrap = type: float. Corrected unwrapped phase map.
-    k_array = type: int. Spiking point fringe order.
+    correct_unwrap: np.ndarray:float.
+                    Corrected unwrapped phase map.
+    k_array: int.
+             Spiking point fringe order.
 
-    '''
+    """
     dup_img = unwrap.copy()
     if direc == 'v':
         k = (1,kernel) #kernel size
@@ -394,31 +375,17 @@ def filt(unwrap, kernel ,direc):
     correct_unwrap = dup_img - (k_array * 2 * np.pi)
     return correct_unwrap, k_array
 
-def filt_cp(unwrap, kernel ,direc):
-    """
-    Cupy version of filt()
-    """
-    dup_img = unwrap.copy()
-    if direc == 'v':
-        k = (1,kernel) #kernel size
-    elif direc == 'h':
-        k = (kernel,1)
-    med_fil = ndimage.median_filter(dup_img, k)
-    k_array = cp.round((dup_img - med_fil) / (2 * cp.pi))
-    correct_unwrap = dup_img - (k_array * 2 * cp.pi)
-    return correct_unwrap, k_array
-
-def ph_temp_unwrap(mask_cos_v, mask_cos_h, mask_step_v, mask_step_h, pitch, height,width, kernel_v, kernel_h):
+def ph_temp_unwrap(cos_wrap_v, cos_wrap_h, step_wrap_v, step_wrap_h, pitch, height,width, kernel_v, kernel_h):
     '''
     Wrapper function for phase coded temporal unwrapping. This function takes masked cosine and stair phase shifted images as input and computes wrapped phase maps. 
     Wrapped phase maps are used to unwrap and obtain absolute phase map which is then further processed to remove spike noise using median filter rectification.
 
     Parameters
     ----------
-    mask_cos_v = type: float.cosine fringe pattern variation in the horizontal direction
-    mask_cos_h = type: float.cosine fringe pattern variation in the vertical direction
-    mask_step_v = type: float.stair fringe pattern variation in the horizontal direction
-    mask_step_h = type: float.stair fringe pattern variation in the vertical direction
+    cos_wrap_v = type: float.cosine fringe wrapped phase map in the horizontal direction
+    cos_wrap_h = type: float.cosine fringe wrapped phase map in the vertical direction
+    step_wrap_v = type: float.stair fringe wrapped phase map in the horizontal direction
+    step_wrap_h = type: float.stair fringe wrapped phase map in the vertical direction
     pitch = type:float. number of pixels per fringe period.
     height = type: float. Height of projector image.
     width = type: float. Width of projector image.
@@ -439,12 +406,6 @@ def ph_temp_unwrap(mask_cos_v, mask_cos_h, mask_step_v, mask_step_h, pitch, heig
 
     '''
     
-    #Wrapped phases
-    cos_wrap_v = phase_cal(mask_cos_v)
-    cos_wrap_h = phase_cal(mask_cos_h)
-    step_wrap_v = phase_cal(mask_step_v)
-    step_wrap_h = phase_cal(mask_step_h)
-    
     #step rectification for border jumps
     step_wrap_v = step_rectification(step_wrap_v, 'v')
     step_wrap_h = step_rectification(step_wrap_h, 'h')
@@ -457,68 +418,55 @@ def ph_temp_unwrap(mask_cos_v, mask_cos_h, mask_step_v, mask_step_h, pitch, heig
     fil_unwrap_h,k0_h = filt(unwrap_h, kernel_h, 'h')    
     return fil_unwrap_v, fil_unwrap_h, k0_v, k0_h, cos_wrap_v, cos_wrap_h, step_wrap_v, step_wrap_h # Filtered unwraped phase maps and k values
 
-def multi_kunwrap(wavelength, ph):
-    '''
+def multi_kunwrap(wavelength: np.array, ph : list)->Tuple[np.ndarray,np.ndarray]:
+    """
     Function performs temporal phase unwrapping using the low and high wavelngth wrapped phase maps.
-    
-
     Parameters
     ----------
-    wavelength = type: float array of wavelengths with decreasing wavelengths (increasing frequencies)
-    ph = type: float array of wrapped phase maps corresponding to decreasing wavelngths (increasing frequencies).
+    wavelength: np.ndarray:float.
+                Array of wavelengths with decreasing wavelengths (increasing frequencies)
+    ph: list:float.
+        Array of wrapped phase maps corresponding to decreasing wavelengths (increasing frequencies).
 
     Returns
     -------
-    unwrap = type. float. Unwrapped phase map
-    k = type: int. Fringe order of lowest wavelength (highest frequency)
+    unwrap: np.ndarray:float.
+            Unwrapped phase map
+    k: np.ndarray: int.
+       Fringe order of the lowest wavelength (the highest frequency)
 
-    '''
+    """
     k = np.round(((wavelength[0] / wavelength[1]) * ph[0] - ph[1])/ (2 * np.pi))
     unwrap = ph[1] + 2 * np.pi * k
     return unwrap, k
 
-def multi_kunwrap_cp(wavelength, ph):
+def multifreq_unwrap(wavelength_arr: np.array, phase_arr : np.ndarray, kernel: int, direc: str)->Tuple[np.ndarray,np.ndarray]:
     """
-    Cupy version of multi_kunwrap()
-    """
-    k = cp.round(((wavelength[0] / wavelength[1]) * ph[0] - ph[1])/ (2 * cp.pi))
-    unwrap = ph[1] + 2 * cp.pi * k
-    return unwrap, k
-
-def multifreq_unwrap(wavelength_arr, phase_arr, kernel, direc):
-    '''
-    Function performs sequential temporal multifrequency phase unwrapping from high wavelength (low frequency) wrapped phase map to low wavelength (high frequency) wrapped phase map.
-
+    Function performs sequential temporal multi-frequency phase unwrapping from high wavelength (low frequency)
+    wrapped phase map to low wavelength (high frequency) wrapped phase map.
     Parameters
     ----------
-    wavelength_arr = type: array of float wavelengths from high wavelngth to low wavelength.
-    phase_arr = type: array of float wrapped phase maps from high wavelngth to low wavelength.
-
+    wavelength_arr: np.array:float.
+                    Wavelengths from high wavelength to low wavelength.
+    phase_arr: np.ndarray:float.
+               Wrapped phase maps from high wavelength to low wavelength.
     Returns
     -------
-    absolute_ph4 = type float. The final unwrapped phase map of low wavelength (high frequency) wrapped phase map.
-    k4 = type: int. The fringe order of low wavelength (high frequency) phase map.
+    absolute_ph4: np.ndarray:float.
+                  The final unwrapped phase map of low wavelength (high frequency) wrapped phase map.
+    k4: np.ndarray:int.
+        The fringe order of low wavelength (high frequency) phase map.
 
-    '''
+    """
     absolute_ph,k = multi_kunwrap(wavelength_arr[0:2], phase_arr[0:2])   
     for i in range(1,len(wavelength_arr)-1):
         absolute_ph,k = multi_kunwrap(wavelength_arr[i:i+2], [absolute_ph, phase_arr[i+1]])    
     absolute_ph, k0 = filt(absolute_ph, kernel, direc)    
     return absolute_ph, k
 
-def multifreq_unwrap_cp(wavelength_arr, phase_arr, kernel, direc):
-    """
-    Cupy version of multifreq_unwrap()
-    """
-    absolute_ph,k = multi_kunwrap_cp(wavelength_arr[0:2], phase_arr[0:2])   
-    for i in range(1,len(wavelength_arr)-1):
-        absolute_ph,k = multi_kunwrap_cp(wavelength_arr[i:i+2], [absolute_ph, phase_arr[i+1]])    
-    absolute_ph, k0 = filt_cp(absolute_ph, kernel, direc)    
-    return absolute_ph, k 
-
 def multiwave_unwrap(wavelength_arr, phase_arr, kernel, direc):
     '''
-    Function performs sequential temporal multiwavelength phase unwrapping from high wavelength and applies median filter rectification to remove artifacts.
+    Function performs sequential temporal multi wavelength phase unwrapping from high wavelength and applies median filter rectification to remove artifacts.
 
     Parameters
     ----------
