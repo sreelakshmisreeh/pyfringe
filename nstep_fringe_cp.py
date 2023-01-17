@@ -45,7 +45,7 @@ def phase_cal_cp(images_cp: cp.ndarray, delta_deck_cp: cp.ndarray, limit: float)
     Parameters
     ----------
     images_cp: cp.ndarray:cp.uint8.
-            Captured fringe images.
+            Captured fringe images. Numpy images must be converted to cupy images first using cupy.asarray()
     delta_deck_cp: cp.ndarray:cp.float64
             phase shift matrix, see function delta_deck_gen_cp() for more details.
     limit: float.
