@@ -15,7 +15,6 @@ def delta_deck_gen_cp(N: int,
     Function computes phase shift δ  values used in N-step phase shifting algorithm for each image pixel of
     given height and width.
     δ_k  =  (2kπ)/N, where k = 1,2,3,... N and N is the number of steps.
-
     Parameters
     ----------
     N: int.
@@ -24,7 +23,6 @@ def delta_deck_gen_cp(N: int,
             Height of the pattern image.
     width: int.
            Width of pattern image.
-
     Returns
     -------
     delta_deck_cp: cupy.ndarray:float.
@@ -45,16 +43,14 @@ def phase_cal_cp(images_cp: cp.ndarray,
     Function that computes and applies mask to captured image based on data modulation_cp (relative modulation_cp) of each pixel
     and computes phase map.
     data modulation_cp = I''(x,y)/I'(x,y).
-
     Parameters
     ----------
-    images_cp: cp.ndarray:cp.uint8.
+    images_cp: cp.ndarray:cp.float64.
             Captured fringe images. Numpy images must be converted to cupy images first using cupy.asarray()
     delta_deck_cp: cp.ndarray:cp.float64
             phase shift matrix, see function delta_deck_gen_cp() for more details.
     limit: float.
            Data modulation_cp limit. Regions with data modulation_cp lower than limit will be masked out.
-
     Returns
     -------
     masked_img: cupy.ndarray:float.
@@ -92,7 +88,6 @@ def filt_cp(unwrap_cp: cp.ndarray,
     Function is used to remove artifacts generated in the temporal unwrapped phase map.
     A median filter is applied to locate incorrectly unwrapped points, and those point phase is corrected by adding or
     subtracting an integer number of 2π.
-
     Parameters
     ----------
     unwrap_cp: cupy.ndarray:float.
@@ -130,7 +125,6 @@ def multi_kunwrap_cp(wavelength_cp: cp.ndarray,
                 Array of wavelengths with decreasing wavelengths (increasing frequencies)
     ph: list:float.
         Array of wrapped phase maps corresponding to decreasing wavelengths (increasing frequencies).
-
     Returns
     -------
     unwrap_cp: cupy.ndarray:float..
