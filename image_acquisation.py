@@ -348,6 +348,9 @@ def proj_cam_acquire_images(cam,
                             preview_image_index,
                             focus_image_index,
                             do_validation=True,
+                            do_repeat=False,
+                            total_image_number=None,
+                            image_section_size=None,
                             pprint_status=True,
                             save_jpeg=False):
     """
@@ -462,6 +465,9 @@ def proj_cam_acquire_images(cam,
                                 proj_frame_period=proj_frame_period,
                                 do_insert_black=do_insert_black,
                                 do_validation=do_validation,
+                                do_repeat=do_repeat,
+                                total_image_number=total_image_number,
+                                image_section_size=image_section_size,
                                 pprint_status=pprint_status,
                                 save_jpeg=save_jpeg)
         
@@ -496,6 +502,9 @@ def proj_cam_acquire_images(cam,
                                     proj_frame_period=proj_frame_period,
                                     do_insert_black=do_insert_black,
                                     do_validation=do_validation,
+                                    do_repeat=do_repeat,
+                                    total_image_number=total_image_number,
+                                    image_section_size=image_section_size,
                                     pprint_status=pprint_status,
                                     save_jpeg=save_jpeg)
             initial_acq_index += 1
@@ -512,47 +521,45 @@ def proj_cam_acquire_images(cam,
                                    preview_type='preview',
                                    image_index=preview_image_index,
                                    pprint_status=pprint_status)
-        for i in range(number_scan):
-            if i != 0:
-                validation_flag = False
-            ret = run_proj_cam_capt(cam=cam,
-                                    nodemap=nodemap,
-                                    s_node_map=s_node_map,
-                                    lcr=lcr,
-                                    savedir=savedir,
-                                    acquisition_index=initial_acq_index,
-                                    image_index_list=image_index_list,
-                                    pattern_num_list=pattern_num_list,
-                                    cam_capt_timeout=cam_capt_timeout,
-                                    proj_exposure_period=proj_exposure_period,
-                                    proj_frame_period=proj_frame_period,
-                                    do_insert_black=do_insert_black,
-                                    do_validation=validation_flag,
-                                    pprint_status=pprint_status,
-                                    save_jpeg=save_jpeg)
-            initial_acq_index += 1
+        ret = run_proj_cam_capt(cam=cam,
+                                nodemap=nodemap,
+                                s_node_map=s_node_map,
+                                lcr=lcr,
+                                savedir=savedir,
+                                acquisition_index=acquisition_index,
+                                image_index_list=image_index_list,
+                                pattern_num_list=pattern_num_list,
+                                cam_capt_timeout=cam_capt_timeout,
+                                proj_exposure_period=proj_exposure_period,
+                                proj_frame_period=proj_frame_period,
+                                do_insert_black=do_insert_black,
+                                do_validation=validation_flag,
+                                do_repeat=do_repeat,
+                                total_image_number=total_image_number,
+                                image_section_size=image_section_size,
+                                pprint_status=pprint_status,
+                                save_jpeg=save_jpeg)
+            
     elif preview_option == 'Never':
-        initial_acq_index = acquisition_index
-        validation_flag = do_validation
-        for i in range(number_scan):
-            if i != 0:
-                validation_flag = False
-            ret = run_proj_cam_capt(cam=cam,
-                                    nodemap=nodemap,
-                                    s_node_map=s_node_map,
-                                    lcr=lcr,
-                                    savedir=savedir,
-                                    acquisition_index=initial_acq_index,
-                                    image_index_list=image_index_list,
-                                    pattern_num_list=pattern_num_list,
-                                    cam_capt_timeout=cam_capt_timeout,
-                                    proj_exposure_period=proj_exposure_period,
-                                    proj_frame_period=proj_frame_period,
-                                    do_insert_black=do_insert_black,
-                                    do_validation=validation_flag,
-                                    pprint_status=pprint_status,
-                                    save_jpeg=save_jpeg)
-            initial_acq_index += 1
+        ret = run_proj_cam_capt(cam=cam,
+                                nodemap=nodemap,
+                                s_node_map=s_node_map,
+                                lcr=lcr,
+                                savedir=savedir,
+                                acquisition_index=acquisition_index,
+                                image_index_list=image_index_list,
+                                pattern_num_list=pattern_num_list,
+                                cam_capt_timeout=cam_capt_timeout,
+                                proj_exposure_period=proj_exposure_period,
+                                proj_frame_period=proj_frame_period,
+                                do_insert_black=do_insert_black,
+                                do_validation=validation_flag,
+                                do_repeat=do_repeat,
+                                total_image_number=total_image_number,
+                                image_section_size=image_section_size,
+                                pprint_status=pprint_status,
+                                save_jpeg=save_jpeg)
+            
     result &= ret
     
     return result
