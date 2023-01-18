@@ -4,8 +4,8 @@ import cupy as cp
 from time import perf_counter_ns
 from typing import Tuple
 from cupyx.scipy import ndimage
+import pickle
 
-# TODO: write test main to test all functions
 def delta_deck_gen_cp(N: int,
                       height: int,
                       width: int) -> cp.ndarray:
@@ -168,6 +168,9 @@ def main():
     N = 3
     height = 1200
     width = 1920
+    test_limit = 0.9
+    pitch_list = [50, 20]
+    N_list = [3, 3]
 
     # testing #1
     start = perf_counter_ns()
@@ -177,6 +180,43 @@ def main():
     t = (end - start) / 1e9
     print('time spent: %1.6f s' % t)
     print("array shape: ", test_cparray.shape)
+    fringe_arr_cp = cp.load("test_data/toy_data.npy")
+    with open(r'test_data\vertical_fringes_cp.pickle', 'rb') as f:
+        vertical_fringes = pickle.load(f)
+    with open(r'test_data\horizontal_fringes_cp.pickle', 'rb') as f:
+        horizontal_fringes = pickle.load(f)
+    #testing #2: 
+    delta_deck_cp = delta_deck_gen_cp(N_list[0], height=fringe_arr_cp.shape[1], width=fringe_arr_cp.shape[2])
+    if delta_deck_cp == vertical_fringes['delta_deck_cp']:
+        print('Delta deck test successfull')
+        masked_img_cp_v1, modulation_cp_v1, average_int_cp_v1, phase_map_cp_v1 = phase_cal_cp(fringe_arr_cp[0:3], delta_deck_cp, test_limit)
+        masked_img_cp_v2, modulation_cp_v2, average_int_cp_v2, phase_map_cp_v2 = phase_cal_cp(fringe_arr_cp[6:9], delta_deck_cp, test_limit)
+        if (phase_map_cp_v1 == vertical_fringes['masked_img_cp_v1']) & (phase_map_cp_v2 == vertical_fringes['masked_img_cp_v2']):
+            print('\n All vertical phase maps match')
+            phase_arr_cp = [phase_map_cp_v1, phase_map_cp_v2]
+            multifreq_unwrap_cp_v, k_arr_cp_v = multifreq_unwrap_cp(pitch_list, phase_arr_cp, 1, 'v')
+            if multifreq_unwrap_cp_v == vertical_fringes['multifreq_unwrap_cp_v']:
+                print('\n Vertical unwrapped phase maps match')
+            else:
+                print('\n Vertical unwrapped phase map mismatch ')  
+        else:
+            print('\n Vertical phase map mismatch')
+        masked_img_cp_h1, modulation_cp_h1, average_int_cp_h1, phase_map_cp_h1 = phase_cal_cp(fringe_arr_cp[3:6], delta_deck_cp, test_limit)
+        masked_img_cp_h2, modulation_cp_h2, average_int_cp_h2, phase_map_cp_h2 = phase_cal_cp(fringe_arr_cp[9:12], delta_deck_cp, test_limit)
+        if (phase_map_cp_h1 == horizontal_fringes['masked_img_cp_h1']) & (phase_map_cp_h2 == horizontal_fringes['masked_img_cp_h2']):
+            print('\n All horizontal phase maps match')
+            phase_arr_cp = [phase_map_cp_h1, phase_map_cp_h2]
+            multifreq_unwrap_cp_h, k_arr_cp_h = multifreq_unwrap_cp(pitch_list, phase_arr_cp, 1, 'h')
+            if multifreq_unwrap_cp_h == horizontal_fringes['multifreq_unwrap_cp_h']:
+                print('\n Horizontal unwrapped phase maps match')
+            else:
+                print('\n Horizontal unwrapped phase map mismatch ')  
+        else:
+            print('\n Horizontal phase map mismatch')
+    else:
+        print('Delta deck test failed')
+    return 
+    
 
 
 if __name__ == '__main__':
