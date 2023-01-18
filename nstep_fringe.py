@@ -38,7 +38,7 @@ def delta_deck_gen(N: int,
     return delta_deck
 
 
-def cos_func(inte_rang: Tuple[int, int],
+def cos_func(inte_rang: list,
              pitch: int,
              direc: str,
              phase_st: float,
@@ -50,7 +50,7 @@ def cos_func(inte_rang: Tuple[int, int],
     
     Parameters
     ----------
-    inte_rang = type: Tuple[int, int]. Operating intensity range or projector's linear operation region.
+    inte_rang = type: list. Operating intensity range or projector's linear operation region.
     pitch = type: int. Number of pixels per fringe period.
     direc = type: str. Visually vertical (v) or horizontal(h) pattern.
     phase_st = type: float. Starting phase. To apply multi frequency and multi wavelength temporal un wrapping starting
@@ -84,7 +84,7 @@ def cos_func(inte_rang: Tuple[int, int],
     inte = i0 + i1 * np.cos(absolute_phi + delta_deck) 
     return inte, absolute_phi
 
-def step_func(inte_rang: Tuple[int, int],
+def step_func(inte_rang: list,
               pitch: int,
               direc: str,
               delta_deck: np.ndarray) -> np.ndarray:
@@ -96,7 +96,7 @@ def step_func(inte_rang: Tuple[int, int],
     I_k(x, y) =  I'(x, y)+ I''(x, y) cos(φs + δ_k)
     Parameters
     ----------
-    inte_rang = type:tuple:float. Operating intensity range or projector's linear operation region.
+    inte_rang = type:list. Operating intensity range or projector's linear operation region.
     pitch = type:float. number of pixels per fringe period.
     direc = type: string. vertical (v) or horizontal(h) patterns.
     delta_deck =  type:numpy.ndarray:float. Delta values at each pixel for each N step pattern.
@@ -132,7 +132,7 @@ def calib_generate(width: int,
                    N_list: list,
                    pitch_list: list,
                    phase_st: float,
-                   inte_rang: Tuple[int, int],
+                   inte_rang: list,
                    path: str)-> Tuple[np.ndarray, np.ndarray]:
     """
     Function to generate fringe patterns based on type of unwrapping. 
@@ -151,7 +151,7 @@ def calib_generate(width: int,
     pitch_list = type: float. Number of pixels per fringe period.
     phase_st = type: float. Starting phase. To apply multi frequency and multi wavelength temporal un wrapping starting phase should be zero.
                             Whereas for phase coding temporal unwrapping starting phase should be -π.
-    inte_rang = type:tuple:float. Operating intensity range or projector's linear operation region.
+    inte_rang = type:list. Operating intensity range or projector's linear operation region.
     path = type: string. Path to which the generated pattern is to be saved.
 
     Returns
@@ -191,7 +191,7 @@ def recon_generate(width: int,
                    N_list: list,
                    pitch_list: list,
                    phase_st: float,
-                   inte_rang: Tuple[int, int],
+                   inte_rang: list,
                    direc: str,
                    path: str)-> Tuple[np.ndarray, np.ndarray]:
     """
@@ -208,7 +208,7 @@ def recon_generate(width: int,
     pitch_list = type: float. Number of pixels per fringe period.
     phase_st = type: float. Starting phase. To apply multi frequency and multi wavelength temporal un wrapping starting phase should be zero.
                             Whereas for phase coding temporal unwrapping starting phase should be -π.
-    inte_rang = type: float. Operating intensity range or projector's linear operation region.
+    inte_rang = type: list. Operating intensity range or projector's linear operation region.
     direc = type: string. Visually vertical (v) or horizontal(h) pattern.
     path = type: string. Path to which the generated pattern is to be saved.
 
@@ -482,7 +482,7 @@ def multi_kunwrap(wavelength: np.array,
     return unwrap, k
 
 def multifreq_unwrap(wavelength_arr: np.array,
-                     phase_arr: np.ndarray,
+                     phase_arr: list,
                      kernel: int, direc: str)->Tuple[np.ndarray, np.ndarray]:
     """
     Function performs sequential temporal multi-frequency phase unwrapping from high wavelength (low frequency)
@@ -491,7 +491,7 @@ def multifreq_unwrap(wavelength_arr: np.array,
     ----------
     wavelength_arr: np.array:float.
                     Wavelengths from high wavelength to low wavelength.
-    phase_arr: np.ndarray:float.
+    phase_arr: list.
                Wrapped phase maps from high wavelength to low wavelength.
     kernel: int
             Filter kernel.
