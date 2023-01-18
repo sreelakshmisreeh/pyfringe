@@ -137,7 +137,7 @@ def multi_kunwrap_cp(wavelength_cp: cp.ndarray,
     return unwrap_cp, k_array_cp
 
 def multifreq_unwrap_cp(wavelength_arr_cp: cp.ndarray,
-                        phase_arr_cp: cp.ndarray,
+                        phase_arr_cp: list,
                         kernel_size: int,
                         direc: str) -> Tuple[cp.ndarray, cp.ndarray]:
     """
@@ -147,7 +147,7 @@ def multifreq_unwrap_cp(wavelength_arr_cp: cp.ndarray,
     ----------
     wavelength_arr_cp: cupy.array:float.
                     Wavelengths from high wavelength to low wavelength.
-    phase_arr_cp: cupy.ndarray:float.
+    phase_arr_cp: list.
                Wrapped phase maps from high wavelength to low wavelength.
     kernel_size: int.
             Kernel size for median filter.
