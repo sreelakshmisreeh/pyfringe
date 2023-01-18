@@ -129,7 +129,7 @@ def proj_cam_preview(cam,
         cv2.destroyAllWindows()
         result &= lcr.pattern_display('stop')
     return result
-#TODO: Set projector to repeat mode and acquire data continously for n scans and single preview
+# TODO: Set projector to repeat mode and acquire data continuously for n scans and single preview (finished, check my editing)
 def run_proj_cam_capt(cam, 
                       nodemap,
                       s_node_map,
@@ -144,6 +144,9 @@ def run_proj_cam_capt(cam,
                       do_insert_black=True,
                       pprint_status=True,
                       do_validation=True,
+                      do_repeat=False,
+                      total_image_number=None,
+                      image_section_size=None,
                       save_jpeg=False):
     
     """
@@ -167,6 +170,9 @@ def run_proj_cam_capt(cam,
     :param pprint_status: pretty print projector and camera current parameters.
     :param do_validation: do validation of projector LUT before projection and capture.
                     Warning: for each new pattern sequence this must be True to change the projector LUT.
+    :param do_repeat: do repeat projection
+    :param total_image_number: total number of images to capture. If None is given, using len(image_index_list).
+    :image_section_size: the number of images that are packed into a single npy file. If None is given, using len(image_index_list).
     :param save_jpeg: Save images as jpeg
     :type cam: CameraPtr
     :type nodemap:cNodemapPtr.
@@ -182,17 +188,19 @@ def run_proj_cam_capt(cam,
     :type do_insert_black: bool.
     :type pprint_status: bool.
     :type do_validation: bool.
-    :type save_jpeg: bool
+    :type do_repeat: bool.
+    :type total_image_number: int.
+    :type image_section_size: int
+    :type save_jpeg: bool.
     :return result :True if successful, False otherwise. 
-    :rtype: bool
+    :rtype: bool.
     """
     
     print('*** IMAGE ACQUISITION ***\n')
 
     result = True  
-    image_array_list = []    
+
     # Retrieve, convert, and save image
-    count = 0        
     total_dual_time_start = perf_counter_ns()
     start = perf_counter_ns() 
     result &= lcr.pattern_display('stop')
@@ -201,7 +209,7 @@ def run_proj_cam_capt(cam,
         if image_index_list and pattern_num_list:
             image_LUT_entries, swap_location_list = lcpy.get_image_LUT_swap_location(image_index_list)
             result &= lcr.set_pattern_config(num_lut_entries=len(image_index_list),
-                                             do_repeat=False,
+                                             do_repeat=do_repeat,
                                              num_pats_for_trig_out2=len(image_index_list),
                                              num_images=len(image_LUT_entries))
             result &= lcr.set_exposure_frame_period(exposure_period=proj_exposure_period,
@@ -232,12 +240,20 @@ def run_proj_cam_capt(cam,
         result &= gspy.trigger_configuration(nodemap=nodemap,
                                              s_node_map=s_node_map,
                                              triggerType='hardware')
-    if result:  
+    if result:
+        if total_image_number is None:
+            total_image_number = len(image_index_list)
+        if image_section_size is None:
+            image_section_size = len(image_index_list)
+        if (not do_repeat) and (total_image_number > len(image_index_list)):
+            print("WARNING: Pattern sequence running once while the total number of images requested is larger than the number of patterns!")
         gspy.activate_trigger(nodemap)
         cam.BeginAcquisition()
-        result &= lcr.pattern_display('start') 
-        capturing_time_start = perf_counter_ns()     
-        while count < len(image_index_list):
+        count = 0
+        image_array_list = []
+        result &= lcr.pattern_display('start')
+        capturing_time_start = perf_counter_ns()
+        while count < total_image_number:
             try:
                 ret, image_array = gspy.capture_image(cam=cam)
             except PySpin.SpinnakerException as ex:
@@ -249,6 +265,18 @@ def run_proj_cam_capt(cam,
             if ret:
                 print("extract successful")
                 image_array_list.append(image_array)
+                if (count % image_section_size) == (image_section_size - 1):
+                    section_id = count // image_section_size
+                    save_path = os.path.join(savedir, 'capt_%d_%d.npy' % (acquisition_index, section_id))
+                    np.save(save_path, image_array_list)
+                    print('scanned images saved as %s' % save_path)
+                    if save_jpeg:
+                        for i, img in enumerate(image_array_list):
+                            save_path_jpeg = os.path.join(savedir,
+                                                          'capt_%d_%d_%d.jpeg' % (acquisition_index, section_id, i))
+                            cv2.imwrite(save_path_jpeg, img)
+                        print('Image jpeg files of section %d are saved at %s' % (section_id, savedir))
+                    image_array_list = []
                 count += 1
                 start = perf_counter_ns()
                 print('waiting clock is reset')
@@ -259,14 +287,20 @@ def run_proj_cam_capt(cam,
                 if waiting_time > cam_capt_timeout:
                     print('timeout is reached, stop capturing image ...')
                     break
-        save_path = os.path.join(savedir, 'capt_%d.npy' % acquisition_index)
-        np.save(save_path, image_array_list)
-        print('scanned images saved as %s' % save_path)
-        if save_jpeg:
-            for i, img in enumerate(image_array_list):
-                save_path_jpeg = os.path.join(savedir, 'capt_%d_%d.jpeg' % (acquisition_index, i))
-                cv2.imwrite(save_path_jpeg, img)
-            print('Image jpeg files are saved at %s' % savedir)
+        if do_repeat:
+            result &= lcr.pattern_display('stop')
+        if image_array_list:
+            print('WARNING: The last image section is incomplete with number of images less than %d, check the total number of images!' % image_section_size)
+            section_id = (count - 1) // image_section_size
+            save_path = os.path.join(savedir, 'capt_%d_%d.npy' % (acquisition_index, section_id))
+            np.save(save_path, image_array_list)
+            print('scanned images saved as %s' % save_path)
+            if save_jpeg:
+                for i, img in enumerate(image_array_list):
+                    save_path_jpeg = os.path.join(savedir,
+                                                  'capt_%d_%d_%d.jpeg' % (acquisition_index, section_id, i))
+                    cv2.imwrite(save_path_jpeg, img)
+                print('Image jpeg files of section %d are saved at %s' % (section_id, savedir))
         total_dual_time_end = perf_counter_ns()
         image_capture_time = (total_dual_time_end - capturing_time_start)/1e9
         total_dual_time = (total_dual_time_end - total_dual_time_start)/1e9
@@ -302,7 +336,7 @@ def proj_cam_acquire_images(cam,
                             save_jpeg=False):
     """
     Wrapper function combining preview option and object scanning. 
-    The projector configuration and camera trigger mode for each is diffrent.
+    The projector configuration and camera trigger mode for each is different.
     
     :param cam: camera to acquire images from.
     :param lcr: lcr4500 USB projector device.
