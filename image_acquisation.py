@@ -129,7 +129,7 @@ def proj_cam_preview(cam,
         cv2.destroyAllWindows()
         result &= lcr.pattern_display('stop')
     return result
-# TODO: Set projector to repeat mode and acquire data continuously for n scans and single preview (finished, check my editing)
+
 def run_proj_cam_capt(cam, 
                       nodemap,
                       s_node_map,
@@ -143,10 +143,10 @@ def run_proj_cam_capt(cam,
                       proj_frame_period=33334,
                       do_insert_black=True,
                       pprint_status=True,
-                      do_validation=True,
                       do_repeat=False,
                       total_image_number=None,
                       image_section_size=None,
+                      save_npy=True,
                       save_jpeg=False):
     
     """
@@ -168,12 +168,11 @@ def run_proj_cam_capt(cam,
     :param do_insert_black: insert black-fill pattern after each pattern. This setting requires 230 us of time before the
                             start of the next pattern.
     :param pprint_status: pretty print projector and camera current parameters.
-    :param do_validation: do validation of projector LUT before projection and capture.
-                    Warning: for each new pattern sequence this must be True to change the projector LUT.
     :param do_repeat: do repeat projection
     :param total_image_number: total number of images to capture. If None is given, using len(image_index_list).
     :image_section_size: the number of images that are packed into a single npy file. If None is given, using len(image_index_list).
-    :param save_jpeg: Save images as jpeg
+    :param save_npy: Save images as .npy format
+    :param save_jpeg: Save images as .jpeg format
     :type cam: CameraPtr
     :type nodemap:cNodemapPtr.
     :type s_node_map:cNodemapPtr.
@@ -187,10 +186,10 @@ def run_proj_cam_capt(cam,
     :type proj_frame_period: int.
     :type do_insert_black: bool.
     :type pprint_status: bool.
-    :type do_validation: bool.
     :type do_repeat: bool.
     :type total_image_number: int.
     :type image_section_size: int
+    :type save_npy: bool.
     :type save_jpeg: bool.
     :return result :True if successful, False otherwise. 
     :rtype: bool.
@@ -217,42 +216,41 @@ def run_proj_cam_capt(cam,
     total_dual_time_start = perf_counter_ns()
     start = perf_counter_ns()
     result &= lcr.pattern_display('stop')
-    if do_validation: 
-        # Configure projector
-        if image_index_list and pattern_num_list:
-            image_LUT_entries, swap_location_list = lcpy.get_image_LUT_swap_location(image_index_list)
-            result &= lcr.set_pattern_config(num_lut_entries=number_of_patterns,
-                                             do_repeat=do_repeat,
-                                             num_pats_for_trig_out2=number_of_patterns,
-                                             num_images=len(image_LUT_entries))
-            result &= lcr.set_exposure_frame_period(exposure_period=proj_exposure_period,
-                                                    frame_period=proj_frame_period)
-            # To set new image LUT
-            result &= lcr.send_img_lut(image_LUT_entries, 0)
-            # To set pattern LUT table    
-            result &= lcr.send_pattern_lut(trig_type=0,
-                                           bit_depth=8,
-                                           led_select=0b111,
-                                           swap_location_list=swap_location_list,
-                                           image_index_list=image_index_list,
-                                           pattern_num_list=pattern_num_list,
-                                           starting_address=0,
-                                           do_insert_black=do_insert_black)
-            if pprint_status:  # Print all projector current attributes set
-                lcr.pretty_print_status()
-                gspy.print_trigger_config(nodemap, s_node_map)
-            result &= lcr.start_pattern_lut_validate()
-        elif not image_index_list:
-            print('\n image_index_list cannot be empty')
-            result &= False
-        elif not pattern_num_list:
-            print('\n pattern_num_list cannot be empty')
-            result &= False
-        # configure camera trigger
-        # config trigger for image acquisition
-        result &= gspy.trigger_configuration(nodemap=nodemap,
-                                             s_node_map=s_node_map,
-                                             triggerType='hardware')
+    # Configure projector
+    if image_index_list and pattern_num_list:
+        image_LUT_entries, swap_location_list = lcpy.get_image_LUT_swap_location(image_index_list)
+        result &= lcr.set_pattern_config(num_lut_entries=number_of_patterns,
+                                         do_repeat=do_repeat,
+                                         num_pats_for_trig_out2=number_of_patterns,
+                                         num_images=len(image_LUT_entries))
+        result &= lcr.set_exposure_frame_period(exposure_period=proj_exposure_period,
+                                                frame_period=proj_frame_period)
+        # To set new image LUT
+        result &= lcr.send_img_lut(image_LUT_entries, 0)
+        # To set pattern LUT table
+        result &= lcr.send_pattern_lut(trig_type=0,
+                                       bit_depth=8,
+                                       led_select=0b111,
+                                       swap_location_list=swap_location_list,
+                                       image_index_list=image_index_list,
+                                       pattern_num_list=pattern_num_list,
+                                       starting_address=0,
+                                       do_insert_black=do_insert_black)
+        if pprint_status:  # Print all projector current attributes set
+            lcr.pretty_print_status()
+            gspy.print_trigger_config(nodemap, s_node_map)
+        result &= lcr.start_pattern_lut_validate()
+    elif not image_index_list:
+        print('\n image_index_list cannot be empty')
+        result &= False
+    elif not pattern_num_list:
+        print('\n pattern_num_list cannot be empty')
+        result &= False
+    # configure camera trigger
+    # config trigger for image acquisition
+    result &= gspy.trigger_configuration(nodemap=nodemap,
+                                         s_node_map=s_node_map,
+                                         triggerType='hardware')
     if result:
         gspy.activate_trigger(nodemap)
         cam.BeginAcquisition()
@@ -268,24 +266,20 @@ def run_proj_cam_capt(cam,
                 ret = False
                 image_array = None
                 pass
-                                
             if ret:
                 print("extract successful")
                 image_array_list.append(image_array)
-
+                if save_jpeg:
+                    save_path_jpeg = os.path.join(savedir,
+                                                  'capt_%d_%d.jpeg' % (acquisition_index, count))
+                    cv2.imwrite(save_path_jpeg, image_array)
                 # save one section when the counter reaches the section size
-                if (count % image_section_size) == (image_section_size - 1):
-                    section_id = count // image_section_size
-                    save_path = os.path.join(savedir, 'capt_%d_%d.npz' % (acquisition_index, section_id))
-                    np.savez_compressed(save_path, image_array_list)
-                    print('scanned images saved as %s' % save_path)
-                    if save_jpeg:
-                        for i, img in enumerate(image_array_list):
-                            save_path_jpeg = os.path.join(savedir,
-                                                          'capt_%d_%d_%d.jpeg' % (acquisition_index, section_id, i))
-                            cv2.imwrite(save_path_jpeg, img)
-                        print('Image jpeg files of section %d are saved at %s' % (section_id, savedir))
-                    image_array_list = []
+                if save_npy:
+                    if (count % image_section_size) == (image_section_size - 1):
+                        section_id = count // image_section_size
+                        save_path = os.path.join(savedir, 'capt_%d_%d.npy' % (acquisition_index, section_id))
+                        np.save(save_path, image_array_list)
+                        image_array_list = []
                 count += 1
                 start = perf_counter_ns()
                 print('waiting clock is reset')
@@ -305,21 +299,14 @@ def run_proj_cam_capt(cam,
         if image_array_list:
             print('WARNING: The last image section is shorter with number of images less than %d.' % image_section_size)
             section_id = (count - 1) // image_section_size
-            save_path = os.path.join(savedir, 'capt_%d_%d.npz' % (acquisition_index, section_id))
-            np.savez_compressed(save_path, image_array_list)
-            print('scanned images saved as %s' % save_path)
-            if save_jpeg:
-                for i, img in enumerate(image_array_list):
-                    save_path_jpeg = os.path.join(savedir,
-                                                  'capt_%d_%d_%d.jpeg' % (acquisition_index, section_id, i))
-                    cv2.imwrite(save_path_jpeg, img)
-                print('Image jpeg files of section %d are saved at %s' % (section_id, savedir))
+            save_path = os.path.join(savedir, 'capt_%d_%d.npy' % (acquisition_index, section_id))
+            np.save(save_path, image_array_list)
+            print('Last section of scanned images saved as %s' % save_path)
         total_dual_time_end = perf_counter_ns()
         total_dual_time = (total_dual_time_end - total_dual_time_start)/1e9
         print('Total dual device time:%.3f' % total_dual_time)
     else:
         result = False
-    
     cam.EndAcquisition()
     gspy.deactivate_trigger(nodemap)
     return result
@@ -342,9 +329,9 @@ def proj_cam_acquire_images(cam,
                             do_insert_black,
                             preview_image_index,
                             focus_image_index,
-                            do_validation=True,
                             image_section_size=None,
                             pprint_status=True,
+                            save_npy=True,
                             save_jpeg=False):
     """
     Wrapper function combining preview option and object scanning. 
@@ -370,10 +357,9 @@ def proj_cam_acquire_images(cam,
     :param preview_image_index: image to be projected for adjusting camera exposure.
     :param focus_image_index: image to be projected to adjust projector and camera focus. If set to None this will be skipped.
     :param pprint_status: pretty print projector and camera current parameters.
-    :param do_validation: do validation of projector LUT before projection and capture.
-                          Warning: for each new pattern sequence this must be True to change the projector LUT.
     :param image_section_size: the number of images that are packed into a single npy file. If None is given, using len(image_index_list).
-    :param save_jpeg: Save images as jpeg
+    :param save_npy: Save images as .npy format
+    :param save_jpeg: Save images as .jpeg
     :type cam: CameraPtr
     :type lcr: class instance.
     :type savedir: str
@@ -393,8 +379,8 @@ def proj_cam_acquire_images(cam,
     :type preview_image_index: int
     :type focus_image_index: int
     :type pprint_status: bool
-    :type do_validation: bool
-    :type image_section_size: int
+    :type image_section_size: int / None
+    :type save_npy: bool
     :type save_jpeg: bool
     :return result :True if successful, False otherwise.
     :rtype: bool
@@ -438,6 +424,7 @@ def proj_cam_acquire_images(cam,
     if (number_scan == 1) & ((preview_option == 'Once') or (preview_option == 'Always')):
         do_repeat = False
         total_image_number = len(image_index_list)
+        image_section_size = total_image_number
         result &= proj_cam_preview(cam=cam,
                                    nodemap=nodemap,
                                    s_node_map=s_node_map,
@@ -461,11 +448,11 @@ def proj_cam_acquire_images(cam,
                                 proj_exposure_period=proj_exposure_period,
                                 proj_frame_period=proj_frame_period,
                                 do_insert_black=do_insert_black,
-                                do_validation=do_validation,
                                 do_repeat=do_repeat,
                                 total_image_number=total_image_number,
                                 image_section_size=image_section_size,
                                 pprint_status=pprint_status,
+                                save_npy=save_npy,
                                 save_jpeg=save_jpeg)
         
         
@@ -474,6 +461,7 @@ def proj_cam_acquire_images(cam,
         initial_acq_index = acquisition_index
         do_repeat = False
         total_image_number = len(image_index_list)
+        image_section_size = total_image_number
         for i in range(number_scan):
             if i > 0:
                 cam_trig_reconfig = True
@@ -500,11 +488,11 @@ def proj_cam_acquire_images(cam,
                                     proj_exposure_period=proj_exposure_period,
                                     proj_frame_period=proj_frame_period,
                                     do_insert_black=do_insert_black,
-                                    do_validation=do_validation,
                                     do_repeat=do_repeat,
                                     total_image_number=total_image_number,
                                     image_section_size=image_section_size,
                                     pprint_status=pprint_status,
+                                    save_npy=save_npy,
                                     save_jpeg=save_jpeg)
             initial_acq_index += 1
             
@@ -532,17 +520,18 @@ def proj_cam_acquire_images(cam,
                                 proj_exposure_period=proj_exposure_period,
                                 proj_frame_period=proj_frame_period,
                                 do_insert_black=do_insert_black,
-                                do_validation=do_validation,
                                 do_repeat=do_repeat,
                                 total_image_number=total_image_number,
                                 image_section_size=image_section_size,
                                 pprint_status=pprint_status,
+                                save_npy=save_npy,
                                 save_jpeg=save_jpeg)
             
     elif preview_option == 'Never':
         if number_scan == 1:
             do_repeat = False
             total_image_number = len(image_index_list)
+            image_section_size = total_image_number
         else:
             do_repeat = True
             total_image_number = number_scan * len(image_index_list)
@@ -558,11 +547,11 @@ def proj_cam_acquire_images(cam,
                                 proj_exposure_period=proj_exposure_period,
                                 proj_frame_period=proj_frame_period,
                                 do_insert_black=do_insert_black,
-                                do_validation=do_validation,
                                 do_repeat=do_repeat,
                                 total_image_number=total_image_number,
                                 image_section_size=image_section_size,
                                 pprint_status=pprint_status,
+                                save_npy=save_npy,
                                 save_jpeg=save_jpeg)
             
     result &= ret
@@ -585,9 +574,9 @@ def run_proj_single_camera(savedir,
                            acquisition_index=0,
                            preview_option='Once',
                            focus_image_index=None,
-                           do_validation=True,
                            image_section_size=None,
                            pprint_status=True,
+                           save_npy=True,
                            save_jpeg=False):
     """
     Initialize and de-initialize projector and camera before and after capture.
@@ -609,10 +598,9 @@ def run_proj_single_camera(savedir,
     :param pprint_status: pretty print projector and camera current parameters.
     :param preview_option: 'Once','Always,'Never'
     :param focus_image_index: image to be projected to adjust projector and camera focus. If set to None this will be skipped.
-    :param do_validation: do validation of projector LUT before projection and capture.
-                          Warning: for each new pattern sequence this must be True to change the projector LUT.
     :param image_section_size: the number of images that are packed into a single npy file. If None is given, using len(image_index_list).
-    :param save_jpeg: Save images as jpeg
+    :param save_npy: Save images as .npy format
+    :param save_jpeg: Save images as .jpeg
     :type savedir: str
     :type image_index_list: list
     :type pattern_num_list: list
@@ -630,8 +618,8 @@ def run_proj_single_camera(savedir,
     :type pprint_status: bool
     :type preview_option: str
     :type focus_image_index: int / None
-    :type do_validation: bool
-    :type image_section_size: int
+    :type image_section_size: int/ None
+    :type save_npy: bool
     :type save_jpeg: bool
     :return result: True if successful, False otherwise.
     :rtype :bool
@@ -669,9 +657,9 @@ def run_proj_single_camera(savedir,
                                       do_insert_black=do_insert_black,
                                       preview_image_index=preview_image_index,
                                       focus_image_index=focus_image_index,
-                                      do_validation=do_validation,
                                       image_section_size=image_section_size,
                                       pprint_status=pprint_status,
+                                      save_npy=save_npy,
                                       save_jpeg=save_jpeg)
         result &= ret
         # Deinitialize camera        
@@ -716,8 +704,8 @@ def gamma_curve(gamma_image_index_list,
                                     do_insert_black=True,
                                     preview_image_index=21,
                                     focus_image_index=34,
-                                    do_validation=True,
                                     pprint_status=True,
+                                    save_npy=True,
                                     save_jpeg=False)
     if result:
 
@@ -766,8 +754,8 @@ def calib_capture(image_index_list,
                                     do_insert_black=True,
                                     preview_image_index=21,
                                     focus_image_index=34,
-                                    do_validation=True,
-                                    pprint_status=True)
+                                    pprint_status=True,
+                                    save_npy=True)
     return result
 def meanpixel_std(savedir,
                   image_index,
@@ -817,8 +805,8 @@ def meanpixel_std(savedir,
                                     do_insert_black=True,
                                     preview_image_index=21,
                                     focus_image_index=None,
-                                    do_validation=True,
                                     pprint_status=True,
+                                    save_npy=True,
                                     save_jpeg=False)
     mean_std_pixel = 0
     std_pixel = 0
@@ -846,7 +834,7 @@ def main():
     result = True
     ret = run_proj_single_camera(savedir=savedir,
                                  preview_option='Once',
-                                 number_scan=2,
+                                 number_scan=5,
                                  acquisition_index=0,
                                  image_index_list=image_index_list,
                                  pattern_num_list=pattern_num_list,
@@ -860,10 +848,10 @@ def main():
                                  do_insert_black=True,
                                  preview_image_index=21,
                                  focus_image_index=34,
-                                 do_validation=True,
-                                 image_section_size=15,
+                                 image_section_size=None,
                                  pprint_status=True,
-                                 save_jpeg=False)
+                                 save_npy=True,
+                                 save_jpeg=True)
     result &= ret
  
     return result 
