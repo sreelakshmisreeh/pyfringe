@@ -204,10 +204,7 @@ def run_proj_cam_capt(cam,
         total_image_number = number_of_patterns
     if image_section_size is None:
         image_section_size = number_of_patterns
-    if (total_image_number > 0) and ((total_image_number % number_of_patterns) != 0):
-        print("ERROR: total_image_number is not valid, it must be N x number_of_patterns.")
-        return False
-    elif total_image_number <= 0:
+    if (total_image_number < number_of_patterns) or ((total_image_number % number_of_patterns) != 0):
         print("ERROR: total_image_number is not valid, it must be N x number_of_patterns.")
         return False
     else:
