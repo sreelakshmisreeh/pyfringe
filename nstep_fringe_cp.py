@@ -6,8 +6,6 @@ from typing import Tuple
 from cupyx.scipy import ndimage
 
 # TODO: write test main to test all functions
-# TODO: Generate 128 x 128 test image with margin nan values as test data. Check with manual calculation(ground truth).
-# TODO: Compare the results from cupy and numpy
 def delta_deck_gen_cp(N: int,
                       height: int,
                       width: int) -> cp.ndarray:
