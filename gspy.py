@@ -16,17 +16,17 @@ def capture_image(cam, timeout=1000):
     
     Parameters
     ----------
-    cam : camera object from PySpin
+    cam:camera object from PySpin
         camera object to be used
-    timeout : int
+    timeout:int
         timeout for capturing a frame in milliseconds
         
     Returns
     -------
-    result : bool
-        True: success
-        False: failed
-    image_averaged: uint8
+    result:bool
+        True--success
+        False--failed
+    image_averaged:uint8
         output image (numpy ndarray).
 
     """
@@ -58,29 +58,28 @@ def cam_configuration(nodemap,
 
     Parameters
     ----------
-    nodemap : CNodemapPtr
+    nodemap:INodemap
         camera nodemap
-    s_node_map: CNodemapPtr
+    s_node_map:INodemap
         camera stream nodemap
-    frameRate : float
+    frameRate:float
         Framerate, if given None, it will not be configured.
-    pgrExposureCompensation: float
+    pgrExposureCompensation:float
         Exposure compensation, if given None, it will not be configured.
-    exposureTime : float
+    exposureTime:float
         Exposure time in microseconds, if given None, it will not be configured.
-    gain : float
+    gain:float
         Gain, if given None, it will not be configured.
-    blackLevel : float
+    blackLevel:float
         black level, if given None, it will not be configured.
-    bufferCount : int
+    bufferCount:int
         Buffer count, if given None, it will not be configured.
-    verbose : bool
+    verbose:bool
         If information should be printed out
     Returns
     -------
-    result : bool
-        operation result.
-
+    result:bool
+        result
     """
 
     print('\n=================== Config camera ==============================================\n')
@@ -128,7 +127,7 @@ def acquire_images(cam,
                    verbose=True):
     """
     This function acquires and saves images from a device. Note that camera 
-    must be initialized and configurated before calling this function, i.e.,
+    must be initialized and configured before calling this function, i.e.,
     cam.Init() and cam_configuration(cam,triggerType, ...,) must be called 
     before calling this function.
 
@@ -137,7 +136,7 @@ def acquire_images(cam,
     :param num_images: the total number of images to be taken.
     :param savedir: directory to save images.
     :param triggerType: Must be one of {"software", "hardware", "off"}.
-                        If triggerType is "off", camera is configurated for live view.
+                        If triggerType is "off", camera is configured for live view.
     :param frameRate: frame rate.
     :param pgrExposureCompensation: Exposure compensation
     :param exposureTime: exposure time in microseconds.
@@ -403,7 +402,7 @@ def clearDir(targetDir):
     
     Parameters
     ----------
-    targetDir : str
+    targetDir:str
         targetDir to be cleared.
 
     Returns
@@ -510,16 +509,31 @@ def enableFrameRateSetting(nodemap):
     acqFrameRateAuto.SetIntValue(acqFrameRateAutoOff.GetValue())  # setting to Off
     print('Set AcquisitionFrameRateAuto to off')
     # Turn on "AcquisitionFrameRateEnabled"
-    acqframeRateEnable = PySpin.CBooleanPtr(nodemap.GetNode("AcquisitionFrameRateEnabled"))
-    if (not PySpin.IsAvailable(acqframeRateEnable)) or (not PySpin.IsWritable(acqframeRateEnable)):
-        print('Unable to retrieve AcqFrameRateEnable. Aborting...')
+    acqFrameRateEnabled = PySpin.CBooleanPtr(nodemap.GetNode("AcquisitionFrameRateEnabled"))
+    if (not PySpin.IsAvailable(acqFrameRateEnabled)) or (not PySpin.IsWritable(acqFrameRateEnabled)):
+        print('Unable to retrieve AcquisitionFrameRateEnabled. Aborting...')
         return False
-    acqframeRateEnable.SetValue(True)
+    acqFrameRateEnabled.SetValue(True)
     print('Set AcquisitionFrameRateEnabled to True')
     return True
 
 
 def setFrameRate(nodemap, frameRate):
+    """
+    Set frame rate
+
+    Parameters
+    ----------
+    nodemap:INodemap
+        camera nodemap
+    frameRate:float
+        frame rate
+
+    Returns
+    -------
+    result:bool
+        result
+    """
     # First enable framerate setting    
     if not enableFrameRateSetting(nodemap):
         return False
@@ -592,16 +606,15 @@ def setExposureMode(nodemap, exposureModeToSet):
 
     Parameters
     ----------
-    nodemap : INodeMap
+    nodemap:INodeMap
         Camara nodemap.
-    exposureModeToSet : str
+    exposureModeToSet:str
         ExposureModeEnums, must be one of {"Timed", "TriggerWidth"}
 
     Returns
     -------
-    bool
-        Operation result.
-
+    result:bool
+        result
     """
     # Get the node "ExposureMode" and check if it is available and writable
     ptrExposureMode = PySpin.CEnumerationPtr(nodemap.GetNode("ExposureMode"))
@@ -621,20 +634,19 @@ def setExposureMode(nodemap, exposureModeToSet):
 
 def setTriggerMode(nodemap, TriggerModeToSet):
     """
-    Controls whether or not the selected trigger is active
+    Controls whether the selected trigger is active
 
     Parameters
     ----------
-    nodemap : INodeMap
+    nodemap:INodeMap
         Camara nodemap.
-    TriggerModeToSet : str
+    TriggerModeToSet:str
         TriggerModeEnums, must be one of {"Off", "On"}
 
     Returns
     -------
-    bool
-        Operation result.
-
+    result:bool
+        result
     """
     # Get the node "TriggerMode" and check if it is available and writable
     ptrTriggerMode = PySpin.CEnumerationPtr(nodemap.GetNode("TriggerMode"))
@@ -657,16 +669,15 @@ def setTriggerActivation(nodemap, TriggerActivationToSet):
 
     Parameters
     ----------
-    nodemap : INodeMap
+    nodemap:INodeMap
         Camara nodemap.
-    TriggerActivationToSet : str
+    TriggerActivationToSet:str
        TriggerActivationEnums, must be one of {"FallingEdge", "RisingEdge"}
 
     Returns
     -------
-    bool
-        Operation result.
-
+    result:bool
+        result.
     """
     # Get the node "TriggerActivation" and check if it is available and writable
     ptrTriggerActivation = PySpin.CEnumerationPtr(nodemap.GetNode("TriggerActivation"))
@@ -689,16 +700,15 @@ def setTriggerOverlap(nodemap, TriggerOverlapToSet):
 
     Parameters
     ----------
-    nodemap : INodeMap
+    nodemap:INodeMap
         Camara nodemap.
-    TriggerOverlapToSet : str
+    TriggerOverlapToSet:str
         TriggerOverlapEnums, must be one of {"Off", "ReadOut"}
 
     Returns
     -------
-    bool
-        Operation result.
-
+    result:bool
+        result.
     """
     # Get the node "TriggerOverlap" and check if it is available and writable
     ptrTriggerOverlap = PySpin.CEnumerationPtr(nodemap.GetNode("TriggerOverlap"))
@@ -721,16 +731,15 @@ def setTriggerSelector(nodemap, TriggerSelectorToSet):
 
     Parameters
     ----------
-    nodemap : INodeMap
+    nodemap:INodeMap
         Camara nodemap.
-    TriggerSelectorToSet : str
+    TriggerSelectorToSet:str
         TriggerSelectorEnums, must be one of {"FrameStart", "ExposureActive"}.
 
     Returns
     -------
-    bool
-        Operation result.
-
+    result:bool
+        result
     """
     # Get the node "TriggerOverlap" and check if it is available and writable
     ptrTriggerSelector = PySpin.CEnumerationPtr(nodemap.GetNode("TriggerSelector"))
@@ -753,16 +762,15 @@ def setTriggerSource(nodemap, TriggerSourceToSet):
 
     Parameters
     ----------
-    nodemap : INodeMap
+    nodemap:INodeMap
         Camara nodemap.
-    TriggerSourceToSet : str
+    TriggerSourceToSet:str
         TriggerSourceEnums, must be one of {"Software", "Line0", "Line1", "Line2", "Line3"}.
 
     Returns
     -------
-    bool
-        Operation result.
-
+    result:bool
+        result
     """
     # Get the node "TriggerSource" and check if it is available and writable
     ptrTriggerSource = PySpin.CEnumerationPtr(nodemap.GetNode("TriggerSource"))
@@ -780,6 +788,21 @@ def setTriggerSource(nodemap, TriggerSourceToSet):
 
 
 def setExposureTime(nodemap, exposureTime=None):
+    """
+    Set exposure time in microseconds.
+
+    Parameters
+    ----------
+    nodemap:INodemap
+        camera nodemap
+    exposureTime:float
+        exposure time in microseconds, if None is given, the maximum possible exposure time is used.
+
+    Returns
+    -------
+    result:bool
+        result
+    """
     # First set the exposure mode to "timed"
     if not setExposureMode(nodemap, "Timed"):
         return False
@@ -800,7 +823,7 @@ def setExposureTime(nodemap, exposureTime=None):
             exposureTime = exposureTimeMax
     # Set the exposure time
     ptrExposureTime.SetValue(exposureTime)
-    print('Exposure Time set to %5.2f microseconds' % exposureTime)
+    print('Exposure Time set to %5.2f us' % exposureTime)
     return True
 
 
@@ -810,16 +833,15 @@ def setAcquisitionMode(nodemap, AcquisitionModeName):
 
     Parameters
     ----------
-    nodemap : camera nodemap
+    nodemap:INodemap
         camera nodemap.
-    AcquisitionModeName : str
+    AcquisitionModeName:str
         must be one from the three: Continuous, SingleFrame, MultiFrame.
 
     Returns
     -------
-    bool
-        result.
-
+    result:bool
+        result
     """
     #  Retrieve enumeration node from nodemap
 
@@ -845,16 +867,15 @@ def setStreamBufferHandlingMode(s_node_map, StreamBufferHandlingModeName):
 
     Parameters
     ----------
-    s_node_map : camera node
-        camera node.
-    StreamBufferHandlingModeName : String
+    s_node_map:INodemap
+        steam nodemap.
+    StreamBufferHandlingModeName:str
         must be one from the four: OldestFirst, OldestFirstOverwrite, NewestOnly, NewestFirst.
 
     Returns
     -------
-    bool
+    result:bool
         result
-
     """
     handlingMode = PySpin.CEnumerationPtr(s_node_map.GetNode('StreamBufferHandlingMode'))
     if (not PySpin.IsAvailable(handlingMode)) or (not PySpin.IsWritable(handlingMode)):
@@ -870,6 +891,21 @@ def setStreamBufferHandlingMode(s_node_map, StreamBufferHandlingModeName):
 
 
 def setBufferCount(s_node_map, bufferCount):
+    """
+    Set manual buffer count
+
+    Parameters
+    ----------
+    s_node_map:INodemap
+        stream nodemap
+    bufferCount:int
+        buffer count number
+
+    Returns
+    -------
+    result:bool
+        result
+    """
     # Retrieve and modify Stream Buffer Count
     buffer_count = PySpin.CIntegerPtr(s_node_map.GetNode('StreamBufferCountManual'))
     if (not PySpin.IsAvailable(buffer_count)) or (not PySpin.IsWritable(buffer_count)):
@@ -881,6 +917,19 @@ def setBufferCount(s_node_map, bufferCount):
 
 
 def disableGainAuto(nodemap):
+    """
+    Disable Gain Auto
+
+    Parameters
+    ----------
+    nodemap:INodemap
+        camera nodemap
+
+    Returns
+    -------
+    result:bool
+        result
+    """
     gainAuto = PySpin.CEnumerationPtr(nodemap.GetNode("GainAuto"))
     if (not PySpin.IsAvailable(gainAuto)) or (not PySpin.IsWritable(gainAuto)):
         print('Unable to retrieve GainAuto. Aborting...')
@@ -896,6 +945,21 @@ def disableGainAuto(nodemap):
 
 
 def setGain(nodemap, gain):
+    """
+    Set camera gain value.
+
+    Parameters
+    ----------
+    nodemap:INodemap
+        camera nodemap
+    gain:float
+        gain
+
+    Returns
+    -------
+    result:bool
+        result
+    """
     # First disable gainAuto
     if not disableGainAuto(nodemap):
         return False
@@ -911,6 +975,21 @@ def setGain(nodemap, gain):
 
 
 def setBlackLevel(nodemap, blackLevel):
+    """
+    Set the camera black level.
+
+    Parameters
+    ----------
+    nodemap:INodemap
+        Camera nodemap
+    blackLevel:float
+        black level
+
+    Returns
+    -------
+    result:bool
+        result
+    """
     # Get the node "BlackLevel" and check the availability
     blackLevelValue = PySpin.CFloatPtr(nodemap.GetNode("BlackLevel"))
     if (not PySpin.IsAvailable(blackLevelValue)) or (not PySpin.IsWritable(blackLevelValue)):
@@ -923,6 +1002,21 @@ def setBlackLevel(nodemap, blackLevel):
 
 
 def setExposureCompensation(nodemap, pgrExposureCompensation):
+    """
+    Set the exposure compensation.
+
+    Parameters
+    ----------
+    nodemap:INodemap
+        camera nodemap
+    pgrExposureCompensation:float
+        exposure compensation
+
+    Returns
+    -------
+    result:bool
+        operation result
+    """
     # Get the node "pgrExposureCompensation" and check the availability
     ExposureCompensationValue = PySpin.CFloatPtr(nodemap.GetNode("pgrExposureCompensation"))
     if (not PySpin.IsAvailable(ExposureCompensationValue)) or (not PySpin.IsWritable(ExposureCompensationValue)):
@@ -944,7 +1038,7 @@ def trigger_configuration(nodemap, s_node_map, triggerType, verbose=True):
      :param s_node_map: camera stream nodemap.
      :type s_node_map: CNodemapPtr
      :param triggerType: Trigger type, 'software' or 'hardware' or 'off'. If triggerType is "off", 
-                         camera is configurated for live view.
+                         camera is configured for live view.
      :type triggerType: str
      :param verbose: verbose print out
      :type verbose: bool
@@ -953,11 +1047,6 @@ def trigger_configuration(nodemap, s_node_map, triggerType, verbose=True):
     """
 
     print('\n*** CONFIGURING TRIGGER ***\n')
-    print(
-        'Note that if the application / user software triggers faster than frame time, the trigger may be dropped / skipped by the camera.\n')
-    print(
-        'If several frames are needed per trigger, a more reliable alternative for such case, is to use the multi-frame mode.\n\n')
-
     if triggerType == 'software':
         print('Software trigger is chosen...')
     elif triggerType == 'hardware':
