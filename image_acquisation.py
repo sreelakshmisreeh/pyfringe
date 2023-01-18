@@ -296,12 +296,13 @@ def run_proj_cam_capt(cam,
         if do_repeat:
             result &= lcr.pattern_display('stop')
         # save the last section if the number of images is shorter than a section size
-        if image_array_list:
-            print('WARNING: The last image section is shorter with number of images less than %d.' % image_section_size)
-            section_id = (count - 1) // image_section_size
-            save_path = os.path.join(savedir, 'capt_%d_%d.npy' % (acquisition_index, section_id))
-            np.save(save_path, image_array_list)
-            print('Last section of scanned images saved as %s' % save_path)
+        if save_npy:
+            if image_array_list:
+                print('WARNING: The last image section is shorter with number of images less than %d.' % image_section_size)
+                section_id = (count - 1) // image_section_size
+                save_path = os.path.join(savedir, 'capt_%d_%d.npy' % (acquisition_index, section_id))
+                np.save(save_path, image_array_list)
+                print('Last section of scanned images saved as %s' % save_path)
         total_dual_time_end = perf_counter_ns()
         total_dual_time = (total_dual_time_end - total_dual_time_start)/1e9
         print('Total dual device time:%.3f' % total_dual_time)
@@ -834,7 +835,7 @@ def main():
     result = True
     ret = run_proj_single_camera(savedir=savedir,
                                  preview_option='Once',
-                                 number_scan=5,
+                                 number_scan=1,
                                  acquisition_index=0,
                                  image_index_list=image_index_list,
                                  pattern_num_list=pattern_num_list,
@@ -850,7 +851,7 @@ def main():
                                  focus_image_index=34,
                                  image_section_size=None,
                                  pprint_status=True,
-                                 save_npy=True,
+                                 save_npy=False,
                                  save_jpeg=True)
     result &= ret
  
