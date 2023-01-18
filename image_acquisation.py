@@ -129,7 +129,7 @@ def proj_cam_preview(cam,
         cv2.destroyAllWindows()
         result &= lcr.pattern_display('stop')
     return result
-
+#TODO: Set projector to repeat mode and acquire data continously for n scans and single preview
 def run_proj_cam_capt(cam, 
                       nodemap,
                       s_node_map,
