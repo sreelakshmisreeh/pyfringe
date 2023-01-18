@@ -14,6 +14,9 @@ import nstep_fringe_cp as nstep_cp
 def toy_generate():
     """
     Function to generate toy data
+    :return fringe_arr: Array of vertical horizontal fringe patterns of two levels of pitch 50 and 20. 
+                        Each has N = 3 images. First 6 patterns are high pitch vertical and horizontal.
+    :rtypr fringe_arr: np.ndarray: float
     """
     height = 118
     width = 118
@@ -32,16 +35,17 @@ def toy_generate():
         cos_h = np.pad(cos_h, pad_width=((0, 0), (5, 5), (5, 5)), mode='constant', constant_values=np.nan) #118+10=128
         fringe_lst.append(np.vstack((cos_v, cos_h)))
     fringe_arr = np.ceil(np.vstack(fringe_lst))
-    #np.save('toy_data.npy',fringe_arr)
+    np.save('test_data/toy_data.npy',fringe_arr)
     return fringe_arr
 
 def main():
     test_limit = 0.9
     pitch_list = [50, 20]
+    N_list = [3, 3]
     fringe_arr_np = toy_generate()
     fringe_arr_cp = cp.asarray(fringe_arr_np)
-    delta_deck_np = nstep.delta_deck_gen(3, height=128, width=128)
-    delta_deck_cp = nstep_cp.delta_deck_gen_cp(3, height=128, width=128)
+    delta_deck_np = nstep.delta_deck_gen(N_list[0], height=fringe_arr_np.shape[1], width=fringe_arr_np.shape[2])
+    delta_deck_cp = nstep_cp.delta_deck_gen_cp(N_list[0], height=fringe_arr_cp.shape[1], width=fringe_arr_cp.shape[2])
     if delta_deck_np.all() == cp.asnumpy(delta_deck_cp).all():
         print('\n Delta deck generation match')
         masked_img_np_v1, modulation_np_v1, average_int_np_v1, phase_map_np_v1 = nstep.phase_cal(fringe_arr_np[0:3], delta_deck_np, test_limit)
