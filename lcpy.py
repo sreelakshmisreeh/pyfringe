@@ -21,7 +21,7 @@ import cv2
 def conv_len(a, l):
     """
     Function that converts a number into a bit string of given length.
-
+    Padding '0' before convert number to make convert number has same length with given length.
     :param a: Number to convert.
     :param l: Length of bit string.
     :type a : int
@@ -38,7 +38,8 @@ def conv_len(a, l):
 def bits_to_bytes(a, reverse=True):  # default is reverse
     """
     Function that converts bit string into a given number of bytes.
-
+    First check if length less than 8, if not padding '0' before, then convert bits number into bytes. 
+    Default reverse set as True (First in last out).
     :param a: Bytes to convert.
     :param reverse: Whether to reverse the byte list.
     :type a: str
@@ -63,7 +64,7 @@ def bits_to_bytes(a, reverse=True):  # default is reverse
 
 def fps_to_period(fps):
     """
-    Calculates desired period (us) from given fps.
+    Calculates desired period (us) from given FPS.
 
     :param fps: Frames per second.
     :type fps: int
@@ -78,6 +79,7 @@ def fps_to_period(fps):
 def connect_usb():
     """
     Context manager for connecting to and releasing usb device.
+    For DLPC350, Product ID is 0x6401, and Vendor ID is 0x0451.
     :yields: USB device.
     """
     device = usb.core.find(idVendor=0x0451, idProduct=0x6401)  # finding the projector usb port
@@ -145,7 +147,16 @@ class dlpc350(object):
                 com2,
                 data=None):
         """
-        Sends a command to the dlpc.
+        Sends a command to the dlpc.The order of the command always be 
+        {[read (120) or write (80) mode], [sequency], [CMD2], [CMD3], [Data]}. If there are second commend requested,
+        the second one only contains {[Data]}.
+        When read form projector, the first 4 space always be occupied by those order.
+        From DLPC Programming guide. 1.2.1: Host sends the report ID byte = 0;
+        Sends flags  bytes 2:0 are set to 0x0 for regular DLPC350 operation, set 0x7 for debugging assistance.
+        Bit 6 set to 0x1 indicates host needs reply from device.
+        Bit 7 set to 0x1 indicates a read transaction, 0x0 as write. 
+        A signal command contains no more than 64 bytes (contains up to 20 patterns or 6 images with RGB channel).
+
         :param str rw_mode: Whether reading or writing.
         :param sequence_byte:
         :param com1: Command 1
@@ -231,7 +242,7 @@ class dlpc350(object):
 
     def print_reply(self):
         """
-        Print bytes in reply.
+        Print bytes in reply(Hex).
         """
         for i in self.ans:
             print(hex(i))
@@ -264,13 +275,13 @@ class dlpc350(object):
     def read_main_status(self):
         """
         The Main Status command shows the status of DMD park and DLPC350 sequencer, frame buffer, and gamma
-         correction.
+        correction. (General 0b00001111)  
         :return result: True if all steps executed correctly
         :rtype result: bool
         """
         result = self.command('r', 0x00, 0x1a, 0x0c, [])  # rw_mode, sequence,com1=0x1a,com2=0x0c for main status, data
         if result:            
-            ans = format(self.ans[4], '08b')
+            ans = format(self.ans[4], '08b')  # convert int into 8bit binary, 08: paded '0' on left side.
             
             if int(ans[-1]):
                 self.mirrorStatus = 'parked'
@@ -326,9 +337,12 @@ class dlpc350(object):
             self.mode = None
         return result
         
-    def set_display_mode(self, mode):  # default mode is 'pattern'
+    def set_display_mode(self, mode):
         """
-        Sets the input mode for the projector.
+        Sets the Display/Operating mode(Video mode or Pattern mode) for the projector.         
+        video mode: Work as the normal projector with pixel resolution up to 1280x800 up to 120Hz.
+                    Gamma correction and input display resolution only support by video mode.
+        Pattern mode: Read image from flash with pixel resolution up to 912x1140. 
         :param mode: 'video' or 'pattern'
         :type mode: str
         :return result: True if all steps executed correctly
@@ -348,7 +362,8 @@ class dlpc350(object):
         
     def read_pattern_input_source(self):
         """
-        Read current input source.
+        Read current pattern input source.
+        This function support by selecting pattern mode.
         :return result: True if all steps executed correctly
         :rtype result: bool
         """
@@ -365,7 +380,10 @@ class dlpc350(object):
         
     def set_pattern_input_source(self, source='flash'):  # pattern source default = 'flash'
         """
-        Selects the input type for pattern sequence.
+        Selects the input source for pattern sequence. This pattern source can be set read from 
+        flash or video port. Before executing this command, stop the current pattern sequence. 
+        After executing this command, send the validation command(USB:0x1A1A) once before starting 
+        the pattern sequence.
         :param source: "video" ,"flash"
         :type source: str
         :return result: True if all steps executed correctly
@@ -414,8 +432,9 @@ class dlpc350(object):
         This API controls the execution of patterns stored in the lookup table. Before using this API, stop the current
         pattern sequence using ``DLPC350_PatternDisplay()`` API. After calling this API, send the Validation command
         using the API DLPC350_ValidatePatLutData() before starting the pattern sequence.
+        When padding several bytes, byte0 on the right side.
         (USB: CMD2: 0x1A, CMD3: 0x31)
-        :param num_lut_entries: Number of LUT entries.
+        :param num_lut_entries: Number of LUT entries(Range from 1 to 128).
         :param do_repeat:True: Execute the pattern sequence once. False: Repeat the pattern sequence.
         :param num_pats_for_trig_out2: Number of patterns to display(range 1 through 256). If in repeat mode, then
                                        this value dictates how often TRIG_OUT_2 is generated.
@@ -429,10 +448,10 @@ class dlpc350(object):
         :rtype result: bool
         """
         
-        num_lut_entries_bin = '0' + conv_len(num_lut_entries - 1, 7)
-        do_repeat_bin = '0000000' + str(int(do_repeat))
-        num_pats_for_trig_out2_bin = conv_len(num_pats_for_trig_out2 - 1, 8)
-        num_images_bin = '00' + conv_len(num_images - 1, 6)
+        num_lut_entries_bin = '0' + conv_len(num_lut_entries - 1, 7)  # Byte0: 6:0 LUT, 7: Reserved
+        do_repeat_bin = '0000000' + str(int(do_repeat))  # Byte1: 0 Repeat pattern seq, 7:1: Reserved
+        num_pats_for_trig_out2_bin = conv_len(num_pats_for_trig_out2 - 1, 8)  # Byte2: 7:0 Pattern number
+        num_images_bin = '00' + conv_len(num_images - 1, 6)  # Byte3: 5:0 Image index, 7:6 Reserved
 
         payload = num_images_bin + num_pats_for_trig_out2_bin + do_repeat_bin + num_lut_entries_bin
         payload = bits_to_bytes(payload)
@@ -461,12 +480,19 @@ class dlpc350(object):
         
     def set_pattern_trigger_mode(self, trigger_mode='vsync'):
         """
-        Selects the trigger type for pattern sequence.
+        Selects the trigger mode for pattern sequence.
+        Pattern Trigger Mode 0: VSYNC triggers the pattern display sequence.For proper operation,
+                                the pattern exposure must equal the total pattern period in this mode.
+        Pattern Trigger Mode 1: Internally or externally (through TRIG_IN_1 and TRIG_IN_2) generated trigger.
+        Pattern Trigger Mode 2: TRIG_IN_1 alternates between two patterns and TRIG_IN_2 advances to the next pair of patterns.
+        Pattern Trigger Mode 3: Internally or externally generated trigger for variable exposure display sequence.
+        Pattern Trigger Mode 4: VSYNC triggered for variable exposure display sequence.Exposure must equal the total
+                                pattern period in this mode.
         :param trigger_mode :0: 'vsync'
-                                :1: 'trig_mode1'
-                                :2: 'trig_mode2'
-                                :3: 'trig_mode3'
-                                :4: 'trig_mode4'
+                            :1: 'trig_mode1'
+                            :2: 'trig_mode2'
+                            :3: 'trig_mode3'
+                            :4: 'trig_mode4'
         :type trigger_mode: str
         :return result: True if all steps executed correctly
         :rtype result: bool
@@ -496,9 +522,9 @@ class dlpc350(object):
             else:
                 self.trigger_polarity = "active high signal"
                 
-            tigger_rising_edge_delay = ans[1]
+            tigger_rising_edge_delay = ans[1]  # Receive a hex number range from 0 to 213, 187 with delay 0us.
             trigger_falling_edge_delay = ans[-1]
-            # convert to μs
+            # convert to μs.
             self.trigedge_rise_delay_microsec = np.round(-20.05 + 0.1072 * tigger_rising_edge_delay, decimals=2)
             self.trigedge_fall_delay_microsec = np.round(-20.05 + 0.1072 * trigger_falling_edge_delay, decimals=2)
         else:
@@ -516,7 +542,7 @@ class dlpc350(object):
         and falling edge delay of the TRIG_OUT_1 signal of the DLPC350. 
         Before executing this command, stop the current pattern sequence. After executing this command, 
         send the Validation command (I2C: 0x7D or USB: 0x1A1A) once before starting the pattern sequence.
-        
+        Normal polarity: high signal.
         :param polarity_invert: True for active low signal
         :param trigedge_rise_delay_microsec: rising edge delay control ranging from –20.05 μs to 2.787 μs. Each bit adds 107.2 ns.
         :param trigedge_fall_delay_microsec: falling edge delay control with range -20.05 μs to +2.787 μs. Each bit adds 107.2 ns
@@ -530,7 +556,7 @@ class dlpc350(object):
         trigedge_rise_delay = int((trigedge_rise_delay_microsec - (-20.05))/0.1072)
         trigedge_fall_delay = int((trigedge_fall_delay_microsec - (-20.05))/0.1072)
         if polarity_invert:
-            polarity = '00000010'
+            polarity = '00000010'  # Bit0: reserved. Bit1: 1: active low signal 0: active high signal. Bit 7:2: Reserved
             self.trigger_polarity = "active low signal"
         else:
             polarity = '00000000'
