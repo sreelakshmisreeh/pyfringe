@@ -206,21 +206,16 @@ def run_proj_cam_capt(cam,
     if (total_image_number < number_of_patterns) or ((total_image_number % number_of_patterns) != 0):
         print("ERROR: total_image_number is not valid, it must be N x number_of_patterns.")
         return False
-    else:
-        pass
+    if (not do_repeat) and (total_image_number > number_of_patterns):
+        print("WARNING: Pattern sequence running once while the total number of images requested is larger than the number of patterns!")
+    # Check if the saving options are valid
     if (not save_npy) and (not save_jpeg):
         print("ERROR: both save_npy and save_jpeg are false, at least one should be True")
         return False
-    else:
-        pass
-
-    if (not do_repeat) and (total_image_number > number_of_patterns):
-        print("WARNING: Pattern sequence running once while the total number of images requested is larger than the number of patterns!")
 
     result = True
-    # Retrieve, convert, and save image
     total_dual_time_start = perf_counter_ns()
-    start = perf_counter_ns()
+    # For projector safety, force the projector to stop first
     result &= lcr.pattern_display('stop')
     # Configure projector
     if image_index_list and pattern_num_list:
@@ -252,14 +247,15 @@ def run_proj_cam_capt(cam,
     elif not pattern_num_list:
         print('\n pattern_num_list cannot be empty')
         result &= False
-    # configure camera trigger
-    # config trigger for image acquisition
+
+    # config camera trigger for image acquisition
     result &= gspy.trigger_configuration(nodemap=nodemap,
                                          s_node_map=s_node_map,
                                          triggerType='hardware')
     if result:
         gspy.activate_trigger(nodemap)
         cam.BeginAcquisition()
+        start = perf_counter_ns()
         count = 0
         image_array_list = []
         result &= lcr.pattern_display('start')
@@ -302,10 +298,11 @@ def run_proj_cam_capt(cam,
                     print('timeout is reached, stop capturing image ...')
                     break
         capturing_time_end = perf_counter_ns()
-        image_capture_time = (capturing_time_end - capturing_time_start) / 1e9
-        print('image capturing time:%.3f' % image_capture_time)
         if do_repeat:
             result &= lcr.pattern_display('stop')
+        image_capture_time = (capturing_time_end - capturing_time_start) / 1e9
+        print('image capturing time:%.3f' % image_capture_time)
+
         # save the last section if the number of images is shorter than a section size
         if save_npy:
             if image_array_list:
@@ -314,13 +311,12 @@ def run_proj_cam_capt(cam,
                 save_path = os.path.join(savedir, 'capt_%d_%d.npy' % (acquisition_index, section_id))
                 np.save(save_path, image_array_list)
                 print('Last section of scanned images saved as %s' % save_path)
+
+        cam.EndAcquisition()
+        gspy.deactivate_trigger(nodemap)
         total_dual_time_end = perf_counter_ns()
         total_dual_time = (total_dual_time_end - total_dual_time_start)/1e9
         print('Total dual device time:%.3f' % total_dual_time)
-    else:
-        result = False
-    cam.EndAcquisition()
-    gspy.deactivate_trigger(nodemap)
     return result
 
 def proj_cam_acquire_images(cam,
@@ -466,7 +462,6 @@ def proj_cam_acquire_images(cam,
                                 pprint_status=pprint_status,
                                 save_npy=save_npy,
                                 save_jpeg=save_jpeg)
-        
         
     elif (number_scan > 1) & (preview_option == 'Always'):
         # if preview option is Always the projector LUT has to be rewritten hence do_validation must be True
@@ -641,7 +636,7 @@ def run_proj_single_camera(savedir,
         cam = cam_list[0]
         if savedir is not None:
             gspy.clearDir(savedir)
-        device = usb.core.find(idVendor=0x0451, idProduct=0x6401)#find the projector usb port
+        device = usb.core.find(idVendor=0x0451, idProduct=0x6401)  # find the projector usb port
         device.set_configuration()
 
         lcr = lcpy.dlpc350(device)
@@ -688,11 +683,11 @@ def run_proj_single_camera(savedir,
     return result
 
 def gamma_curve(gamma_image_index_list,
-               gamma_pattern_num_list,
-               savedir,
-               cam_width=1920,
-               cam_height=1200,
-               half_cross_length=100):
+                gamma_pattern_num_list,
+                savedir,
+                cam_width=1920,
+                cam_height=1200,
+                half_cross_length=100):
     """
     Function to generate gamma curve
     """
@@ -720,7 +715,6 @@ def gamma_curve(gamma_image_index_list,
                                     save_npy=True,
                                     save_jpeg=False)
     if result:
-
         n_scanned_image_list = np.load(os.path.join(savedir, 'capt_0.npy'))
         camera_captured = n_scanned_image_list[:, camy - half_cross_length: camy + half_cross_length, camx - half_cross_length: camx + half_cross_length]
         mean_intensity = np.mean(camera_captured.reshape((camera_captured.shape[0], -1)), axis=1)
@@ -820,10 +814,10 @@ def meanpixel_std(savedir,
                                     pprint_status=True,
                                     save_npy=True,
                                     save_jpeg=False)
-    mean_std_pixel = 0
-    std_pixel = 0
+    mean_std_pixel = None
+    std_pixel = None
     if result:
-        n_scanned_image_list = np.load(os.path.join(savedir, 'capt_%d.npy' %acquisition_index))
+        n_scanned_image_list = np.load(os.path.join(savedir, 'capt_%d.npy' % acquisition_index))
         camx = int(cam_width/2)
         camy = int(cam_height/2)
         capt_cropped = n_scanned_image_list[:, camy - half_cross_length: camy + half_cross_length, camx - half_cross_length: camx + half_cross_length]
@@ -832,7 +826,6 @@ def meanpixel_std(savedir,
         np.save(os.path.join(savedir, 'mean_std_pixel.npy'), mean_std_pixel)
     else:
         print('ERROR: Capture failure ')
-
     return mean_std_pixel, std_pixel
 
 def main():
@@ -865,7 +858,6 @@ def main():
                                  save_npy=False,
                                  save_jpeg=True)
     result &= ret
- 
     return result 
 
 
