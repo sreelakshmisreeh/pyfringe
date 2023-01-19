@@ -16,7 +16,7 @@ def toy_generate():
     Function to generate toy data
     :return fringe_arr: Array of vertical horizontal fringe patterns of two levels of pitch 50 and 20. 
                         Each has N = 3 images. First 6 patterns are high pitch vertical and horizontal.
-    :rtypr fringe_arr: np.ndarray: float
+    :rtype fringe_arr: np.ndarray: float
     """
     height = 118
     width = 118
@@ -35,7 +35,7 @@ def toy_generate():
         cos_h = np.pad(cos_h, pad_width=((0, 0), (5, 5), (5, 5)), mode='constant', constant_values=np.nan) #118+10=128
         fringe_lst.append(np.vstack((cos_v, cos_h)))
     fringe_arr = np.ceil(np.vstack(fringe_lst))
-    np.save('test_data/toy_data.npy',fringe_arr)
+    #np.save('test_data/toy_data.npy', fringe_arr)
     return fringe_arr
 
 def main():
