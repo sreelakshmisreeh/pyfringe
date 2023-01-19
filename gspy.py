@@ -7,7 +7,7 @@ import cv2
 from time import perf_counter_ns
 
 
-def capture_image(cam, timeout=1000):
+def capture_image(cam, timeout=1000, save_path=None, return_array=True):
     """
     Once the camera engine has been activated, this function is used to Extract 
     one image from the buffering memory and save it into a numpy array.
@@ -20,7 +20,10 @@ def capture_image(cam, timeout=1000):
         camera object to be used
     timeout:int
         timeout for capturing a frame in milliseconds
-        
+    save_path:str
+        save_path for saving jpeg file
+    return_array:bool
+        whether numpy array is saved
     Returns
     -------
     result:bool
@@ -37,7 +40,12 @@ def capture_image(cam, timeout=1000):
         print('Image incomplete with image status %d ...' % image_result.GetImageStatus(), end="\r")
         return False, None
     else:
-        image_array = image_result.GetNDArray()
+        if save_path is not None:
+            image_result.Save(save_path)
+        if return_array:
+            image_array = image_result.GetNDArray()
+        else:
+            image_array = None
         # Release image
         image_result.Release()
         return True, image_array
