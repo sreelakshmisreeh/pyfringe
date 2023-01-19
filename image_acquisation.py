@@ -208,6 +208,12 @@ def run_proj_cam_capt(cam,
         return False
     else:
         pass
+    if (not save_npy) and (not save_jpeg):
+        print("ERROR: both save_npy and save_jpeg are false, at least one should be True")
+        return False
+    else:
+        pass
+
     if (not do_repeat) and (total_image_number > number_of_patterns):
         print("WARNING: Pattern sequence running once while the total number of images requested is larger than the number of patterns!")
 
@@ -260,7 +266,16 @@ def run_proj_cam_capt(cam,
         capturing_time_start = perf_counter_ns()
         while count < total_image_number:
             try:
-                ret, image_array = gspy.capture_image(cam=cam)
+                if save_npy:
+                    return_array = True
+                else:
+                    return_array = False
+                if save_jpeg:
+                    save_path_jpeg = os.path.join(savedir,
+                                                  'capt_%d_%d.jpeg' % (acquisition_index, count))
+                else:
+                    save_path_jpeg = None
+                ret, image_array = gspy.capture_image(cam=cam, save_path=save_path_jpeg, return_array=return_array)
             except PySpin.SpinnakerException as ex:
                 print('Error: %s' % ex)
                 ret = False
@@ -268,13 +283,9 @@ def run_proj_cam_capt(cam,
                 pass
             if ret:
                 print("extract successful")
-                image_array_list.append(image_array)
-                if save_jpeg:
-                    save_path_jpeg = os.path.join(savedir,
-                                                  'capt_%d_%d.jpeg' % (acquisition_index, count))
-                    cv2.imwrite(save_path_jpeg, image_array)
                 # save one section when the counter reaches the section size
                 if save_npy:
+                    image_array_list.append(image_array)
                     if (count % image_section_size) == (image_section_size - 1):
                         section_id = count // image_section_size
                         save_path = os.path.join(savedir, 'capt_%d_%d.npy' % (acquisition_index, section_id))
@@ -825,9 +836,9 @@ def meanpixel_std(savedir,
     return mean_std_pixel, std_pixel
 
 def main():
-    '''
+    """
     Example main function.
-    '''
+    """
   
     image_index_list = np.repeat(np.arange(0, 5), 3).tolist()
     pattern_num_list = [0, 1, 2] * len(set(image_index_list))
@@ -835,7 +846,7 @@ def main():
     result = True
     ret = run_proj_single_camera(savedir=savedir,
                                  preview_option='Once',
-                                 number_scan=1,
+                                 number_scan=2,
                                  acquisition_index=0,
                                  image_index_list=image_index_list,
                                  pattern_num_list=pattern_num_list,
