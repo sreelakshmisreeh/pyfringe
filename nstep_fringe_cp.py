@@ -187,15 +187,15 @@ def main():
         horizontal_fringes = pickle.load(f)
     #testing #2: 
     delta_deck_cp = delta_deck_gen_cp(N_list[0], height=fringe_arr_cp.shape[1], width=fringe_arr_cp.shape[2])
-    if delta_deck_cp == vertical_fringes['delta_deck_cp']:
+    if delta_deck_cp.all() == vertical_fringes['delta_deck_cp'].all():
         print('Delta deck test successfull')
         masked_img_cp_v1, modulation_cp_v1, average_int_cp_v1, phase_map_cp_v1 = phase_cal_cp(fringe_arr_cp[0:3], delta_deck_cp, test_limit)
         masked_img_cp_v2, modulation_cp_v2, average_int_cp_v2, phase_map_cp_v2 = phase_cal_cp(fringe_arr_cp[6:9], delta_deck_cp, test_limit)
-        if (phase_map_cp_v1 == vertical_fringes['masked_img_cp_v1']) & (phase_map_cp_v2 == vertical_fringes['masked_img_cp_v2']):
+        if (phase_map_cp_v1.all() == vertical_fringes['phase_map_cp_v1'].all()) & (phase_map_cp_v2.all() == vertical_fringes['phase_map_cp_v2'].all()):
             print('\n All vertical phase maps match')
             phase_arr_cp = [phase_map_cp_v1, phase_map_cp_v2]
             multifreq_unwrap_cp_v, k_arr_cp_v = multifreq_unwrap_cp(pitch_list, phase_arr_cp, 1, 'v')
-            if multifreq_unwrap_cp_v == vertical_fringes['multifreq_unwrap_cp_v']:
+            if multifreq_unwrap_cp_v.all() == vertical_fringes['multifreq_unwrap_cp_v'].all():
                 print('\n Vertical unwrapped phase maps match')
             else:
                 print('\n Vertical unwrapped phase map mismatch ')  
@@ -203,11 +203,11 @@ def main():
             print('\n Vertical phase map mismatch')
         masked_img_cp_h1, modulation_cp_h1, average_int_cp_h1, phase_map_cp_h1 = phase_cal_cp(fringe_arr_cp[3:6], delta_deck_cp, test_limit)
         masked_img_cp_h2, modulation_cp_h2, average_int_cp_h2, phase_map_cp_h2 = phase_cal_cp(fringe_arr_cp[9:12], delta_deck_cp, test_limit)
-        if (phase_map_cp_h1 == horizontal_fringes['masked_img_cp_h1']) & (phase_map_cp_h2 == horizontal_fringes['masked_img_cp_h2']):
+        if (phase_map_cp_h1.all() == horizontal_fringes['phase_map_cp_h1'].all()) & (phase_map_cp_h2.all() == horizontal_fringes['phase_map_cp_h2'].all()):
             print('\n All horizontal phase maps match')
             phase_arr_cp = [phase_map_cp_h1, phase_map_cp_h2]
             multifreq_unwrap_cp_h, k_arr_cp_h = multifreq_unwrap_cp(pitch_list, phase_arr_cp, 1, 'h')
-            if multifreq_unwrap_cp_h == horizontal_fringes['multifreq_unwrap_cp_h']:
+            if multifreq_unwrap_cp_h.all() == horizontal_fringes['multifreq_unwrap_cp_h'].all():
                 print('\n Horizontal unwrapped phase maps match')
             else:
                 print('\n Horizontal unwrapped phase map mismatch ')  
