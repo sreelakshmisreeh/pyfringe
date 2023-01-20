@@ -20,6 +20,7 @@ from plyfile import PlyData, PlyElement
 from scipy.optimize import leastsq
 from scipy.spatial import distance
 from copy import deepcopy
+import shutil
 
 EPSILON = -0.5
 TAU = 5.5
@@ -109,14 +110,25 @@ class Calibration:
         self.bobdetect_convexity = bobdetect_convexity
         self.kernel_v = kernel_v
         self.kernel_h = kernel_h
-        self.data_type = data_type
-        self.processing = processing
         if self.type_unwrap == 'phase':
             self.phase_st = -np.pi
         elif (self.type_unwrap == 'multifreq') or (self.type_unwrap == 'multiwave'):
             self.phase_st = 0
+        else:
+            print('ERROR: Invalid type_unwrap')
+            return
+        if not os.path.exists(self.path):
+            print('ERROR: %s does not exist'% self.path)
+        if (data_type != 'jpeg') or (data_type != 'npy'):
+            print('ERROR: Invalid data type. Data type should be \'jpeg\' or \'npy\'')
+        else:
+            self.data_type = data_type
+        if (processing != 'cpu') or (processing != 'gpu'):
+            print('ERROR: Invalid processing type. Processing type should be \'cpu\' or \'gpu\'')
+        else:
+            self.processing = processing
         
-    def calib(self):
+    def calib(self, fx, fy):
         """
         Function to calibrate camera and projector and save npz file of calibration parameter based on user choice 
         of temporal phase unwrapping.
@@ -163,7 +175,7 @@ class Calibration:
             unwrapv_lst, unwraph_lst, white_lst, avg_lst, mod_lst, wrapped_phase_lst = self.projcam_calib_img_multiwave()
             
         #Projector images
-        proj_img_lst=self.projector_img(unwrapv_lst, unwraph_lst, white_lst)
+        proj_img_lst=self.projector_img(unwrapv_lst, unwraph_lst, white_lst, fx, fy)
         #Camera calibration
         camr_error, cam_objpts, cam_imgpts, cam_mtx, cam_dist, cam_rvecs, cam_tvecs = self.camera_calib(objp, white_lst)
         
@@ -459,6 +471,7 @@ class Calibration:
                     "stepwrapv": stepwrapv_lst,
                     "stepwraph": stepwraph_lst
                     }
+
                 
         return unwrap_v_lst, unwrap_h_lst, white_lst, avg_lst, mod_lst, wrapped_phase_lst
     
@@ -845,8 +858,16 @@ class Calibration:
                 unwraph_lst.append(multiwav_unwrap_h)
                 
         return unwrapv_lst, unwraph_lst, white_lst, avg_lst, mod_lst, wrapped_phase_lst
+    
+    @staticmethod
+    def _image_resize(image_lst, fx=1, fy=0.5):
+        resize_img_lst = []
+        for i in image_lst:
+            resize_img_lst.append(cv2.resize(i, None, fx=fx, fy=fy))
+        return resize_img_lst
+        
 
-    def projector_img(self, unwrap_v_lst, unwrap_h_lst, white_lst):
+    def projector_img(self, unwrap_v_lst, unwrap_h_lst, white_lst, fx, fy):
         """
         Function to generate projector image using absolute phase maps from horizontally and vertically varying patterns.
         Parameters
@@ -857,12 +878,19 @@ class Calibration:
                       List of unwrapped absolute phase map from vertically varying pattern.
         white_lst: list.
                    List of true object image (without patterns).
+        fx: float.
+            Scale factor along the horizontal axis.
+        fy: float.
+            Scale factor along the vertical axis
         Returns
         -------
         proj_img: list.
                   Projector image list.
     
         """
+        unwrap_v_lst = Calibration._image_resize(unwrap_v_lst, fx, fy)
+        unwrap_h_lst = Calibration._image_resize(unwrap_h_lst, fx, fy)
+        white_lst = Calibration._image_resize(white_lst, fx, fy)
         proj_img=[]
         for i in tqdm(range(0, len(unwrap_v_lst)), desc='projector images'):
             # Convert phase map to coordinates
@@ -894,7 +922,7 @@ class Calibration:
             
         return proj_img
     
-    def camera_calib(self, objp, white_lst):
+    def camera_calib(self, objp, white_lst, display=True):
         """
         Function to calibrate camera using asymmetric circle pattern. 
         OpenCV bob detector is used to detect circle centers which is used for calibration.
@@ -905,6 +933,8 @@ class Calibration:
               World object coordinate.
         white_lst: list.
                    List of calibration poses used for calibrations.
+        display: bool.
+                 If set each calibration drawings are displayed.
         Returns
         -------
         r_error: float.
@@ -970,13 +1000,16 @@ class Calibration:
                 objpoints.append(objp)  # Certainly, every loop objp is the same, in 3D.
                 
                 cam_imgpoints.append(corners)
-                # Draw and display the centers.
-                im_with_keypoints = cv2.drawChessboardCorners(white_color, (self.board_gridrows, self.board_gridcolumns), corners, ret)# circles
                 count_lst.append(found)
                 found += 1
-                
-            cv2.imshow("Camera calibration", im_with_keypoints) # display
-            cv2.waitKey(500)
+                if display:
+                    # Draw and display the centers.
+                    im_with_keypoints = cv2.drawChessboardCorners(white_color,
+                                                                  (self.board_gridrows, self.board_gridcolumns),
+                                                                  corners,
+                                                                  ret)  # circles
+                    cv2.imshow("Camera calibration", im_with_keypoints) # display
+                    cv2.waitKey(500)
     
         cv2.destroyAllWindows()
         cv2.waitKey(1)
@@ -1005,7 +1038,7 @@ class Calibration:
                    cam_imgpts, 
                    unwrap_v_lst, 
                    unwrap_h_lst, 
-                   proj_img_lst):
+                   proj_img_lst=None):
         """
         Function to calibrate projector by using absolute phase maps. 
         Circle centers detected using OpenCV is mapped to the absolute phase maps and the corresponding projector image coordinate for the centers are calculated.
@@ -1022,8 +1055,9 @@ class Calibration:
         unwrap_h_lst: list.
                       List of absolute phase maps for vertically varying patterns for
                       each calibration pose.
-        proj_img_lst: list.
+        proj_img_lst: list/None.
                       List of computed projector image for each calibration pose.
+                      If it is None calibration drawing is not diaplayed.
         Returns
         -------
         r_error: float.
@@ -1048,22 +1082,23 @@ class Calibration:
             v = [(nstep.bilinear_interpolate(unwrap_h_lst[x], i) - self.phase_st) * (self.pitch[-1] / (2*np.pi)) for i in c]
             coordi = np.column_stack((u, v)).reshape(cam_objpts[0].shape[0], 1, 2).astype(np.float32)
             proj_imgpts.append(coordi)
-            proj_color = cv2.cvtColor(proj_img_lst[x], cv2.COLOR_GRAY2RGB) #only for drawing
-            proj_color_filt = cv2.medianBlur(proj_color, ksize=3)
-            proj_keypoints = cv2.drawChessboardCorners(proj_color_filt, (self.board_gridrows, self.board_gridcolumns), coordi, True)
-            proj_keypoints_resized = cv2.resize(proj_keypoints, None, fx=1, fy=0.5)
-            cv2.imshow("Projector calibration", proj_keypoints_resized) # display
-            cv2.waitKey(500)
+            if proj_img_lst is not None:
+                proj_color = cv2.cvtColor(proj_img_lst[x], cv2.COLOR_GRAY2RGB) #only for drawing
+                proj_keypoints = cv2.drawChessboardCorners(proj_color, (self.board_gridrows, self.board_gridcolumns), coordi, True)
+                cv2.imshow("Projector calibration", proj_keypoints) # display
+                cv2.waitKey(100)
         cv2.destroyAllWindows()
-        cv2.waitKey(1)
         #Set all distortion =0. linear model assumption
         flags=cv2.CALIB_ZERO_TANGENT_DIST + cv2.CALIB_FIX_K1 + cv2.CALIB_FIX_K2 + cv2.CALIB_FIX_K3 + cv2.CALIB_FIX_K4 + cv2.CALIB_FIX_K5 + cv2.CALIB_FIX_K6
        
         #Projector calibration
-        proj_ret, proj_mtx, proj_dist, proj_rvecs, proj_tvecs = cv2.calibrateCamera(cam_objpts, 
-                                                                              proj_imgpts, proj_img_lst[x].shape[::-1],
-                                                                              None, None, flags=flags,
-                                                                              criteria=(cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 2e-16))
+        proj_ret, proj_mtx, proj_dist, proj_rvecs, proj_tvecs = cv2.calibrateCamera(cam_objpts,
+                                                                                    proj_imgpts,
+                                                                                    proj_img_lst[0].shape[::-1],
+                                                                                    None,
+                                                                                    None,
+                                                                                    flags=flags,
+                                                                                    criteria=(cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 2e-16))
         tot_error=0
         #Average re projection error
         for i in range(len(cam_objpts)):
@@ -1075,7 +1110,7 @@ class Calibration:
         
         return r_error, proj_imgpts, proj_mtx, proj_dist, proj_rvecs, proj_tvecs
     
-    def image_analysis(self, unwrap, aspect_ratio=1):
+    def image_analysis(self, unwrap, title, aspect_ratio=1):
         """
         Function to plot list of images for calibration diagnostic purpose. Eg: To plot list of
         unwrapped phase maps of all calibration poses.
@@ -1083,13 +1118,15 @@ class Calibration:
         ----------
         unwrap: list.
                 List of images
+        title: str.
+               Title to be displayed on plots.
         aspect_ratio: float.
                       Aspect ratio for plotting.
         """
         for i in range(0, len(unwrap)):
             plt.figure()
             plt.imshow(unwrap[i], aspect=aspect_ratio)
-            plt.title('Unwrap phase map', fontsize=20)
+            plt.title('{}'.format(title), fontsize=20)
         return
 
     def wrap_profile_analysis(self, wrapped_phase_lst, direc):
@@ -1584,6 +1621,118 @@ class Calibration:
             print('Invalid point to point distance. For given calibration board distance values are {}'.format(true_val))
             distances = None
         return distances
+    
+    def copy_tofolder(self, sample_index_list, dest_folder):
+        """
+        Function for copying samples into a sub folder for bootstrapping. 
+        Parameters
+        ----------
+        sample_index_list: list.
+                           Index of poses to be transfered.
+        dest_folder: str.
+                     Folder into which the selected poses data will be copied for calculations.
+                       
+        """
+        #empty destination folder
+        for f in os.listdir(dest_folder):
+            os.remove(os.path.join(dest_folder, f))
+        #copy contents
+        if self.data_type == 'jpeg':    
+            to_be_moved = [glob.glob(os.path.join(self.path, 'capt%d_*.jpg'% x)) for x in sample_index_list]
+        elif self.data_type =='npy':
+            to_be_moved = [glob.glob(os.path.join(self.path, 'capt_%d.npy'% x)) for x in sample_index_list]
+        flat_list = [item for sublist in to_be_moved for item in sublist]
+        for t in flat_list:
+            shutil.copy(t, dest_folder)
+        return
+
+    @staticmethod
+    def sample_statistics(sample):
+        mean = np.mean(sample, axis=0)
+        std = np.std(sample, axis=0)
+        return mean, std
+    # processing all poses, eg:100 poses, together will lead to memory issue.
+
+    def bootstrap_intrinsics_extrinsics(self, delta_pose, sub_sample_size, no_sample_parameters):
+        """
+        Function to apply bootstrapping and system intrinsics and extrinsics.
+        Parameters
+        ----------
+        delta_pose: int.
+                    Number of images in each 4 directions, alteast 4 directions 
+                    must be used to avoid any bias.
+        sub_sample_size: int.
+                         Sample size to sample from 4 subsets 
+        no_sample_parameters:int.
+                             Total number of samples of intrinsics and extrinsics parameters. 
+        """
+        left_direction = np.arange(0, delta_pose)
+        right_direction = np.arange(delta_pose, 2*delta_pose)
+        down_direction = np.arange(2*delta_pose, 3*delta_pose)
+        up_direction = np.arange(3*delta_pose, 4*delta_pose)
+        dest_folder = os.path.join(self.path, 'sub_calib')
+        if not os.path.exists(dest_folder):
+            os.makedirs(dest_folder)
+        cam_mtx_sample = []
+        cam_dist_sample = []
+        proj_mtx_sample = []
+        proj_dist_sample = []
+        st_rmat_sample = []
+        st_tvec_sample = []
+        proj_h_mtx_sample = []
+        cam_h_mtx_sample = []
+        for i in range(no_sample_parameters):
+            sample_index_l = np.random.choice(left_direction, size=sub_sample_size, replace=False)
+            sample_index_r = np.random.choice(right_direction, size=sub_sample_size, replace=False)
+            sample_index_d = np.random.choice(down_direction, size=sub_sample_size, replace=False)
+            sample_index_u = np.random.choice(up_direction, size=sub_sample_size, replace=False)
+            sample_index = np.sort(np.concatenate((sample_index_l, sample_index_r, sample_index_d, sample_index_u)))
+            self.copy_tofolder(sample_index, dest_folder)
+            objp = self.world_points()
+            unwrapv_lst, unwraph_lst, white_lst, avg_lst, mod_lst, wrapped_phase_lst = self.projcam_calib_img_multifreq()
+            #Camera calibration
+            camr_error, cam_objpts, cam_imgpts, cam_mtx, cam_dist, cam_rvecs, cam_tvecs = self.camera_calib(objp, white_lst, display=False)
+            #Projector calibration
+            proj_ret, proj_imgpts, proj_mtx, proj_dist, proj_rvecs, proj_tvecs = self.proj_calib(cam_objpts,
+                                                                                                 cam_imgpts,
+                                                                                                 unwrapv_lst,
+                                                                                                 unwraph_lst)
+            #Stereo calibration
+            criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 40, 0.0001)
+            stereocalibration_flags = cv2.CALIB_FIX_INTRINSIC + cv2.CALIB_ZERO_TANGENT_DIST + cv2.CALIB_FIX_K3+cv2.CALIB_FIX_K4 + cv2.CALIB_FIX_K5+cv2.CALIB_FIX_K6
+            
+            st_retu, st_cam_mtx, st_cam_dist, st_proj_mtx, st_proj_dist, st_cam_proj_rmat, st_cam_proj_tvec, E, F=cv2.stereoCalibrate(cam_objpts,
+                                                                                                                                      cam_imgpts,
+                                                                                                                                      proj_imgpts,
+                                                                                                                                      cam_mtx,
+                                                                                                                                      cam_dist,
+                                                                                                                                      proj_mtx,
+                                                                                                                                      proj_dist,
+                                                                                                                                      white_lst[0].shape[::-1],
+                                                                                                                                      flags=stereocalibration_flags,
+                                                                                                                                      criteria=criteria)
+            proj_h_mtx = np.dot(proj_mtx, np.hstack((st_cam_proj_rmat, st_cam_proj_tvec)))
+            cam_h_mtx = np.dot(cam_mtx, np.hstack((np.identity(3), np.zeros((3, 1)))))
+            cam_mtx_sample.append(cam_mtx)
+            cam_dist_sample.append(cam_dist)
+            proj_mtx_sample.append(proj_mtx)
+            proj_dist_sample.append(proj_dist)
+            st_rmat_sample.append(st_cam_proj_rmat)
+            st_tvec_sample.append(st_cam_proj_tvec)
+            proj_h_mtx_sample.append(proj_h_mtx)
+            cam_h_mtx_sample.append(cam_h_mtx)
+        cam_mtx_mean, cam_mtx_std = Calibration.sample_statistics(cam_mtx_sample)
+        cam_dist_mean, cam_dist_std = Calibration.sample_statistics(cam_dist_sample)
+        proj_mtx_mean, proj_mtx_std = Calibration.sample_statistics(proj_mtx_sample)
+        proj_dist_mean, proj_dist_std = Calibration.sample_statistics(proj_dist_sample)
+        st_rmat_mean, st_rmat_std = Calibration.sample_statistics(st_rmat_sample)
+        st_tvec_mean, st_tvec_std = Calibration.sample_statistics(st_tvec_sample)
+        proj_h_mtx_mean, proj_h_mtx_std = Calibration.sample_statistics(proj_h_mtx_sample)
+        cam_h_mtx_mean, cam_h_mtx_std = Calibration.sample_statistics(cam_h_mtx_sample)
+        np.savez(os.path.join(self.path, 'sample_calibration_param.npz'), cam_mtx_sample, cam_dist_sample, proj_mtx_sample, proj_dist_sample, st_rmat_sample, st_tvec_sample, proj_h_mtx_sample, cam_h_mtx_sample)
+        np.savez(os.path.join(self.path, 'mean_calibration_param.npz'), cam_mtx_mean, cam_mtx_std, cam_dist_mean, cam_dist_std, proj_mtx_mean, proj_mtx_std, proj_dist_mean, proj_dist_std, st_rmat_mean, st_rmat_std, st_tvec_mean, st_tvec_std)
+        np.savez(os.path.join(self.path, 'h_matrix_param.npz'), cam_h_mtx_mean, cam_h_mtx_std, proj_h_mtx_mean, proj_h_mtx_std)
+        return cam_mtx_mean, cam_mtx_std, cam_dist_mean, cam_dist_std, proj_mtx_mean, proj_mtx_std, proj_dist_mean, proj_dist_std, st_rmat_mean, st_rmat_std, st_tvec_mean, st_tvec_std, proj_h_mtx_mean, proj_h_mtx_std, cam_h_mtx_mean, cam_h_mtx_std
       
 def dist_l(center_cordi_lst, true_val):
     """
@@ -1629,8 +1778,8 @@ def obj(X, p):
                Dataframe of distance calculated for each calibration pose.
     """
     plane_xyz = p[0:3]
-    distance = (plane_xyz * X.T).sum(axis=1) + p[3]
-    return distance/ np.linalg.norm(plane_xyz)
+    distance_pp = (plane_xyz * X.T).sum(axis=1) + p[3]
+    return distance_pp/ np.linalg.norm(plane_xyz)
 
 def residuals(p, X):
     """
@@ -1680,13 +1829,13 @@ def plane_resid_plot(residual_lst):
     residual_lst: list.
                   List of residuals for each calibration pose.
     """
-    residuals = np.concatenate(residual_lst, axis=0)
-    rms = np.sqrt(np.mean(residuals**2))
+    residual = np.concatenate(residual_lst, axis=0)
+    rms = np.sqrt(np.mean(residual**2))
     fig, ax= plt.subplots()
     plt.title('Residual from fitted planes', fontsize=20)
     sns.histplot(residuals, legend=False)
-    mean = np.mean(residuals)
-    std = np.std(residuals)
+    mean = np.mean(residual)
+    std = np.std(residual)
     ax.text(0.75, 0.75, 'Mean:{0:.3f}'.format(mean), fontsize=20, horizontalalignment='center',
             verticalalignment='center', transform=ax.transAxes)
     ax.text(0.75, 0.65, 'Std:{0:.3f}'.format(std), fontsize=20, horizontalalignment='center',
@@ -1774,7 +1923,7 @@ def main():
                             path=path,
                             data_type=data_type,
                             processing=processing)
-    unwrapv_lst, unwraph_lst, white_lst, mod_lst, proj_img_lst, cam_objpts, cam_imgpts, proj_imgpts, euler_angles, cam_mean_error, cam_delta, cam_df1, proj_mean_error, proj_delta, proj_df1 = calib_inst.calib()
+    unwrapv_lst, unwraph_lst, white_lst, mod_lst, proj_img_lst, cam_objpts, cam_imgpts, proj_imgpts, euler_angles, cam_mean_error, cam_delta, cam_df1, proj_mean_error, proj_delta, proj_df1 = calib_inst.calib(fx=1, fy=2)
     #Plot for re projection error analysis
     calib_inst.intrinsic_errors_plts(cam_mean_error, cam_delta, cam_df1, 'Camera')
     calib_inst.intrinsic_errors_plts(proj_mean_error, proj_delta, proj_df1, 'Projector')
