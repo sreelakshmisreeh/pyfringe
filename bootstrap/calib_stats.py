@@ -14,12 +14,15 @@ sys.path.append(r'C:\Users\kl001\pyfringe')
 import calibration as calib
 import nstep_fringe as nstep
 
-def copy_tofolder (sample_index, source_folder, dest_folder):
+def copy_tofolder (sample_index, source_folder, dest_folder, data_type):
     #empty destination folder
     for f in os.listdir(dest_folder):
         os.remove(os.path.join(dest_folder, f))
-    #copy contents    
-    to_be_moved = [glob.glob(os.path.join(source_folder,'capt%d_*.jpg'%x)) for x in sample_index]
+    #copy contents
+    if data_type == 'jpeg':    
+        to_be_moved = [glob.glob(os.path.join(source_folder,'capt%d_*.jpg'%x)) for x in sample_index]
+    elif data_type =='npy':
+        to_be_moved = [glob.glob(os.path.join(source_folder,'capt_%d.npy'%x)) for x in sample_index]
     flat_list = [item for sublist in to_be_moved for item in sublist]
     for t in flat_list:
         shutil.copy(t, dest_folder)
@@ -138,7 +141,7 @@ def main():
     data_type = 'jpeg'
     processing = 'gpu'
     sub_sample_size = 5 # sample to be taken each direction
-    no_sample_sets = 100
+    no_sample_sets = 100 #500
     root_dir = r'C:\Users\kl001\Documents\pyfringe_test\white_camera_error\varying_B\bootstrap' 
     source_folder = os.path.join(root_dir, '%s_calib_images' %type_unwrap)
     dest_folder = os.path.join(source_folder, 'sub_calib')
@@ -154,7 +157,6 @@ def main():
     #savedir = r'C:\Users\kl001\Documents\pyfringe_test\white_camera_error\varying_B\bootstrap\obj_reconstruction\plane'
     if not os.path.exists(savedir):
         os.makedirs(savedir)  
-        
     quantile_limit = 5.5
     limit = nstep.B_cutoff_limit(sigma_path, quantile_limit, N_list, pitch_list)
     
@@ -194,3 +196,12 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+#%%
+sample_index = [1,6,8,20]
+source_folder = r'C:\Users\kl001\Documents\pyfringe_test\multifreq_calib_images'
+dest_folder = r'C:\Users\kl001\Documents\pyfringe_test\multifreq_calib_images\sub_calib'
+to_be_moved = [glob.glob(os.path.join(source_folder,'capt_%d.npy'%x)) for x in sample_index]
+flat_list = [item for sublist in to_be_moved for item in sublist]
+for t in flat_list:
+    shutil.copy(t, dest_folder)
