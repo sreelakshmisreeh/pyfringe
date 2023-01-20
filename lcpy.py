@@ -151,12 +151,19 @@ class dlpc350(object):
         {[read (120) or write (80) mode], [sequency], [CMD2], [CMD3], [Data]}. If there are second commend requested,
         the second one only contains {[Data]}.
         When read form projector, the first 4 space always be occupied by those order.
-        From DLPC Programming guide. 1.2.1: Host sends the report ID byte = 0;
-        Sends flags  bytes 2:0 are set to 0x0 for regular DLPC350 operation, set 0x7 for debugging assistance.
-        Bit 6 set to 0x1 indicates host needs reply from device.
-        Bit 7 set to 0x1 indicates a read transaction, 0x0 as write. 
-        A signal command contains no more than 64 bytes (contains up to 20 patterns or 6 images with RGB channel).
-
+        From DLPC Programming guide:
+        Byte0 report ID byte: User don't need to setup this parameter. Report ID = 0.
+        Byte1 Flag byte: Bits 2:0 are set to 0x0 for regular DLPC350 operation, set 0x7 for debugging assistance.
+                         Bit 6 set to 0x1 indicates host needs reply from device.
+                         Bit 7 set to 0x1 indicates a read transaction, 0x0 as write. 
+        Byte2 Sequence byte: A signal command contains no more than 64 bytes (contains up to 20 patterns or 6 images with RGB channel)
+                             the command is sent as multiple USB packets and the sequence byte numbers the packets 
+                             so the device can assemble them in the right sequence.
+        Byte3 & Byte4: Length LSB and MSB. User don't need to setup this parameter, it be calculated in function. 
+                       This length denotes the number of data bytes in the packet and excludes the number of bytes 0-4.
+        Subcommand bytes: CMD2 and CMD3.
+        Byte5 Data byte. 
+    
         :param str rw_mode: Whether reading or writing.
         :param sequence_byte:
         :param com1: Command 1
@@ -275,7 +282,7 @@ class dlpc350(object):
     def read_main_status(self):
         """
         The Main Status command shows the status of DMD park and DLPC350 sequencer, frame buffer, and gamma
-        correction. (General 0b00001111)  
+        correction. If everything is working properly，receive 0b00001111.  
         :return result: True if all steps executed correctly
         :rtype result: bool
         """
@@ -595,6 +602,9 @@ class dlpc350(object):
         Either the exposure time must be equivalent to the frame period, or the exposure time must be less than the
         frame period by 230 microseconds. Before executing this command, stop the current pattern sequence. After
         executing this command, call ``DLPC350_ValidatePatLutData()`` API before starting the pattern sequence.
+        Byte3:0 bit31:0: Pattern exposure time (μs). Dicitates how long the display time is. Since the exposure has 
+                         at least 230 μs difference, during the difference, projector stop projecting.
+        Byte7:4 bit31:0: Frame period (μs). Dicitates the interval between 2 frames.
         :param exposure_period: Exposure time in microseconds (4 bytes).
         :param frame_period: Frame period in microseconds (4 bytes).
         :type exposure_period: int
@@ -619,6 +629,16 @@ class dlpc350(object):
         """
         This API checks the programmed pattern display modes and indicates any invalid settings. This command needs to
         be executed after all pattern display configurations have been completed.
+        Several setting validate in this function including:
+            Bit0: Exposure or frame period setting.
+            Bit1: Patten number in LUT.
+            Bit2: Tigger out1 setting.
+            Bit3: Post sector setting.
+            Bit4: Frame period and exposure differece.
+            Bit6 & Bit5: Reserved.
+            Bit7: Status of DLPC350 validating.
+        First make every bit to invalid(0b11111111) which gives enough time(10 sec) for validation,
+        if validation time larger than 10 sec, stop running.
         :return result: True if all steps executed correctly
         :rtype result: bool
         """
