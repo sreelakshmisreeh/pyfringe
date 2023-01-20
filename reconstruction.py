@@ -6,6 +6,7 @@ Created on Tue May 24 13:00:19 2022
 @author: Sreelakshmi
 """
 import numpy as np
+import cupy as cp
 import sys
 sys.path.append(r'C:\Users\kl001\pyfringe')
 import nstep_fringe as nstep
@@ -57,7 +58,7 @@ def inv_mtx(a11,a12,a13,a21,a22,a23,a31,a32,a33):
     
     
 def reconstruction_pts(uv_true, unwrapv, c_mtx, c_dist, p_mtx, cp_rot_mtx, cp_trans_mtx, phase_st, pitch):
-    '''
+    """
     Function to reconstruct 3D point coordinates of 2D points.
 
     Parameters
@@ -82,7 +83,7 @@ def reconstruction_pts(uv_true, unwrapv, c_mtx, c_dist, p_mtx, cp_rot_mtx, cp_tr
     :type pitch:float
     :return x,y,z: cordinate arrays
     :rtype x,y,z: float
-    '''
+    """
     no_pts = uv_true.shape[0]
     uv = cv2.undistortPoints(uv_true, c_mtx, c_dist, None, c_mtx )
     uv = uv.reshape(uv.shape[0],2)
@@ -514,15 +515,16 @@ def obj_reconst_wrapper(width,
                         data_type,
                         processing,
                         kernel=1):
-    '''
+    """
     Function for 3D reconstruction of object based on different unwrapping method.
 
     Parameters
     ----------
     width =type: float. Width of projector.
     height = type: float. Height of projector.
-    pitch_list : TYPE
-        DESCRIPTION.
+    cam_width,
+    cam_height
+    pitch_list :
     N_list = type: float array. The number of steps in phase shifting algorithm. If phase coded unwrapping method is used this is a single element array. For other methods corresponding to each pitch one element in the list.
     limit = type: float array. Array of number of pixels per fringe period.
     
@@ -541,16 +543,23 @@ def obj_reconst_wrapper(width,
     obj_cordi = type : float array. Array of reconstructed x,y,z coordinates of each points on the object
     obj_color = type: float array. Color (texture/ intensity) at each point.
 
-   '''
+    """
    
    # calibration = np.load(os.path.join(calib_path,'{}_calibration_param.npz'.format(type_unwrap)))
-    delta_deck_lst, delta_index = delta_deck_calculation()
+    delta_deck_lst, delta_index = delta_deck_calculation(cam_height,cam_width, N_list, processing)
+    if data_type == 'jpeg':
+        img_path = sorted(glob.glob(os.path.join(obj_path, 'capt_*.jpg')), key=os.path.getmtime)
+        images_arr = [cv2.imread(file, 0) for file in img_path]
+        if processing == 'cpu':
+            images_arr = np.array(images_arr).astype(np.float64)
+        else:
+            images_arr = cp.asarray(images_arr).astype(cp.float64)
+    elif(data_type == 'npy') & (processing == 'cpu'):
+        images_arr = np.load(os.path.join(obj_path, 'capt_*.npy'))
+    elif(data_type == 'npy') & (processing == 'gpu'):
+        images_arr = cp.load(os.path.join(obj_path, 'capt_*.npy'))
+
     if type_unwrap == 'phase':
-      if data_type == 'jpeg':
-          img_path = sorted(glob.glob(os.path.join(obj_path, 'capt_*.jpg')), key=os.path.getmtime)
-          images_arr = np.array([cv2.imread(file, 0) for file in img_path]).astype(np.float64)
-      elif data_type == 'npy':   
-          img_data = np.load(os.path.join(path, 'capt_%d.npy' %x)).astype(np.float64)
       if processing == 'cpu':
           object_cos, obj_cos_mod, obj_cos_avg, phase_cos = nstep.phase_cal(images_arr[0:N_list[0]], 
                                                                             delta_deck_lst[0], 
@@ -562,99 +571,108 @@ def obj_reconst_wrapper(width,
           #unwrapped phase
           unwrap0, k0 = nstep.unwrap_cal(phase_step, phase_cos, pitch_list[0], width, height, direc)
           unwrap, k = nstep.filt(unwrap0, kernel, direc)
-      elif processing == 'gpu':
-          object_cos, obj_cos_mod, obj_cos_avg, phase_cos = nstep_cp.phase_cal(images_arr[0:N_list[0]],
-                                                                               delta_deck_lst[0],
-                                                                               limit)
-          object_step, obj_step_mod, obj_step_avg, phase_step = nstep_cp.phase_cal(images_arr[N_list[0]:2*N_list[0]], 
-                                                                                   delta_deck_lst[0], 
-                                                                                   limit)
-          phase_step = nstep_cp.step_rectification(phase_step,direc)
-          #unwrapped phase
-          unwrap0, k0 = nstep_cp.unwrap_cal(phase_step, phase_cos, pitch_list[0], width, height, direc)
-          unwrap, k = nstep_cp.filt(unwrap0, kernel, direc)
-      inte_img = cv2.imread(os.path.join(obj_path,'white.jpg'))   
-      if temp:
-          temperature = np.load(os.path.join(obj_path,'temperature.npy'))
-      else:
-          temperature = 0
-      inte_rgb = inte_img[...,::-1].copy()
-      np.save(os.path.join(obj_path,'{}_obj_mod.npy'.format(type_unwrap)),obj_cos_mod) 
-      np.savez(os.path.join(obj_path,'{}_unwrap.npz'.format(type_unwrap)),data = unwrap.data, mask = unwrap.mask)
-      obj_cordi, obj_color, obj_t, cordi_sigma, mod_vect = complete_recon(unwrap, inte_rgb, obj_cos_mod, limit, calib_path, sigma_path, phase_st, pitch_list[-1], N_list[-1], obj_path, temp, temperature)
+          mod_freq4 = obj_cos_mod
        
     elif type_unwrap == 'multifreq':
-       object_freq1, mod_freq1, avg_freq1, gamma_freq1, delta_deck_freq1  = nstep.mask_img(np.array([cv2.imread(os.path.join(obj_path,'capt_%d.jpg'%i),0) for i in range(0, N_list[0])]), limit)
-       object_freq2, mod_freq2, avg_freq2, gamma_freq2, delta_deck_freq2 = nstep.mask_img(np.array([cv2.imread(os.path.join(obj_path,'capt_%d.jpg'%i),0) for i in range(N_list[0], N_list[0] + N_list[1])]), limit)
-       object_freq3, mod_freq3, avg_freq3, gamma_freq3, delta_deck_freq3 = nstep.mask_img(np.array([cv2.imread(os.path.join(obj_path,'capt_%d.jpg'%i),0) for i in range( N_list[0] + N_list[1], N_list[0]+ N_list[1]+ N_list[2])]), limit)
-       object_freq4, mod_freq4, avg_freq4, gamma_freq4, delta_deck_freq4 = nstep.mask_img(np.array([cv2.imread(os.path.join(obj_path,'capt_%d.jpg'%i),0) for i in range(N_list[0]+ N_list[1]+ N_list[2], N_list[0]+ N_list[1]+ N_list[2] + N_list[3])]), limit)
-
-       #wrapped phase
-       phase_freq1 = nstep.phase_cal(object_freq1, N_list[0], delta_deck_freq1 )
-       phase_freq2 = nstep.phase_cal(object_freq2, N_list[1], delta_deck_freq2 )
-       phase_freq3 = nstep.phase_cal(object_freq3, N_list[2], delta_deck_freq3 )
-       phase_freq4 = nstep.phase_cal(object_freq4, N_list[3], delta_deck_freq4 )
-       phase_freq1[phase_freq1 < EPSILON] = phase_freq1[phase_freq1 < EPSILON] + 2 * np.pi
-
-       #unwrapped phase
-       phase_arr = np.stack([phase_freq1, phase_freq2, phase_freq3, phase_freq4])
-       unwrap, k = nstep.multifreq_unwrap(pitch_list, phase_arr, kernel, direc)
-       inte_img = cv2.imread(os.path.join(obj_path,'white.jpg'))
-       if temp:
-           temperature = np.load(os.path.join(obj_path,'temperature.npy'))
-       else:
-           temperature = 0
-       inte_rgb = inte_img[...,::-1].copy()
-       np.save(os.path.join(obj_path,'{}_obj_mod.npy'.format(type_unwrap)),mod_freq4) 
-       np.savez(os.path.join(obj_path,'{}_unwrap.npz'.format(type_unwrap)),data = unwrap.data, mask = unwrap.mask) 
-       obj_cordi, obj_color, obj_t, cordi_sigma, mod_vect = complete_recon(unwrap, inte_rgb, mod_freq4, limit, calib_path, sigma_path, phase_st, pitch_list[-1], N_list[-1], obj_path, temp, temperature)
+        if processing == 'cpu':
+           object_freq1, mod_freq1, avg_freq1, phase_freq1  = nstep.phase_cal(images_arr[0: N_list[0]],
+                                                                              delta_deck_lst[delta_index[0]],
+                                                                              limit)
+           object_freq2, mod_freq2, avg_freq2, phase_freq2 = nstep.phase_cal(images_arr[N_list[0]: N_list[0] + N_list[1]],
+                                                                             delta_deck_lst[delta_index[1]],
+                                                                             limit)
+           object_freq3, mod_freq3, avg_freq3, phase_freq3 = nstep.phase_cal(images_arr[ N_list[0] + N_list[1]: N_list[0]+ N_list[1]+ N_list[2]],
+                                                                             delta_deck_lst[delta_index[2]],
+                                                                             limit)
+           object_freq4, mod_freq4, avg_freq4, phase_freq4 = nstep.phase_cal(images_arr[N_list[0]+ N_list[1]+ N_list[2]: N_list[0]+ N_list[1]+ N_list[2] + N_list[3]],
+                                                                             delta_deck_lst[delta_index[3]],
+                                                                             limit)
+           phase_freq1[phase_freq1 < EPSILON] = phase_freq1[phase_freq1 < EPSILON] + 2 * np.pi
+           #unwrapped phase
+           phase_arr = np.stack([phase_freq1, phase_freq2, phase_freq3, phase_freq4])
+           unwrap, k = nstep.multifreq_unwrap(pitch_list, phase_arr, kernel, direc)
+           
+        elif processing == 'gpu':
+            object_freq1, mod_freq1, avg_freq1, phase_freq1 = nstep_cp.phase_cal_cp(images_arr[0: N_list[0]],
+                                                                                    delta_deck_lst[delta_index[0]],
+                                                                                    limit)
+            object_freq2, mod_freq2, avg_freq2, phase_freq2 = nstep_cp.phase_cal_cp(images_arr[N_list[0]: N_list[0] + N_list[1]],
+                                                                                    delta_deck_lst[delta_index[1]],
+                                                                                    limit)
+            object_freq3, mod_freq3, avg_freq3, phase_freq3 = nstep_cp.phase_cal_cp(images_arr[N_list[0] + N_list[1]: N_list[0] + N_list[1] + N_list[2]],
+                                                                                    delta_deck_lst[delta_index[2]],
+                                                                                    limit)
+            object_freq4, mod_freq4, avg_freq4, phase_freq4 = nstep_cp.phase_cal_cp(images_arr[N_list[0] + N_list[1] + N_list[2]: N_list[0] + N_list[1] + N_list[2] + N_list[3]],
+                                                                                    delta_deck_lst[delta_index[3]],
+                                                                                    limit)
+            phase_freq1[phase_freq1 < EPSILON] = phase_freq1[phase_freq1 < EPSILON] + 2 * np.pi
+            # unwrapped phase
+            phase_arr = np.stack([phase_freq1, phase_freq2, phase_freq3, phase_freq4])
+            unwrap, k = nstep_cp.multifreq_unwrap(pitch_list, phase_arr, kernel, direc)
+            unwrap = cp.asnumpy(unwrap)
+            mod_freq4 = cp.asnumpy(mod_freq4)
        
-   elif type_unwrap == 'multiwave':
-       eq_wav12 = (pitch_list[-1] * pitch_list[1]) / (pitch_list[1]-pitch_list[-1])
-       eq_wav123 = pitch_list[0] * eq_wav12 / (pitch_list[0] - eq_wav12)
-
-       pitch_list = np.insert(pitch_list, 0, eq_wav123)
-       pitch_list = np.insert(pitch_list, 2, eq_wav12)
-       
-       object_wav3, mod_wav3, avg_wav3, gamma_wav1, delta_deck_wav3 = nstep.mask_img(np.array([cv2.imread(os.path.join(obj_path,'capt_%d.jpg'%i),0) for i in range(0, N_list[0])]), limit)
-       object_wav2, mod_wav2, avg_wav2, gamma_wav2, delta_deck_wav2 = nstep.mask_img(np.array([cv2.imread(os.path.join(obj_path,'capt_%d.jpg'%i),0) for i in range(N_list[0], N_list[0] + N_list[1])]), limit)
-       object_wav1, mod_wav1, avg_wav1, gamma_wav3, delta_deck_wav1 = nstep.mask_img(np.array([cv2.imread(os.path.join(obj_path,'capt_%d.jpg'%i),0) for i in range(N_list[0] + N_list[1], N_list[0]+ N_list[1]+ N_list[2])]), limit)
-
-       #wrapped phase
-       phase_wav1 = nstep.phase_cal(object_wav1, N_list[2], delta_deck_wav1 )
-       phase_wav2 = nstep.phase_cal(object_wav2, N_list[1], delta_deck_wav2 )
-       phase_wav3 = nstep.phase_cal(object_wav3, N_list[0], delta_deck_wav3 )
-       phase_wav12 = np.mod(phase_wav1 - phase_wav2, 2 * np.pi)
-       phase_wav123 = np.mod(phase_wav12 - phase_wav3, 2 * np.pi)       
-       phase_wav123[phase_wav123 > TAU] = phase_wav123[phase_wav123 > TAU] - 2 * np.pi
-
-       #unwrapped phase
-       phase_arr = np.stack([phase_wav123, phase_wav3, phase_wav12, phase_wav2, phase_wav1])
-       unwrap, k = nstep.multiwave_unwrap(pitch_list, phase_arr, kernel, direc)
-       inte_img = cv2.imread(os.path.join(obj_path,'white.jpg'))    
-       if temp:
-           temperature = np.load(os.path.join(obj_path,'temperature.npy'))
-       else:
-           temperature = 0
-       inte_rgb = inte_img[...,::-1].copy()
-       np.save(os.path.join(obj_path,'{}_obj_mod.npy'.format(type_unwrap)),mod_freq4) 
-       np.savez(os.path.join(obj_path,'{}_unwrap.npz'.format(type_unwrap)),data = unwrap.data, mask = unwrap.mask)
-       obj_cordi, obj_color, obj_t, cordi_sigma, mod_vect = complete_recon(unwrap, inte_rgb, mod_wav3, limit,  calib_path, sigma_path, phase_st, pitch_list[-1], N_list[-1], obj_path, temp, temperature)   
-   return obj_cordi, obj_color, obj_t, cordi_sigma, mod_vect
+    elif type_unwrap == 'multiwave':
+        eq_wav12 = (pitch_list[-1] * pitch_list[1]) / (pitch_list[1]-pitch_list[-1])
+        eq_wav123 = pitch_list[0] * eq_wav12 / (pitch_list[0] - eq_wav12)
+        pitch_list = np.insert(pitch_list, 0, eq_wav123)
+        pitch_list = np.insert(pitch_list, 2, eq_wav12)
+        object_wav3, mod_wav3, avg_wav3, phase_wav1 = nstep.phase_cal(images_arr[0, N_list[0]],
+                                                                      delta_deck_lst[delta_index[0]],
+                                                                      limit)
+        object_wav2, mod_wav2, avg_wav2, phase_wav2 = nstep.phase_cal(images_arr[N_list[0], N_list[0] + N_list[1]],
+                                                                      delta_deck_lst[delta_index[0]],
+                                                                      limit)
+        object_wav1, mod_wav1, avg_wav1, phase_wav3 = nstep.phase_cal(images_arr[N_list[0] + N_list[1], N_list[0]+ N_list[1]+ N_list[2]],
+                                                                      delta_deck_lst[delta_index[0]],
+                                                                      limit)
+        phase_wav12 = np.mod(phase_wav1 - phase_wav2, 2 * np.pi)
+        phase_wav123 = np.mod(phase_wav12 - phase_wav3, 2 * np.pi)
+        phase_wav123[phase_wav123 > TAU] = phase_wav123[phase_wav123 > TAU] - 2 * np.pi
+        #unwrapped phase
+        phase_arr = np.stack([phase_wav123, phase_wav3, phase_wav12, phase_wav2, phase_wav1])
+        unwrap, k = nstep.multiwave_unwrap(pitch_list, phase_arr, kernel, direc)
+        mod_freq4 = mod_wav3
+    inte_img = cv2.imread(os.path.join(obj_path,'white.jpg'))
+    if temp:
+       temperature = np.load(os.path.join(obj_path,'temperature.npy'))
+    else:
+       temperature = 0
+    inte_rgb = inte_img[...,::-1].copy()
+    np.save(os.path.join(obj_path,'{}_obj_mod.npy'.format(type_unwrap)),mod_freq4)
+    np.save(os.path.join(obj_path,'{}_unwrap.npy'.format(type_unwrap)),unwrap)
+    obj_cordi, obj_color, obj_t, cordi_sigma, mod_vect = complete_recon(unwrap, 
+                                                                        inte_rgb, 
+                                                                        mod_freq4, 
+                                                                        limit, 
+                                                                        calib_path, 
+                                                                        sigma_path, 
+                                                                        phase_st, 
+                                                                        pitch_list[-1], 
+                                                                        N_list[-1], 
+                                                                        obj_path, 
+                                                                        temp, 
+                                                                        temperature)
+    return obj_cordi, obj_color, obj_t, cordi_sigma, mod_vect
        
 def obj_reconst_wrapper_3level(width, 
                                height, 
+                               cam_width,
+                               cam_height,
                                pitch_list, 
-                               N_list, limit,  
-                               phase_st, direc, 
+                               N_list,
+                               limit,
+                               phase_st,
+                               direc,
                                type_unwrap, 
                                calib_path, 
                                obj_path, 
                                sigma_path, 
-                               temp,
-                               processing, 
-                               kernel = 1):
-   '''
+                               temp, 
+                               data_type,
+                               processing,
+                               kernel=1):
+    """
     Function for 3D reconstruction of object based on different unwrapping method.
 
     Parameters
@@ -681,86 +699,111 @@ def obj_reconst_wrapper_3level(width,
     obj_cordi = type : float array. Array of reconstructed x,y,z coordinates of each points on the object
     obj_color = type: float array. Color (texture/ intensity) at each point.
 
-    '''
+    """
    
-  # calibration = np.load(os.path.join(calib_path,'{}_calibration_param.npz'.format(type_unwrap)))
-  
-   if type_unwrap == 'phase':
+    # calibration = np.load(os.path.join(calib_path,'{}_calibration_param.npz'.format(type_unwrap)))
+    delta_deck_lst, delta_index = delta_deck_calculation(cam_height, cam_width, N_list, processing)
+    if data_type == 'jpeg':
+        img_path = sorted(glob.glob(os.path.join(obj_path, 'capt_*.jpg')), key=os.path.getmtime)
+        images_arr = [cv2.imread(file, 0) for file in img_path]
+        if processing == 'cpu':
+            images_arr = np.array(images_arr).astype(np.float64)
+        else:
+            images_arr = cp.asarray(images_arr).astype(cp.float64)
+    elif (data_type == 'npy') & (processing == 'cpu'):
+        images_arr = np.load(os.path.join(obj_path, 'capt_*.npy'))
+    elif (data_type == 'npy') & (processing == 'gpu'):
+        images_arr = cp.load(os.path.join(obj_path, 'capt_*.npy'))
+        
+    if type_unwrap == 'phase':
        
-       object_cos, obj_cos_mod, obj_cos_avg, obj_cos_gamma, delta_deck_cos  = nstep.mask_img(np.array([cv2.imread(os.path.join(obj_path,'capt_%d.jpg'%i),0) for i in range(0, N_list[0])]), limit)
-       object_step, obj_step_mod, obj_step_avg, obj_step_gamma, delta_deck_step = nstep.mask_img(np.array([cv2.imread(os.path.join(obj_path,'capt_%d.jpg'%i),0) for i in range(N_list[0],2 * N_list[0])]), limit)
+       object_cos, obj_cos_mod, obj_cos_avg, phase_cos  = nstep.phase_cal(images_arr[0, N_list[0]],
+                                                                          delta_deck_lst[0], 
+                                                                          limit)
+       object_step, obj_step_mod, obj_step_avg, phase_step = nstep.phase_cal(images_arr[N_list[0],2 * N_list[0]], 
+                                                                             delta_deck_lst[0],
+                                                                             limit)
 
        #wrapped phase
-       phase_cos = nstep.phase_cal(object_cos, N_list, delta_deck_cos )
-       phase_step = nstep.phase_cal(object_step, N_list, delta_deck_step )
        phase_step = nstep.step_rectification(phase_step,direc)
        #unwrapped phase
        unwrap0, k0 = nstep.unwrap_cal(phase_step, phase_cos, pitch_list[0], width, height, direc)
        unwrap, k = nstep.filt(unwrap0, kernel, direc)
-       inte_img = cv2.imread(os.path.join(obj_path,'white.jpg'))   
-       if temp:
-           temperature = np.load(os.path.join(obj_path,'temperature.npy'))
-       else:
-           temperature = 0
-       inte_rgb = inte_img[...,::-1].copy()
-       np.save(os.path.join(obj_path,'{}_obj_mod.npy'.format(type_unwrap)),obj_cos_mod) 
-       np.savez(os.path.join(obj_path,'{}_unwrap.npz'.format(type_unwrap)),data = unwrap.data, mask = unwrap.mask)
-       obj_cordi, obj_color, obj_t, cordi_sigma, mod_vect = complete_recon(unwrap, inte_rgb, obj_cos_mod, limit, calib_path, sigma_path, phase_st, pitch_list[-1], N_list[-1], obj_path, temp, temperature)
+       mod_freq3 = obj_cos_mod
        
-   elif type_unwrap == 'multifreq':
-       object_freq1, mod_freq1, avg_freq1, gamma_freq1, delta_deck_freq1  = nstep.mask_img(np.array([cv2.imread(os.path.join(obj_path,'capt_%d.jpg'%i),0) for i in range(0, N_list[0])]), limit)
-       object_freq2, mod_freq2, avg_freq2, gamma_freq2, delta_deck_freq2 = nstep.mask_img(np.array([cv2.imread(os.path.join(obj_path,'capt_%d.jpg'%i),0) for i in range(N_list[0], N_list[0] + N_list[1])]), limit)
-       object_freq3, mod_freq3, avg_freq3, gamma_freq3, delta_deck_freq3 = nstep.mask_img(np.array([cv2.imread(os.path.join(obj_path,'capt_%d.jpg'%i),0) for i in range( N_list[0] + N_list[1], N_list[0]+ N_list[1]+ N_list[2])]), limit)
-
-       #wrapped phase
-       phase_freq1 = nstep.phase_cal(object_freq1, N_list[0], delta_deck_freq1 )
-       phase_freq2 = nstep.phase_cal(object_freq2, N_list[1], delta_deck_freq2 )
-       phase_freq3 = nstep.phase_cal(object_freq3, N_list[2], delta_deck_freq3 )
-       phase_freq1[phase_freq1 < EPSILON] = phase_freq1[phase_freq1 < EPSILON] + 2 * np.pi
-
-       #unwrapped phase
-       phase_arr = np.stack([phase_freq1, phase_freq2, phase_freq3])
-       unwrap, k = nstep.multifreq_unwrap(pitch_list, phase_arr, kernel, direc)
-       inte_img = cv2.imread(os.path.join(obj_path,'white.jpg'))
-       if temp:
-           temperature = np.load(os.path.join(obj_path,'temperature.npy'))
-       else:
-           temperature = 0
-       inte_rgb = inte_img[...,::-1].copy()
-       np.save(os.path.join(obj_path,'{}_obj_mod.npy'.format(type_unwrap)),mod_freq3) 
-       np.savez(os.path.join(obj_path,'{}_unwrap.npz'.format(type_unwrap)),data = unwrap.data, mask = unwrap.mask) 
-       obj_cordi, obj_color, obj_t, cordi_sigma, mod_vect = complete_recon(unwrap, inte_rgb, mod_freq3, limit, calib_path, sigma_path, phase_st, pitch_list[-1], N_list[-1], obj_path, temp, temperature)
+    elif type_unwrap == 'multifreq':
+        if processing == 'cpu':
+            object_freq1, mod_freq1, avg_freq1, phase_freq1 = nstep.phase_cal(images_arr[0: N_list[0]], 
+                                                                               delta_deck_lst[delta_index[0]], 
+                                                                               limit)
+            object_freq2, mod_freq2, avg_freq2, phase_freq2 = nstep.phase_cal(images_arr[N_list[0]: N_list[0] + N_list[1]], 
+                                                                              delta_deck_lst[delta_index[1]], 
+                                                                              limit)
+            object_freq3, mod_freq3, avg_freq3, phase_freq3 = nstep.phase_cal(images_arr[ N_list[0] + N_list[1]: N_list[0]+ N_list[1]+ N_list[2]],
+                                                                              delta_deck_lst[delta_index[2]], 
+                                                                              limit)
+            #wrapped phase
+            phase_freq1[phase_freq1 < EPSILON] = phase_freq1[phase_freq1 < EPSILON] + 2 * np.pi
+            #unwrapped phase
+            phase_arr = np.stack([phase_freq1, phase_freq2, phase_freq3])
+            unwrap, k = nstep.multifreq_unwrap(pitch_list, phase_arr, kernel, direc)
+        elif processing == 'gpu':
+            object_freq1, mod_freq1, avg_freq1, phase_freq1  = nstep_cp.phase_cal_cp(images_arr[0: N_list[0]], 
+                                                                                     delta_deck_lst[delta_index[0]], 
+                                                                                     limit)
+            object_freq2, mod_freq2, avg_freq2, phase_freq2 = nstep_cp.phase_cal_cp(images_arr[N_list[0]: N_list[0] + N_list[1]], 
+                                                                                    delta_deck_lst[delta_index[1]], 
+                                                                                    limit)
+            object_freq3, mod_freq3, avg_freq3, phase_freq3 = nstep_cp.phase_cal_cp(images_arr[ N_list[0] + N_list[1]: N_list[0]+ N_list[1]+ N_list[2]],
+                                                                                    delta_deck_lst[delta_index[2]], 
+                                                                                    limit)
+            #wrapped phase
+            phase_freq1[phase_freq1 < EPSILON] = phase_freq1[phase_freq1 < EPSILON] + 2 * np.pi
+            #unwrapped phase
+            phase_arr = [phase_freq1, phase_freq2, phase_freq3]
+            unwrap, k = nstep_cp.multifreq_unwrap_cp(pitch_list, phase_arr, kernel, direc)
+            unwrap = cp.asnumpy(unwrap)
+            mod_freq3 = cp.asnumpy(mod_freq3)
        
-   elif type_unwrap == 'multiwave':
-       eq_wav12 = (pitch_list[-1] * pitch_list[1]) / (pitch_list[1]-pitch_list[-1])
-       eq_wav123 = pitch_list[0] * eq_wav12 / (pitch_list[0] - eq_wav12)
-
-       pitch_list = np.insert(pitch_list, 0, eq_wav123)
-       pitch_list = np.insert(pitch_list, 2, eq_wav12)
+    elif type_unwrap == 'multiwave':
+        eq_wav12 = (pitch_list[-1] * pitch_list[1]) / (pitch_list[1]-pitch_list[-1])
+        eq_wav123 = pitch_list[0] * eq_wav12 / (pitch_list[0] - eq_wav12)
+        pitch_list = np.insert(pitch_list, 0, eq_wav123)
+        pitch_list = np.insert(pitch_list, 2, eq_wav12)
+        object_wav3, mod_wav3, avg_wav3, phase_wav1 = nstep.phase_cal(images_arr[0: N_list[0]], 
+                                                                      delta_deck_lst[delta_index[0]], 
+                                                                      limit)
+        object_wav2, mod_wav2, avg_wav2, phase_wav2 = nstep.phase_cal(images_arr[N_list[0]: N_list[0] + N_list[1]], 
+                                                                      delta_deck_lst[delta_index[1]],
+                                                                      limit)
+        object_wav1, mod_wav1, avg_wav1, phase_wav3 = nstep.phase_cal(images_arr[N_list[0] + N_list[1]: N_list[0]+ N_list[1]+ N_list[2]],
+                                                                      delta_deck_lst[delta_index[2]],
+                                                                      limit)
+        phase_wav12 = np.mod(phase_wav1 - phase_wav2, 2 * np.pi)
+        phase_wav123 = np.mod(phase_wav12 - phase_wav3, 2 * np.pi)
+        phase_wav123[phase_wav123 > TAU] = phase_wav123[phase_wav123 > TAU] - 2 * np.pi
+        #unwrapped phase
+        phase_arr = np.stack([phase_wav123, phase_wav3, phase_wav12, phase_wav2, phase_wav1])
+        unwrap, k = nstep.multiwave_unwrap(pitch_list, phase_arr, kernel, direc)
+        mod_freq3 = mod_wav3
        
-       object_wav3, mod_wav3, avg_wav3, gamma_wav1, delta_deck_wav3 = nstep.mask_img(np.array([cv2.imread(os.path.join(obj_path,'capt_%d.jpg'%i),0) for i in range(0, N_list[0])]), limit)
-       object_wav2, mod_wav2, avg_wav2, gamma_wav2, delta_deck_wav2 = nstep.mask_img(np.array([cv2.imread(os.path.join(obj_path,'capt_%d.jpg'%i),0) for i in range(N_list[0], N_list[0] + N_list[1])]), limit)
-       object_wav1, mod_wav1, avg_wav1, gamma_wav3, delta_deck_wav1 = nstep.mask_img(np.array([cv2.imread(os.path.join(obj_path,'capt_%d.jpg'%i),0) for i in range(N_list[0] + N_list[1], N_list[0]+ N_list[1]+ N_list[2])]), limit)
-
-       #wrapped phase
-       phase_wav1 = nstep.phase_cal(object_wav1, N_list[2], delta_deck_wav1 )
-       phase_wav2 = nstep.phase_cal(object_wav2, N_list[1], delta_deck_wav2 )
-       phase_wav3 = nstep.phase_cal(object_wav3, N_list[0], delta_deck_wav3 )
-       phase_wav12 = np.mod(phase_wav1 - phase_wav2, 2 * np.pi)
-       phase_wav123 = np.mod(phase_wav12 - phase_wav3, 2 * np.pi)       
-       phase_wav123[phase_wav123 > TAU] = phase_wav123[phase_wav123 > TAU] - 2 * np.pi
-
-       #unwrapped phase
-       phase_arr = np.stack([phase_wav123, phase_wav3, phase_wav12, phase_wav2, phase_wav1])
-       unwrap, k = nstep.multiwave_unwrap(pitch_list, phase_arr, kernel, direc)
-       inte_img = cv2.imread(os.path.join(obj_path,'white.jpg'))    
-       if temp:
-           temperature = np.load(os.path.join(obj_path,'temperature.npy'))
-       else:
-           temperature = 0
-       inte_rgb = inte_img[...,::-1].copy()
-       np.save(os.path.join(obj_path,'{}_obj_mod.npy'.format(type_unwrap)),mod_wav3) 
-       np.savez(os.path.join(obj_path,'{}_unwrap.npz'.format(type_unwrap)),data = unwrap.data, mask = unwrap.mask)
-       obj_cordi, obj_color, obj_t, cordi_sigma, mod_vect = complete_recon(unwrap, inte_rgb, mod_wav3, limit,  calib_path, sigma_path, phase_st, pitch_list[-1], N_list[-1], obj_path, temp, temperature)   
-   return obj_cordi, obj_color, obj_t, cordi_sigma, mod_vect
+    inte_img = cv2.imread(os.path.join(obj_path,'white.jpg'))
+    if temp:
+        temperature = np.load(os.path.join(obj_path,'temperature.npy'))
+    else:
+        temperature = 0
+    inte_rgb = inte_img[...,::-1].copy()
+    np.save(os.path.join(obj_path,'{}_obj_mod.npy'.format(type_unwrap)),mod_freq3) 
+    np.save(os.path.join(obj_path,'{}_unwrap.npy'.format(type_unwrap)),unwrap) 
+    obj_cordi, obj_color, obj_t, cordi_sigma, mod_vect = complete_recon(unwrap, 
+                                                                        inte_rgb, 
+                                                                        mod_freq3, 
+                                                                        limit, 
+                                                                        calib_path, 
+                                                                        sigma_path, 
+                                                                        phase_st, pitch_list[-1], 
+                                                                        N_list[-1], 
+                                                                        obj_path, 
+                                                                        temp, temperature)
+    return obj_cordi, obj_color, obj_t, cordi_sigma, mod_vect
        
