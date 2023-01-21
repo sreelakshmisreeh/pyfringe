@@ -163,9 +163,10 @@ def multifreq_unwrap_cp(wavelength_arr_cp: cp.ndarray,
         absolute_ph_cp, k_array_cp = multi_kunwrap_cp(wavelength_arr_cp[i:i + 2], [absolute_ph_cp, phase_arr_cp[i + 1]])
     absolute_ph_cp, k0 = filt_cp(absolute_ph_cp, kernel_size, direc)
     return absolute_ph_cp, k_array_cp
-#Note: PyCharm : loading time: 0.263918       spyder : loading time: 0.008540           anaconda prompt: loading time: 0.256507
-#                delta deck time: 0.174196             delta deck time: 0.001249                         delta deck time: 0.190626
-#                computing time: 6.502625              computing time: 0.074099                          computing time: 0.246226
+
+# Note: PyCharm : loading time: 0.263918       spyder : loading time: 0.008540           anaconda prompt: loading time: 0.256507
+#                 delta deck time: 0.174196             delta deck time: 0.001249                         delta deck time: 0.190626
+#                 computing time: 6.502625              computing time: 0.074099                          computing time: 0.246226
 
 def main():
     test_limit = 0.9
@@ -184,7 +185,7 @@ def main():
     start = perf_counter_ns()
     delta_deck_cp = delta_deck_gen_cp(N_list[0], height=fringe_arr_cp.shape[1], width=fringe_arr_cp.shape[2])
     end = perf_counter_ns()
-    print('delta deck time: %2.6f'% ((end - start)/1e9))
+    print('delta deck time: %2.6f' % ((end - start)/1e9))
 
     if delta_deck_cp.all() == vertical_fringes['delta_deck_cp'].all():
         print('Delta deck test successful')
@@ -217,8 +218,7 @@ def main():
     end = perf_counter_ns()
     computing_time = (end - start) / 1e9
     print('computing time: %2.6f' % computing_time)
-    return 
-    
+    return
 
 
 if __name__ == '__main__':

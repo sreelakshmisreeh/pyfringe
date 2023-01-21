@@ -133,7 +133,7 @@ def calib_generate(width: int,
                    pitch_list: list,
                    phase_st: float,
                    inte_rang: list,
-                   path: str)-> Tuple[np.ndarray, np.ndarray]:
+                   path: str) -> Tuple[np.ndarray, np.ndarray]:
     """
     Function to generate fringe patterns based on type of unwrapping. 
     This function generates both vertically and horizontally varying fringe patterns which is usually required for system calibration.
@@ -193,7 +193,7 @@ def recon_generate(width: int,
                    phase_st: float,
                    inte_rang: list,
                    direc: str,
-                   path: str)-> Tuple[np.ndarray, np.ndarray]:
+                   path: str) -> Tuple[np.ndarray, np.ndarray]:
     """
     Function is used to generate fringe pattern in a specified direction.
 
@@ -222,7 +222,7 @@ def recon_generate(width: int,
     delta_deck_list = []
     if type_unwrap == 'phase':
         delta_deck_list = delta_deck_gen(N_list[0], height, width)
-        if direc =='v':
+        if direc == 'v':
             step = step_func(inte_rang, pitch_list[0], 'v', delta_deck_list)
             cos, absolute_phi_v = cos_func(inte_rang, pitch_list[0], 'v', phase_st, delta_deck_list)
         elif direc == 'h':    
@@ -233,20 +233,20 @@ def recon_generate(width: int,
     elif type_unwrap == 'multifreq' or type_unwrap == 'multiwave':
         for p, n in zip(pitch_list, N_list): 
             delta_deck = delta_deck_gen(n, height, width)
-            if direc =='v':
+            if direc == 'v':
                 cos, absolute_phi = cos_func(inte_rang, p, 'v', phase_st, delta_deck)
             elif direc == 'h':
                 cos, absolute_phi = cos_func(inte_rang, p, 'h', phase_st, delta_deck)
             fringe_lst.append(cos)
             delta_deck_list.append(delta_deck)
-        fringe_arr=np.ceil(np.vstack(fringe_lst)).astype('uint8') 
+        fringe_arr = np.ceil(np.vstack(fringe_lst)).astype('uint8')
     np.save(os.path.join(path, '{}_fringes.npy'.format(type_unwrap)), fringe_arr) 
     return fringe_arr, delta_deck_list
 
 def B_cutoff_limit(sigma_path: str,
                    quantile_limit: float,
                    N_list: list,
-                   pitch_list: list)->float:
+                   pitch_list: list) -> float:
     """
     Function to calculate modulation minimum based on success rate.
     :param sigma_path:  Path to read variance of noise model (sigma)
@@ -268,7 +268,7 @@ def B_cutoff_limit(sigma_path: str,
 
 def phase_cal(images: np.ndarray,
               delta_deck: np.ndarray,
-              limit: float)->Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+              limit: float) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     Function that computes and applies mask to captured image based on data modulation (relative modulation) of each pixel
     and computes phase map.
@@ -300,23 +300,23 @@ def phase_cal(images: np.ndarray,
     sin_delta[np.abs(sin_delta) < 1e-15] = 0 
     sin_lst = (np.sum(images * sin_delta, axis=0))
     cos_delta = np.cos(delta_deck)
-    cos_delta[np.abs(cos_delta)<1e-15] = 0
+    cos_delta[np.abs(cos_delta) < 1e-15] = 0
     cos_lst = (np.sum(images * cos_delta, axis=0))
     modulation = 2 * np.sqrt(sin_lst**2 + cos_lst**2) / N
     average_int = np.sum(images, axis=0) / N
     mask = np.full(modulation.shape, True)
     mask[modulation > limit] = False
     mask_deck = np.repeat(mask[np.newaxis, :, :], images.shape[0], axis=0)
-    images[mask_deck]=np.nan
-    #wrapped phase
+    images[mask_deck] = np.nan
+    # wrapped phase
     sin_lst[mask] = np.nan
     cos_lst[mask] = np.nan
-    phase_map = -np.arctan2(sin_lst, cos_lst)# wrapped phase;
+    phase_map = -np.arctan2(sin_lst, cos_lst)  # wrapped phase;
     return images, modulation, average_int, phase_map
 
 
 def step_rectification(step_ph: np.ndarray,
-                       direc: str)->np.ndarray:
+                       direc: str) -> np.ndarray:
     """
     This function rectify abnormal phase jumps at the ends of stair coded phase maps caused by unstable region of
     arc-tangent function (−π,π).
@@ -328,10 +328,10 @@ def step_rectification(step_ph: np.ndarray,
     -------
     step_ph = type: float. Rectified stair coded wrapped phase map.
     """
-    img_width = step_ph.shape[1] # number of col
-    img_height = step_ph.shape[0] # number of row
+    img_width = step_ph.shape[1]  # number of col
+    img_height = step_ph.shape[0]  # number of row
     if direc == 'v':
-        step_ph[:, 0:int(img_width/2)][step_ph[:, 0:int(img_width/2)] >(0.9 * np.pi)] = step_ph[:, 0:int(img_width/2)][step_ph[:, 0:int(img_width/2)] >(0.9 * np.pi)] - 2 * np.pi
+        step_ph[:, 0:int(img_width/2)][step_ph[:, 0:int(img_width/2)] > (0.9 * np.pi)] = step_ph[:, 0:int(img_width/2)][step_ph[:, 0:int(img_width/2)] > (0.9 * np.pi)] - 2 * np.pi
         step_ph[:, int(img_width/2):img_width][step_ph[:, int(img_width/2):img_width] < (-0.9 * np.pi)] = step_ph[:, int(img_width/2):img_width][step_ph[:, int(img_width/2):img_width] < (-0.9 * np.pi)] + 2 * np.pi
     elif direc == 'h':
         step_ph[0:int(img_height/2), :][step_ph[0:int(img_height/2), :] > (0.9 * np.pi)] = step_ph[0:int(img_height/2), :][step_ph[0:int(img_height/2), :] > (0.9 * np.pi)] - 2 * np.pi
@@ -345,7 +345,7 @@ def unwrap_cal(step_wrap: np.ndarray,
                pitch: int,
                width: int,
                height: int,
-               direc: str)->Tuple[np.ndarray, np.ndarray]:
+               direc: str) -> Tuple[np.ndarray, np.ndarray]:
     """
     Function applies phase coded temporal phase unwrapping to obtain absolute phase map.
 
@@ -374,10 +374,10 @@ def unwrap_cal(step_wrap: np.ndarray,
     cos_unwrap = (2 * np.pi * k) + cos_wrap
     return cos_unwrap, k
 
-#median filter 
+# median filter
 def filt(unwrap: np.ndarray,
          kernel: int,
-         direc: str)->Tuple[np.ndarray, np.ndarray]:
+         direc: str) -> Tuple[np.ndarray, np.ndarray]:
     """
     Function is used to remove artifacts generated in the temporal unwrapped phase map. 
     A median filter is applied to locate incorrectly unwrapped points, and those point phase is corrected by adding or
@@ -401,7 +401,7 @@ def filt(unwrap: np.ndarray,
     """
     dup_img = unwrap.copy()
     if direc == 'v':
-        k = (1, kernel) #kernel size
+        k = (1, kernel)  # kernel size
     elif direc == 'h':
         k = (kernel, 1)
     med_fil = scipy.ndimage.median_filter(dup_img, k)
@@ -417,7 +417,7 @@ def ph_temp_unwrap(cos_wrap_v: np.ndarray,
                    height: int,
                    width: int,
                    kernel_v: int,
-                   kernel_h: int)->Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+                   kernel_h: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     Wrapper function for phase coded temporal unwrapping. This function takes masked cosine and stair phase shifted images as input and computes wrapped phase maps. 
     Wrapped phase maps are used to unwrap and obtain absolute phase map which is then further processed to remove spike noise using median filter rectification.
@@ -446,20 +446,20 @@ def ph_temp_unwrap(cos_wrap_v: np.ndarray,
     step_wrap_v = type: float.  Wrapped phase map of stair intensity pattern varying in the horizontal direction.
     step_wrap_h = type: float.  Wrapped phase map of stair intensity pattern varying in the vertical direction.
     """
-    #step rectification for border jumps
+    # step rectification for border jumps
     step_wrap_v = step_rectification(step_wrap_v, 'v')
     step_wrap_h = step_rectification(step_wrap_h, 'h')
-    #Unwrapped
+    # Unwrapped
     unwrap_v, k_v = unwrap_cal(step_wrap_v, cos_wrap_v, pitch, width, height, 'v')
     unwrap_h, k_h = unwrap_cal(step_wrap_h, cos_wrap_h, pitch, width, height, 'h')
     
-    #Apply median rectification
+    # Apply median rectification
     fil_unwrap_v, k0_v = filt(unwrap_v, kernel_v, 'v')
     fil_unwrap_h, k0_h = filt(unwrap_h, kernel_h, 'h')
-    return fil_unwrap_v, fil_unwrap_h, k0_v, k0_h, cos_wrap_v, cos_wrap_h, step_wrap_v, step_wrap_h # Filtered unwrapped phase maps and k values
+    return fil_unwrap_v, fil_unwrap_h, k0_v, k0_h, cos_wrap_v, cos_wrap_h, step_wrap_v, step_wrap_h  # Filtered unwrapped phase maps and k values
 
 def multi_kunwrap(wavelength: np.array,
-                  ph: list)->Tuple[np.ndarray, np.ndarray]:
+                  ph: list) -> Tuple[np.ndarray, np.ndarray]:
     """
     Function performs temporal phase unwrapping using the low and high wavelength wrapped phase maps.
     Parameters
@@ -477,13 +477,13 @@ def multi_kunwrap(wavelength: np.array,
        Fringe order of the lowest wavelength (the highest frequency)
 
     """
-    k = np.round(((wavelength[0] / wavelength[1]) * ph[0] - ph[1])/ (2 * np.pi))
+    k = np.round(((wavelength[0] / wavelength[1]) * ph[0] - ph[1]) / (2 * np.pi))
     unwrap = ph[1] + 2 * np.pi * k
     return unwrap, k
 
 def multifreq_unwrap(wavelength_arr: np.array,
                      phase_arr: list,
-                     kernel: int, direc: str)->Tuple[np.ndarray, np.ndarray]:
+                     kernel: int, direc: str) -> Tuple[np.ndarray, np.ndarray]:
     """
     Function performs sequential temporal multi-frequency phase unwrapping from high wavelength (low frequency)
     wrapped phase map to low wavelength (high frequency) wrapped phase map.
@@ -514,7 +514,7 @@ def multifreq_unwrap(wavelength_arr: np.array,
 def multiwave_unwrap(wavelength_arr: np.ndarray,
                      phase_arr: np.array,
                      kernel: int,
-                     direc: str)->Tuple[np.ndarray, np.ndarray]:
+                     direc: str) -> Tuple[np.ndarray, np.ndarray]:
     """
     Function performs sequential temporal multi wavelength phase unwrapping from high wavelength and applies median filter rectification to remove artifacts.
 
@@ -540,7 +540,7 @@ def multiwave_unwrap(wavelength_arr: np.ndarray,
     return absolute_ph, k
 
 def edge_rectification(multi_phase_123: np.ndarray,
-                       direc: str)->np.ndarray:
+                       direc: str) -> np.ndarray:
     """
     Function to rectify abnormal phase jumps at the edge of multi wavelength high wavelength wrapped phase map.
 
@@ -554,8 +554,8 @@ def edge_rectification(multi_phase_123: np.ndarray,
     multi_phase_123 = type: float. Rectified phase map.
 
     """
-    img_height=multi_phase_123.shape[1]
-    img_width=multi_phase_123.shape[0]
+    img_height = multi_phase_123.shape[1]
+    img_width = multi_phase_123.shape[0]
     if direc == 'v':
         multi_phase_123[:, 0:int(img_width/2)][multi_phase_123[:, 0:int(img_width/2)] > 1.5 * np.pi] = multi_phase_123[:, 0:int(img_width/2)][multi_phase_123[:, 0:int(img_width/2)] > 1.5 * np.pi] - 2 * np.pi
         multi_phase_123[:, int(img_width/2):][multi_phase_123[:, int(img_width/2):] < -1.5 * np.pi] = multi_phase_123[:, int(img_width/2):][multi_phase_123[:, int(img_width/2):] < -1.5 * np.pi] + 2 * np.pi
@@ -584,7 +584,7 @@ def bilinear_interpolate(unwrap, center):
     else:
         x = np.asarray(center[:, 0])
         y = np.asarray(center[:, 1])
-    #neighbours
+    # neighbours
     x0 = np.floor(x).astype(int)
     x1 = x0 + 1
     y0 = np.floor(y).astype(int)
@@ -593,34 +593,33 @@ def bilinear_interpolate(unwrap, center):
     unwrap_b = unwrap[y1, x0]
     unwrap_c = unwrap[y0, x1]
     unwrap_d = unwrap[y1, x1]
-    #weights
+    # weights
     wa = (x1-x) * (y1-y)
     wb = (x1-x) * (y-y0)
     wc = (x-x0) * (y1-y)
     wd = (x-x0) * (y-y0)
 
     return wa*unwrap_a + wb*unwrap_b + wc*unwrap_c + wd*unwrap_d
-#=====================================================
+
+# =====================================================
 # For diagnosis
-#Removing trend
-
-#Calculation of coefficients
+# Removing trend
+# Calculation of coefficients
 def fit_trend(filter_img, x_grid, y_grid):
-    filter_img_flat=filter_img.flatten()[:, np.newaxis]
-    x_row=x_grid.flatten()
-    y_row=y_grid.flatten()
-    one_row=np.ones(len(x_row))
-    xy_array=np.array([one_row, x_row, y_row]).T
+    filter_img_flat = filter_img.flatten()[:, np.newaxis]
+    x_row = x_grid.flatten()
+    y_row = y_grid.flatten()
+    one_row = np.ones(len(x_row))
+    xy_array = np.array([one_row, x_row, y_row]).T
     coeff = np.linalg.inv(xy_array.T@xy_array) @ xy_array.T @ filter_img_flat
-
     return coeff
 
 def trend(x_grid, y_grid, coeff):
-    x_row=x_grid.flatten()
-    y_row=y_grid.flatten()
-    one_row=np.ones(len(x_row))
-    xy_arr=np.array([one_row, x_row, y_row]).T
-    phi_col=xy_arr@coeff
+    x_row = x_grid.flatten()
+    y_row = y_grid.flatten()
+    one_row = np.ones(len(x_row))
+    xy_arr = np.array([one_row, x_row, y_row]).T
+    phi_col = xy_arr@coeff
     return phi_col.reshape(x_grid.shape)
 
 def main():
@@ -633,7 +632,7 @@ def main():
         vertical_fringes = pickle.load(f)
     with open(r'test_data\horizontal_fringes_np.pickle', 'rb') as f:
         horizontal_fringes = pickle.load(f)
-    #testing #1: 
+    # testing #1:
     delta_deck_np = delta_deck_gen(N_list[0], height=fringe_arr_np.shape[1], width=fringe_arr_np.shape[2])
     if delta_deck_np.all() == vertical_fringes['delta_deck_np'].all():
         print('Delta deck test successful')
@@ -664,6 +663,7 @@ def main():
     else:
         print('Delta deck test failed')
     return 
+
 
 if __name__ == '__main__':
     main()
