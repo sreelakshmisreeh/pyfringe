@@ -860,7 +860,7 @@ class Calibration:
         return unwrapv_lst, unwraph_lst, white_lst, avg_lst, mod_lst, wrapped_phase_lst
     
     @staticmethod
-    def _image_resize(image_lst, fx=1, fy=0.5):
+    def _image_resize(image_lst, fx, fy):
         resize_img_lst = []
         for i in image_lst:
             resize_img_lst.append(cv2.resize(i, None, fx=fx, fy=fy))
