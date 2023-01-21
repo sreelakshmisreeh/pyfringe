@@ -578,8 +578,12 @@ def bilinear_interpolate(unwrap, center):
    Subpixel mapped absolute phase value corresponding to given circle center. 
 
     """
-    x = np.asarray(center[0])
-    y = np.asarray(center[1])
+    if len(center.shape) == 1:
+        x = np.asarray(center[0])
+        y = np.asarray(center[1])
+    else:
+        x = np.asarray(center[:, 0])
+        y = np.asarray(center[:, 1])
     #neighbours
     x0 = np.floor(x).astype(int)
     x1 = x0 + 1
