@@ -70,7 +70,8 @@ def proj_cam_preview(cam,
     if cam_trig_reconfig:
         result &= gspy.trigger_configuration(nodemap=nodemap,
                                              s_node_map=s_node_map,
-                                             triggerType="off")
+                                             triggerType="off",
+                                             verbose=pprint_status)
     
     if preview_type == 'focus':
         result &= lcr.send_img_lut([image_index], 0)
@@ -97,7 +98,6 @@ def proj_cam_preview(cam,
     # Print all projector current attributes set
     if pprint_status:
         lcr.pretty_print_status()
-        gspy.print_trigger_config(nodemap, s_node_map) 
 
     # validate the pattern lut
     result &= lcr.start_pattern_lut_validate()
@@ -239,7 +239,6 @@ def run_proj_cam_capt(cam,
                                        do_insert_black=do_insert_black)
         if pprint_status:  # Print all projector current attributes set
             lcr.pretty_print_status()
-            gspy.print_trigger_config(nodemap, s_node_map)
         result &= lcr.start_pattern_lut_validate()
     elif not image_index_list:
         print('\n image_index_list cannot be empty')
@@ -397,9 +396,6 @@ def proj_cam_acquire_images(cam,
     nodemap_tldevice = cam.GetTLDeviceNodeMap()
     s_node_map = cam.GetTLStreamNodeMap()
     gspy.print_device_info(nodemap_tldevice)
-    gspy.print_camera_config(nodemap, s_node_map)
-    gspy.print_trigger_config(nodemap, s_node_map)
-
     frameRate = 1e6/proj_frame_period  # proj_frame_period is in μs
     
     proj_preview_exp_period = proj_exposure_period + 230
@@ -414,7 +410,8 @@ def proj_cam_acquire_images(cam,
                                      exposureTime=proj_exposure_period,
                                      gain=cam_gain,
                                      blackLevel=cam_black_level,
-                                     bufferCount=cam_bufferCount)
+                                     bufferCount=cam_bufferCount,
+                                     verbose=pprint_status)
     cam_trig_reconfig = True
     if focus_image_index is not None:
         result &= proj_cam_preview(cam=cam,
@@ -832,32 +829,54 @@ def main():
     """
     Example main function.
     """
-  
-    image_index_list = np.repeat(np.arange(0, 5), 3).tolist()
-    pattern_num_list = [0, 1, 2] * len(set(image_index_list))
-    savedir = r'C:\Users\kl001\Documents\grasshopper3_python\images'
+    option = input("Please choose:\n1-- test\n2 -- gamma curve\n3--calibration capture")
     result = True
-    ret = run_proj_single_camera(savedir=savedir,
-                                 preview_option='Once',
-                                 number_scan=2,
-                                 acquisition_index=0,
-                                 image_index_list=image_index_list,
-                                 pattern_num_list=pattern_num_list,
-                                 cam_gain=0,
-                                 cam_bufferCount=15,
-                                 cam_capt_timeout=10,
-                                 cam_black_level=0,
-                                 cam_ExposureCompensation=0,
-                                 proj_exposure_period=27084,
-                                 proj_frame_period=33334,
-                                 do_insert_black=True,
-                                 preview_image_index=21,
-                                 focus_image_index=34,
-                                 image_section_size=None,
-                                 pprint_status=True,
-                                 save_npy=False,
-                                 save_jpeg=True)
-    result &= ret
+    if option == '1':
+        image_index_list = np.repeat(np.arange(0, 5), 3).tolist()
+        pattern_num_list = [0, 1, 2] * len(set(image_index_list))
+        savedir = r'C:\Users\kl001\Documents\grasshopper3_python\images'
+        result &= run_proj_single_camera(savedir=savedir,
+                                         preview_option='Always',
+                                         number_scan=2,
+                                         acquisition_index=0,
+                                         image_index_list=image_index_list,
+                                         pattern_num_list=pattern_num_list,
+                                         cam_gain=0,
+                                         cam_bufferCount=15,
+                                         cam_capt_timeout=10,
+                                         cam_black_level=0,
+                                         cam_ExposureCompensation=0,
+                                         proj_exposure_period=27084,
+                                         proj_frame_period=33334,
+                                         do_insert_black=True,
+                                         preview_image_index=21,
+                                         focus_image_index=34,
+                                         image_section_size=None,
+                                         pprint_status=True,
+                                         save_npy=False,
+                                         save_jpeg=True)
+    elif option == '2':
+        gamma_image_index_list = np.repeat(np.arange(5, 22), 3).tolist()
+        gamma_pattern_num_list = [0, 1, 2] * len(set(image_index_list))
+        savedir = r'C:\Users\kl001\Documents\pyfringe_test\gamma_images'
+        result &= gamma_curve(gamma_image_index_list,
+                              gamma_pattern_num_list,
+                              savedir,
+                              cam_width=1920,
+                              cam_height=1200,
+                              half_cross_length=100)
+    elif option == '3':
+        image_index_list = np.repeat(np.arange(22, 34), 3).tolist()
+        pattern_num_list = [0, 1, 2] * len(set(image_index_list))
+        savedir =r'C:\Users\kl001\Documents\pyfringe_test\multifreq_calib_images' 
+        number_scan = int(input("\nEnter number of scans"))
+        acquisition_index = int(input("\nEnter acquisation index"))
+        result &= calib_capture(image_index_list=image_index_list,
+                                pattern_num_list=pattern_num_list,
+                                savedir=savedir,
+                                number_scan=number_scan,
+                                acquisition_index=acquisition_index)
+    
     return result 
 
 
