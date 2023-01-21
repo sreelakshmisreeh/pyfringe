@@ -24,7 +24,6 @@ EPSILON = -0.5
 TAU = 5.5
 
 #TODO: Update documentation
-#TODO: Incomplete: update to reconstruct from input image array. Switch between read image from disk or using image array 
 
 
 def inv_mtx(a11,a12,a13,a21,a22,a23,a31,a32,a33):
