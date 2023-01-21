@@ -35,6 +35,7 @@ class Calibration:
                  cam_width,
                  cam_height,
                  no_pose,
+                 acquisation_index,
                  mask_limit, 
                  type_unwrap, 
                  N_list, 
@@ -64,6 +65,8 @@ class Calibration:
                     Modulation limit for applying mask to captured images.
         no_pose: int.
                  Number of calibration poses.
+        acquisation_index: int.
+                           Starting acquisation index
         type_unwrap: string.
                      Type of temporal unwrapping to be applied.
                      phase' = phase coded unwrapping method,
@@ -98,6 +101,7 @@ class Calibration:
         self.cam_width = cam_width
         self.cam_height = cam_height
         self.no_pose = no_pose
+        self.acquisation_index=acquisation_index
         self.limit = mask_limit
         self.type_unwrap = type_unwrap
         self.N = N_list
@@ -119,11 +123,11 @@ class Calibration:
             return
         if not os.path.exists(self.path):
             print('ERROR: %s does not exist'% self.path)
-        if (data_type != 'jpeg') or (data_type != 'npy'):
+        if (data_type != 'jpeg') and (data_type != 'npy'):
             print('ERROR: Invalid data type. Data type should be \'jpeg\' or \'npy\'')
         else:
             self.data_type = data_type
-        if (processing != 'cpu') or (processing != 'gpu'):
+        if (processing != 'cpu') and (processing != 'gpu'):
             print('ERROR: Invalid processing type. Processing type should be \'cpu\' or \'gpu\'')
         else:
             self.processing = processing
@@ -434,7 +438,7 @@ class Calibration:
         stepwrapv_lst=[]
         stepwraph_lst=[]
         delta_deck_lst, delta_index = self.delta_deck_calculation()
-        for x in tqdm(range(0, self.no_pose), desc='generating unwrapped phases map for {} images'.format(self.no_pose)):
+        for x in tqdm(range(self.acquisation_index, (self.acquisation_index + self.no_pose)), desc='generating unwrapped phases map for {} images'.format(self.no_pose)):
             if os.path.exists(os.path.join(self.path, 'capt%d_0.jpg' %x)):
                 #Read and apply mask to each captured images for cosine and stair patterns
                 img_path = sorted(glob.glob(os.path.join(self.path, 'capt%d_*.jpg' %x)), key=os.path.getmtime)
@@ -685,9 +689,9 @@ class Calibration:
         unwraph_lst = []
         delta_deck_lst, delta_index = self.delta_deck_calculation()
         if (self.data_type == 'jpeg') and (self.processing == 'cpu'):
-            for x in tqdm(range(0, self.no_pose), desc='generating unwrapped phases map for {} pose'.format(self.no_pose)):
-                if os.path.exists(os.path.join(self.path, 'capt%d_0.jpg' %x)):
-                    img_path = sorted(glob.glob(os.path.join(self.path, 'capt%d_*.jpg' %x)), key=os.path.getmtime)
+            for x in tqdm(range(self.acquisation_index, (self.acquisation_index + self.no_pose)), desc='generating unwrapped phases map for {} pose'.format(self.no_pose)):
+                if os.path.exists(os.path.join(self.path, 'capt_%d_0.jpg' %x)):
+                    img_path = sorted(glob.glob(os.path.join(self.path, 'capt_%d_*.jpg' %x)), key=os.path.getmtime)
                     images_arr = np.array([cv2.imread(file, 0) for file in img_path]).astype(np.float64)
                     unwrap_v, unwrap_h, phase_arr_v, phase_arr_h, orig_img, avg_arr, mod_arr = self.multifreq_analysis(images_arr, 
                                                                                                                        delta_deck_lst, 
@@ -702,13 +706,11 @@ class Calibration:
                                          }
                     unwrapv_lst.append(unwrap_v)
                     unwraph_lst.append(unwrap_h)
-                else:
-                    print('%s does not exist' %(os.path.exists(os.path.join(self.path, 'capt%d_0.jpg' %x))))
             
         elif (self.data_type == 'npy') & (self.processing =='cpu'):
-            for x in tqdm(range(0, self.no_pose), desc='generating unwrapped phases map for {} pose'.format(self.no_pose)):
-                if os.path.exists(os.path.join(self.path, 'capt_%d.npy' %x)):
-                    img_data = np.load(os.path.join(self.path, 'capt_%d.npy' %x)).astype(np.float64)
+            for x in tqdm(range(self.acquisation_index, (self.acquisation_index + self.no_pose)), desc='generating unwrapped phases map for {} pose'.format(self.no_pose)):
+                if os.path.exists(os.path.join(self.path, 'capt_%d_0.npy' %x)):
+                    img_data = np.load(os.path.join(self.path, 'capt_%d_0.npy' %x)).astype(np.float64)
                     unwrap_v, unwrap_h, phase_arr_v, phase_arr_h, orig_img, avg_arr, mod_arr = self.multifreq_analysis(img_data,
                                                                                                                        delta_deck_lst, 
                                                                                                                        delta_index)
@@ -722,12 +724,11 @@ class Calibration:
                                          }
                     unwrapv_lst.append(unwrap_v)
                     unwraph_lst.append(unwrap_h)
-                else:
-                    print('%s does not exist' %(os.path.exists(os.path.join(self.path, 'capt_%d.npy' %x))))
+                
         elif (self.data_type == 'jpeg') & (self.processing =='gpu'):
-            for x in tqdm(range(0, self.no_pose), desc='generating unwrapped phases map for {} pose'.format(self.no_pose)):
-                if os.path.exists(os.path.join(self.path, 'capt%d_0.jpg' %x)):
-                    img_path = sorted(glob.glob(os.path.join(self.path, 'capt%d_*.jpg' %x)), key=os.path.getmtime)
+            for x in tqdm(range(self.acquisation_index, (self.acquisation_index + self.no_pose)), desc='generating unwrapped phases map for {} pose'.format(self.no_pose)):
+                if os.path.exists(os.path.join(self.path, 'capt_%d_0.jpg' %x)):
+                    img_path = sorted(glob.glob(os.path.join(self.path, 'capt_%d_*.jpg' %x)), key=os.path.getmtime)
                     images_arr = cp.asarray([cv2.imread(file, 0) for file in img_path]).astype(cp.float64)
                     unwrap_v, unwrap_h, phase_arr_v, phase_arr_h, orig_img, avg_arr, mod_arr = self.multifreq_analysis_cupy(images_arr,
                                                                                                                             delta_deck_lst, 
@@ -742,12 +743,12 @@ class Calibration:
                                          }
                     unwrapv_lst.append(unwrap_v)
                     unwraph_lst.append(unwrap_h)
-                else:
-                    print('%s does not exist' %(os.path.exists(os.path.join(self.path, 'capt%d_0.jpg' %x))))
+                
+            cp._default_memory_pool.free_all_blocks()
         elif (self.data_type == 'npy') & (self.processing =='gpu'):
-            for x in tqdm(range(0, self.no_pose), desc='generating unwrapped phases map for {} pose'.format(self.no_pose)):
-                if os.path.exists(os.path.join(self.path, 'capt_%d.npy' %x)):
-                    img_data = cp.load(os.path.join(self.path, 'capt_%d.npy' %x)).astype(cp.float64)
+            for x in tqdm(range(self.acquisation_index, (self.acquisation_index + self.no_pose)), desc='generating unwrapped phases map for {} pose'.format(self.no_pose)):
+                if os.path.exists(os.path.join(self.path, 'capt_%d_0.npy' %x)):
+                    img_data = cp.load(os.path.join(self.path, 'capt_%d_0.npy' %x)).astype(cp.float64)
                     unwrap_v, unwrap_h, phase_arr_v, phase_arr_h, orig_img, avg_arr, mod_arr =self.multifreq_analysis_cupy(img_data,
                                                                                                                            delta_deck_lst, 
                                                                                                                            delta_index) 
@@ -761,8 +762,8 @@ class Calibration:
                                          }
                     unwrapv_lst.append(unwrap_v)
                     unwraph_lst.append(unwrap_h)
-                else:
-                    print('%s does not exist' %(os.path.exists(os.path.join(self.path, 'capt_%d.npy' %x))))
+                
+            cp._default_memory_pool.free_all_blocks()
         return unwrapv_lst, unwraph_lst, white_lst, avg_lst, mod_lst, wrapped_phase_lst
             
 
@@ -804,7 +805,7 @@ class Calibration:
         pitch_arr=np.insert(pitch_arr, 0, eq_wav123)
         pitch_arr=np.insert(pitch_arr, 2, eq_wav12)
         delta_deck_lst, delta_index = self.delta_deck_calculation()
-        for x in tqdm(range(0, self.no_pose), desc='generating unwrapped phases map for {} images'.format(self.no_pose)):
+        for x in tqdm(range(self.acquisation_index, (self.acquisation_index + self.no_pose)), desc='generating unwrapped phases map for {} images'.format(self.no_pose)):
             if os.path.exists(os.path.join(self.path, 'capt%d_0.jpg' %x)):
                 img_path = sorted(glob.glob(os.path.join(self.path, 'capt%d_*.jpg' %x)), key=os.path.getmtime)
                 images_arr = np.array([cv2.imread(file, 0) for file in img_path]).astype(np.float64)
@@ -1009,10 +1010,9 @@ class Calibration:
                                                                   corners,
                                                                   ret)  # circles
                     cv2.imshow("Camera calibration", im_with_keypoints) # display
-                    cv2.waitKey(500)
+                    cv2.waitKey(100)
     
         cv2.destroyAllWindows()
-        cv2.waitKey(1)
         if not all(ret_lst):
             print('Warning: Centers are not detected for some poses. Modify bobdetect_areamin and bobdetect_areamin parameter')
         #set flags to have tangential distortion = 0, k4 = 0, k5 = 0, k6 = 0 
@@ -1094,7 +1094,7 @@ class Calibration:
         #Projector calibration
         proj_ret, proj_mtx, proj_dist, proj_rvecs, proj_tvecs = cv2.calibrateCamera(cam_objpts,
                                                                                     proj_imgpts,
-                                                                                    proj_img_lst[0].shape[::-1],
+                                                                                    (self.proj_width,self.proj_height),
                                                                                     None,
                                                                                     None,
                                                                                     flags=flags,
@@ -1622,13 +1622,15 @@ class Calibration:
             distances = None
         return distances
     
-    def copy_tofolder(self, sample_index_list, dest_folder):
+    def copy_tofolder(self, sample_index_list, source_folder, dest_folder):
         """
         Function for copying samples into a sub folder for bootstrapping. 
         Parameters
         ----------
         sample_index_list: list.
                            Index of poses to be transfered.
+        source_folder: str.
+                       Folder containing data of all poses
         dest_folder: str.
                      Folder into which the selected poses data will be copied for calculations.
                        
@@ -1638,9 +1640,9 @@ class Calibration:
             os.remove(os.path.join(dest_folder, f))
         #copy contents
         if self.data_type == 'jpeg':    
-            to_be_moved = [glob.glob(os.path.join(self.path, 'capt%d_*.jpg'% x)) for x in sample_index_list]
+            to_be_moved = [glob.glob(os.path.join(source_folder, 'capt_%d_*.jpg'% x)) for x in sample_index_list]
         elif self.data_type =='npy':
-            to_be_moved = [glob.glob(os.path.join(self.path, 'capt_%d.npy'% x)) for x in sample_index_list]
+            to_be_moved = [glob.glob(os.path.join(source_folder, 'capt_%d_0.npy'% x)) for x in sample_index_list]
         flat_list = [item for sublist in to_be_moved for item in sublist]
         for t in flat_list:
             shutil.copy(t, dest_folder)
@@ -1653,7 +1655,10 @@ class Calibration:
         return mean, std
     # processing all poses, eg:100 poses, together will lead to memory issue.
 
-    def bootstrap_intrinsics_extrinsics(self, delta_pose, sub_sample_size, no_sample_parameters):
+    def bootstrap_intrinsics_extrinsics(self, 
+                                        delta_pose, 
+                                        sub_sample_size, 
+                                        no_sample_parameters):
         """
         Function to apply bootstrapping and system intrinsics and extrinsics.
         Parameters
@@ -1670,9 +1675,11 @@ class Calibration:
         right_direction = np.arange(delta_pose, 2*delta_pose)
         down_direction = np.arange(2*delta_pose, 3*delta_pose)
         up_direction = np.arange(3*delta_pose, 4*delta_pose)
+        source_folder = self.path
         dest_folder = os.path.join(self.path, 'sub_calib')
         if not os.path.exists(dest_folder):
             os.makedirs(dest_folder)
+        self.path = dest_folder
         cam_mtx_sample = []
         cam_dist_sample = []
         proj_mtx_sample = []
@@ -1687,7 +1694,7 @@ class Calibration:
             sample_index_d = np.random.choice(down_direction, size=sub_sample_size, replace=False)
             sample_index_u = np.random.choice(up_direction, size=sub_sample_size, replace=False)
             sample_index = np.sort(np.concatenate((sample_index_l, sample_index_r, sample_index_d, sample_index_u)))
-            self.copy_tofolder(sample_index, dest_folder)
+            self.copy_tofolder(sample_index, source_folder, dest_folder)
             objp = self.world_points()
             unwrapv_lst, unwraph_lst, white_lst, avg_lst, mod_lst, wrapped_phase_lst = self.projcam_calib_img_multifreq()
             #Camera calibration
@@ -1833,7 +1840,7 @@ def plane_resid_plot(residual_lst):
     rms = np.sqrt(np.mean(residual**2))
     fig, ax= plt.subplots()
     plt.title('Residual from fitted planes', fontsize=20)
-    sns.histplot(residuals, legend=False)
+    sns.histplot(residual, legend=False)
     mean = np.mean(residual)
     std = np.std(residual)
     ax.text(0.75, 0.75, 'Mean:{0:.3f}'.format(mean), fontsize=20, horizontalalignment='center',
@@ -1897,7 +1904,7 @@ def main():
         kernel_h=25
 
     # no_pose = int(len(glob.glob(os.path.join(path,'capt*.jpg'))) / np.sum(np.array(N_list)) / 2)
-    no_pose = 10
+    no_pose = 2
 
     sigma_path = r'C:\Users\kl001\Documents\pyfringe_test\mean_pixel_std\mean_std_pixel.npy'
     quantile_limit = 1
