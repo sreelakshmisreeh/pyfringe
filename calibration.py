@@ -466,10 +466,11 @@ class Calibration:
                 coswraph_lst.append(cos_wrap_h)
                 stepwrapv_lst.append(step_wrap_v)
                 stepwraph_lst.append(step_wrap_h)
-                wrapped_phase_lst = {"wrapv": coswrapv_lst,
-                                     "wraph": coswraph_lst,
-                                     "stepwrapv": stepwrapv_lst,
-                                     "stepwraph": stepwraph_lst}
+
+        wrapped_phase_lst = {"wrapv": coswrapv_lst,
+                             "wraph": coswraph_lst,
+                             "stepwrapv": stepwrapv_lst,
+                             "stepwraph": stepwraph_lst}
         return unwrap_v_lst, unwrap_h_lst, white_lst, avg_lst, mod_lst, wrapped_phase_lst
     
     def delta_deck_calculation(self):
@@ -488,7 +489,7 @@ class Calibration:
         for n in unique_N_list:
             if self.processing == 'cpu':
                 delta_deck = nstep.delta_deck_gen(n, self.cam_height, self.cam_width)
-            elif self.processing == 'gpu':
+            else:
                 delta_deck = nstep_cp.delta_deck_gen_cp(n, self.cam_height, self.cam_width)
             delta_deck_lst.append(delta_deck)
         delta_index = []
