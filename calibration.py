@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-
-
 import numpy as np
 import cupy as cp
 import nstep_fringe as nstep
@@ -35,13 +33,13 @@ class Calibration:
                  cam_width,
                  cam_height,
                  no_pose,
-                 acquisation_index,
-                 mask_limit, 
-                 type_unwrap, 
-                 N_list, 
-                 pitch_list, 
-                 board_gridrows, 
-                 board_gridcolumns, 
+                 acquisition_index,
+                 mask_limit,
+                 type_unwrap,
+                 N_list,
+                 pitch_list,
+                 board_gridrows,
+                 board_gridcolumns,
                  dist_betw_circle,
                  bobdetect_areamin,
                  bobdetect_convexity,
@@ -65,11 +63,11 @@ class Calibration:
                     Modulation limit for applying mask to captured images.
         no_pose: int.
                  Number of calibration poses.
-        acquisation_index: int.
-                           Starting acquisation index
+        acquisition_index: int.
+                           Starting acquisition index
         type_unwrap: string.
                      Type of temporal unwrapping to be applied.
-                     phase' = phase coded unwrapping method,
+                     'phase' = phase coded unwrapping method,
                      'multifreq' = multi frequency unwrapping method
                      'multiwave' = multi wavelength unwrapping method.
         N_list: list.
@@ -79,7 +77,7 @@ class Calibration:
         pitch_list: list.
                     Array of number of pixels per fringe period.
         board_gridrows: int.
-                        Number of rows in the assymetric circle pattern.
+                        Number of rows in the asymmetric circle pattern.
         board_gridcolumns: int.
                            Number of columns in the asymmetric circle pattern.
         dist_betw_circle: float.
@@ -101,7 +99,7 @@ class Calibration:
         self.cam_width = cam_width
         self.cam_height = cam_height
         self.no_pose = no_pose
-        self.acquisation_index=acquisation_index
+        self.acquisition_index = acquisition_index
         self.limit = mask_limit
         self.type_unwrap = type_unwrap
         self.N = N_list
@@ -122,7 +120,7 @@ class Calibration:
             print('ERROR: Invalid type_unwrap')
             return
         if not os.path.exists(self.path):
-            print('ERROR: %s does not exist'% self.path)
+            print('ERROR: %s does not exist' % self.path)
         if (data_type != 'jpeg') and (data_type != 'npy'):
             print('ERROR: Invalid data type. Data type should be \'jpeg\' or \'npy\'')
         else:
@@ -178,12 +176,12 @@ class Calibration:
         elif self.type_unwrap == 'multiwave':
             unwrapv_lst, unwraph_lst, white_lst, avg_lst, mod_lst, wrapped_phase_lst = self.projcam_calib_img_multiwave()
             
-        #Projector images
-        proj_img_lst=self.projector_img(unwrapv_lst, unwraph_lst, white_lst, fx, fy)
-        #Camera calibration
+        # Projector images
+        proj_img_lst = self.projector_img(unwrapv_lst, unwraph_lst, white_lst, fx, fy)
+        # Camera calibration
         camr_error, cam_objpts, cam_imgpts, cam_mtx, cam_dist, cam_rvecs, cam_tvecs = self.camera_calib(objp, white_lst)
         
-        #Projector calibration
+        # Projector calibration
         proj_ret, proj_imgpts, proj_mtx, proj_dist, proj_rvecs, proj_tvecs = self.proj_calib(cam_objpts,
                                                                                              cam_imgpts,
                                                                                              unwrapv_lst,
@@ -196,29 +194,29 @@ class Calibration:
                                                                            cam_dist, 
                                                                            cam_rvecs, 
                                                                            cam_tvecs)
-        #Projector calibration error analysis
+        # Projector calibration error analysis
         proj_mean_error, proj_delta, proj_df1 = self.intrinsic_error_analysis(cam_objpts,
                                                                               proj_imgpts,
                                                                               proj_mtx,
                                                                               proj_dist,
                                                                               proj_rvecs,
                                                                               proj_tvecs)
-        #Stereo calibration
+        # Stereo calibration
         criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 40, 0.0001)
         stereocalibration_flags = cv2.CALIB_FIX_INTRINSIC+cv2.CALIB_ZERO_TANGENT_DIST+cv2.CALIB_FIX_K3+cv2.CALIB_FIX_K4+cv2.CALIB_FIX_K5+cv2.CALIB_FIX_K6
 
-        st_retu, st_cam_mtx, st_cam_dist, st_proj_mtx, st_proj_dist, st_cam_proj_rmat, st_cam_proj_tvec, E, F=cv2.stereoCalibrate(cam_objpts,
-                                                                                                                                  cam_imgpts,
-                                                                                                                                  proj_imgpts,
-                                                                                                                                  cam_mtx,
-                                                                                                                                  cam_dist,
-                                                                                                                                  proj_mtx,
-                                                                                                                                  proj_dist,
-                                                                                                                                  white_lst[0].shape[::-1],
-                                                                                                                                  flags=stereocalibration_flags,
-                                                                                                                                  criteria=criteria)
-        project_mat=np.hstack((st_cam_proj_rmat, st_cam_proj_tvec))
-        _, _, _, _, _, _, euler_angles=cv2.decomposeProjectionMatrix(project_mat)
+        st_retu, st_cam_mtx, st_cam_dist, st_proj_mtx, st_proj_dist, st_cam_proj_rmat, st_cam_proj_tvec, E, F = cv2.stereoCalibrate(cam_objpts,
+                                                                                                                                    cam_imgpts,
+                                                                                                                                    proj_imgpts,
+                                                                                                                                    cam_mtx,
+                                                                                                                                    cam_dist,
+                                                                                                                                    proj_mtx,
+                                                                                                                                    proj_dist,
+                                                                                                                                    white_lst[0].shape[::-1],
+                                                                                                                                    flags=stereocalibration_flags,
+                                                                                                                                    criteria=criteria)
+        project_mat = np.hstack((st_cam_proj_rmat, st_cam_proj_tvec))
+        _, _, _, _, _, _, euler_angles = cv2.decomposeProjectionMatrix(project_mat)
         
         np.savez(os.path.join(self.path, '{}_calibration_param.npz'.format(self.type_unwrap)), st_cam_mtx, st_cam_dist, st_proj_mtx, st_cam_proj_rmat, st_cam_proj_tvec)
         np.savez(os.path.join(self.path, '{}_cam_rot_tvecs.npz'.format(self.type_unwrap)), cam_rvecs, cam_tvecs)
@@ -284,11 +282,11 @@ class Calibration:
                   of updated list of poses.
         """
         up_lst = list(set(proj_df1[proj_df1['absdelta_x'] > reproj_criteria]['image'].to_list() + proj_df1[proj_df1['absdelta_y'] > reproj_criteria]['image'].to_list()))
-        up_white_lst =[]
-        up_unwrapv_lst=[]
-        up_unwraph_lst=[]
-        up_mod_lst=[]
-        up_proj_img_lst=[]
+        up_white_lst = []
+        up_unwrapv_lst = []
+        up_unwraph_lst = []
+        up_mod_lst = []
+        up_proj_img_lst = []
         for index, element in enumerate(white_lst):
             if index not in up_lst:
                 up_white_lst.append(element)
@@ -299,7 +297,7 @@ class Calibration:
         objp = self.world_points()
         camr_error, cam_objpts, cam_imgpts, cam_mtx, cam_dist, cam_rvecs, cam_tvecs = self.camera_calib(objp, up_white_lst)
         
-        #Projector calibration
+        # Projector calibration
         proj_ret, proj_imgpts, proj_mtx, proj_dist, proj_rvecs, proj_tvecs = self.proj_calib(cam_objpts,
                                                                                              cam_imgpts,
                                                                                              up_unwrapv_lst,
@@ -312,35 +310,34 @@ class Calibration:
                                                                            cam_dist,
                                                                            cam_rvecs,
                                                                            cam_tvecs)
-        #Projector calibration error analysis
+        # Projector calibration error analysis
         proj_mean_error, proj_delta, proj_df1 = self.intrinsic_error_analysis(cam_objpts,
                                                                               proj_imgpts,
                                                                               proj_mtx,
                                                                               proj_dist,
                                                                               proj_rvecs,
                                                                               proj_tvecs)
-        #Stereo calibration
+        # Stereo calibration
         criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 40, 0.0001)
         stereocalibration_flags = cv2.CALIB_FIX_INTRINSIC+cv2.CALIB_ZERO_TANGENT_DIST+cv2.CALIB_FIX_K3+cv2.CALIB_FIX_K4+cv2.CALIB_FIX_K5+cv2.CALIB_FIX_K6
 
-        st_retu, st_cam_mtx, st_cam_dist, st_proj_mtx, st_proj_dist, st_cam_proj_rmat, st_cam_proj_tvec, E, F=cv2.stereoCalibrate(cam_objpts,
-                                                                                                                                  cam_imgpts,
-                                                                                                                                  proj_imgpts,
-                                                                                                                                  cam_mtx,
-                                                                                                                                  cam_dist,
-                                                                                                                                  proj_mtx,
-                                                                                                                                  proj_dist,
-                                                                                                                                  white_lst[0].shape[::-1],
-                                                                                                                                  flags=stereocalibration_flags,
-                                                                                                                                  criteria=criteria)
-        project_mat=np.hstack((st_cam_proj_rmat, st_cam_proj_tvec))
-        _, _, _, _, _, _, euler_angles=cv2.decomposeProjectionMatrix(project_mat)
+        st_retu, st_cam_mtx, st_cam_dist, st_proj_mtx, st_proj_dist, st_cam_proj_rmat, st_cam_proj_tvec, E, F = cv2.stereoCalibrate(cam_objpts,
+                                                                                                                                    cam_imgpts,
+                                                                                                                                    proj_imgpts,
+                                                                                                                                    cam_mtx,
+                                                                                                                                    cam_dist,
+                                                                                                                                    proj_mtx,
+                                                                                                                                    proj_dist,
+                                                                                                                                    white_lst[0].shape[::-1],
+                                                                                                                                    flags=stereocalibration_flags,
+                                                                                                                                    criteria=criteria)
+        project_mat = np.hstack((st_cam_proj_rmat, st_cam_proj_tvec))
+        _, _, _, _, _, _, euler_angles = cv2.decomposeProjectionMatrix(project_mat)
         
         np.savez(os.path.join(self.path, '{}_calibration_param.npz'.format(self.type_unwrap)), st_cam_mtx, st_cam_dist, st_proj_mtx, st_cam_proj_rmat, st_cam_proj_tvec)
         np.savez(os.path.join(self.path, '{}_cam_rot_tvecs.npz'.format(self.type_unwrap)), cam_rvecs, cam_tvecs)
         return up_unwrapv_lst, up_unwraph_lst, up_white_lst, up_mod_lst, up_proj_img_lst, cam_objpts, cam_imgpts, proj_imgpts, euler_angles, cam_mean_error, cam_delta, cam_df1, proj_mean_error, proj_delta, proj_df1 
-        
-    
+
     def calib_center_reconstruction(self, cam_imgpts, unwrap_phase):
         """
         This function is a wrapper function to reconstruct circle centers for each camera pose and compute error 
@@ -372,7 +369,7 @@ class Calibration:
         vectors = np.load(os.path.join(self.path, '{}_cam_rot_tvecs.npz'.format(self.type_unwrap)))
         rvec = vectors["arr_0"]
         tvec = vectors["arr_1"]
-        #Function call to get all circle center x,y,z coordinates
+        # Function call to get all circle center x,y,z coordinates
         center_cordi_lst = self.center_xyz(cam_imgpts, 
                                            unwrap_phase, 
                                            c_mtx, 
@@ -380,10 +377,10 @@ class Calibration:
                                            p_mtx, 
                                            cp_rot_mtx, 
                                            cp_trans_mtx)
-        true_cordinates = self.world_points()
+        true_coordinates = self.world_points()
         
-        #Function call to get projective xyz for each pose
-        proj_xyz_arr = self.project_validation(rvec, tvec, true_cordinates)
+        # Function call to get projective xyz for each pose
+        proj_xyz_arr = self.project_validation(rvec, tvec, true_coordinates)
         # Error dataframes
         delta_df, abs_delta_df = self.center_err_analysis(center_cordi_lst, proj_xyz_arr)
         
@@ -426,22 +423,22 @@ class Calibration:
         wrapped_phase_lst: dictionary.
                             List of vertical and horizontal phase maps
         """
-        unwrap_v_lst=[]
-        unwrap_h_lst=[]
-        white_lst=[]
-        avg_lst=[]
-        mod_lst=[]
-        kv_lst=[]
-        kh_lst=[]
-        coswrapv_lst=[]
-        coswraph_lst=[]
-        stepwrapv_lst=[]
-        stepwraph_lst=[]
+        unwrap_v_lst = []
+        unwrap_h_lst = []
+        white_lst = []
+        avg_lst = []
+        mod_lst = []
+        kv_lst = []
+        kh_lst = []
+        coswrapv_lst = []
+        coswraph_lst = []
+        stepwrapv_lst = []
+        stepwraph_lst = []
         delta_deck_lst, delta_index = self.delta_deck_calculation()
-        for x in tqdm(range(self.acquisation_index, (self.acquisation_index + self.no_pose)), desc='generating unwrapped phases map for {} images'.format(self.no_pose)):
-            if os.path.exists(os.path.join(self.path, 'capt%d_0.jpg' %x)):
-                #Read and apply mask to each captured images for cosine and stair patterns
-                img_path = sorted(glob.glob(os.path.join(self.path, 'capt%d_*.jpg' %x)), key=os.path.getmtime)
+        for x in tqdm(range(self.acquisition_index, (self.acquisition_index + self.no_pose)), desc='generating unwrapped phases map for {} images'.format(self.no_pose)):
+            if os.path.exists(os.path.join(self.path, 'capt_%d_0.jpg' % x)):
+                # Read and apply mask to each captured images for cosine and stair patterns
+                img_path = sorted(glob.glob(os.path.join(self.path, 'capt_%d_*.jpg' % x)), key=os.path.getmtime)
                 images_arr = np.array([cv2.imread(file, 0) for file in img_path]).astype(np.float64)
                 cos_v_int8,  mod1, avg1, phase_cosv = nstep.phase_cal(images_arr[0:self.N[0]], delta_deck_lst[0], self.limit)
                 cos_h_int8,  mod2, avg2, phase_cosh = nstep.phase_cal(images_arr[self.N[0]:2*self.N[0]], delta_deck_lst[0], self.limit)
@@ -469,14 +466,10 @@ class Calibration:
                 coswraph_lst.append(cos_wrap_h)
                 stepwrapv_lst.append(step_wrap_v)
                 stepwraph_lst.append(step_wrap_h)
-                wrapped_phase_lst = {
-                    "wrapv": coswrapv_lst,
-                    "wraph": coswraph_lst,
-                    "stepwrapv": stepwrapv_lst,
-                    "stepwraph": stepwraph_lst
-                    }
-
-                
+                wrapped_phase_lst = {"wrapv": coswrapv_lst,
+                                     "wraph": coswraph_lst,
+                                     "stepwrapv": stepwrapv_lst,
+                                     "stepwraph": stepwraph_lst}
         return unwrap_v_lst, unwrap_h_lst, white_lst, avg_lst, mod_lst, wrapped_phase_lst
     
     def delta_deck_calculation(self):
@@ -498,14 +491,11 @@ class Calibration:
             elif self.processing == 'gpu':
                 delta_deck = nstep_cp.delta_deck_gen_cp(n, self.cam_height, self.cam_width)
             delta_deck_lst.append(delta_deck)
-        delta_index = [0]
-        count = 0
-        for i, n in enumerate(self.N[1:]):
-            if n == self.N[i]:
-                delta_index.append(count)
-            else:
-                count += 1
-                delta_index.append(count)
+        delta_index = []
+        N_list_array = np.array(self.N)
+        for i, n in enumerate(unique_N_list):
+            count = np.sum(N_list_array == n)
+            delta_index.extend([i] * count)
         return delta_deck_lst, delta_index
     
     def multifreq_analysis(self, data_array, delta_deck_lst, delta_index):
@@ -551,7 +541,7 @@ class Calibration:
         multi_cos_v_int3, multi_mod_v3, multi_avg_v3, multi_phase_v3 = nstep.phase_cal(data_array[2 * self.N[0] + 2 * self.N[1]:2 * self.N[0] + 2 * self.N[1] + self.N[2]],
                                                                                        delta_deck_lst[delta_index[2]], 
                                                                                        self.limit)
-        multi_cos_h_int3, multi_mod_h3, multi_avg_h3, multi_phase_h3 = nstep.phase_cal(data_array[2 * self.N[0] + 2 * self.N[1] + self.N[2]:2 * self.N[0] + 2 * self.N[1] + 2* self.N[2]], 
+        multi_cos_h_int3, multi_mod_h3, multi_avg_h3, multi_phase_h3 = nstep.phase_cal(data_array[2 * self.N[0] + 2 * self.N[1] + self.N[2]:2 * self.N[0] + 2 * self.N[1] + 2 * self.N[2]],
                                                                                        delta_deck_lst[delta_index[2]], 
                                                                                        self.limit)
         multi_cos_v_int4, multi_mod_v4, multi_avg_v4, multi_phase_v4 = nstep.phase_cal(data_array[2 * self.N[0] + 2 * self.N[1] + 2 * self.N[2]:2 * self.N[0] + 2 * self.N[1] + 2*self.N[2]+self.N[3]], 
@@ -563,8 +553,8 @@ class Calibration:
         
         orig_img = multi_avg_h4 + multi_mod_h4
 
-        multi_phase_v1[multi_phase_v1< EPSILON] = multi_phase_v1[multi_phase_v1 < EPSILON] + 2 * np.pi
-        multi_phase_h1[multi_phase_h1< EPSILON] = multi_phase_h1[multi_phase_h1 < EPSILON] + 2 * np.pi
+        multi_phase_v1[multi_phase_v1 < EPSILON] = multi_phase_v1[multi_phase_v1 < EPSILON] + 2 * np.pi
+        multi_phase_h1[multi_phase_h1 < EPSILON] = multi_phase_h1[multi_phase_h1 < EPSILON] + 2 * np.pi
         
         phase_arr_v = [multi_phase_v1, multi_phase_v2, multi_phase_v3, multi_phase_v4]
         phase_arr_h = [multi_phase_h1, multi_phase_h2, multi_phase_h3, multi_phase_h4]
@@ -621,20 +611,20 @@ class Calibration:
         multi_cos_v_int3, multi_mod_v3, multi_avg_v3, multi_phase_v3 = nstep_cp.phase_cal_cp(data_array[2 * self.N[0] + 2 * self.N[1]:2 * self.N[0] + 2 * self.N[1] + self.N[2]],
                                                                                              delta_deck_lst[delta_index[2]],
                                                                                              self.limit)
-        multi_cos_h_int3, multi_mod_h3, multi_avg_h3, multi_phase_h3 = nstep_cp.phase_cal_cp(data_array[2 * self.N[0] + 2 * self.N[1] + self.N[2]:2 * self.N[0] + 2 * self.N[1] + 2* self.N[2]], 
+        multi_cos_h_int3, multi_mod_h3, multi_avg_h3, multi_phase_h3 = nstep_cp.phase_cal_cp(data_array[2 * self.N[0] + 2 * self.N[1] + self.N[2]:2 * self.N[0] + 2 * self.N[1] + 2 * self.N[2]],
                                                                                              delta_deck_lst[delta_index[2]],
                                                                                              self.limit)
-        multi_cos_v_int4, multi_mod_v4, multi_avg_v4, multi_phase_v4 = nstep_cp.phase_cal_cp(data_array[2 * self.N[0] + 2 * self.N[1] + 2 * self.N[2]:2 * self.N[0] + 2 * self.N[1] + 2*self.N[2]+self.N[3]],
+        multi_cos_v_int4, multi_mod_v4, multi_avg_v4, multi_phase_v4 = nstep_cp.phase_cal_cp(data_array[2 * self.N[0] + 2 * self.N[1] + 2 * self.N[2]:2 * self.N[0] + 2 * self.N[1] + 2 * self.N[2] + self.N[3]],
                                                                                              delta_deck_lst[delta_index[3]],
                                                                                              self.limit)
-        multi_cos_h_int4, multi_mod_h4, multi_avg_h4, multi_phase_h4 = nstep_cp.phase_cal_cp(data_array[2 * self.N[0] + 2 * self.N[1] + 2*self.N[2] + self.N[3]: 2 * self.N[0] + 2 * self.N[1] + 2*self.N[2] + 2 * self.N[3]], 
+        multi_cos_h_int4, multi_mod_h4, multi_avg_h4, multi_phase_h4 = nstep_cp.phase_cal_cp(data_array[2 * self.N[0] + 2 * self.N[1] + 2*self.N[2] + self.N[3]: 2 * self.N[0] + 2 * self.N[1] + 2 * self.N[2] + 2 * self.N[3]],
                                                                                              delta_deck_lst[delta_index[3]],
                                                                                              self.limit)
         
         orig_img = multi_avg_h4 + multi_mod_h4
 
-        multi_phase_v1[multi_phase_v1< EPSILON] = multi_phase_v1[multi_phase_v1 < EPSILON] + 2 * np.pi
-        multi_phase_h1[multi_phase_h1< EPSILON] = multi_phase_h1[multi_phase_h1 < EPSILON] + 2 * np.pi
+        multi_phase_v1[multi_phase_v1 < EPSILON] = multi_phase_v1[multi_phase_v1 < EPSILON] + 2 * np.pi
+        multi_phase_h1[multi_phase_h1 < EPSILON] = multi_phase_h1[multi_phase_h1 < EPSILON] + 2 * np.pi
         
         phase_arr_v = [multi_phase_v1, multi_phase_v2, multi_phase_v3, multi_phase_v4]
         phase_arr_h = [multi_phase_h1, multi_phase_h2, multi_phase_h3, multi_phase_h4]
@@ -689,9 +679,9 @@ class Calibration:
         unwraph_lst = []
         delta_deck_lst, delta_index = self.delta_deck_calculation()
         if (self.data_type == 'jpeg') and (self.processing == 'cpu'):
-            for x in tqdm(range(self.acquisation_index, (self.acquisation_index + self.no_pose)), desc='generating unwrapped phases map for {} pose'.format(self.no_pose)):
-                if os.path.exists(os.path.join(self.path, 'capt_%d_0.jpg' %x)):
-                    img_path = sorted(glob.glob(os.path.join(self.path, 'capt_%d_*.jpg' %x)), key=os.path.getmtime)
+            for x in tqdm(range(self.acquisition_index, (self.acquisition_index + self.no_pose)), desc='generating unwrapped phases map for {} pose'.format(self.no_pose)):
+                if os.path.exists(os.path.join(self.path, 'capt_%d_0.jpg' % x)):
+                    img_path = sorted(glob.glob(os.path.join(self.path, 'capt_%d_*.jpg' % x)), key=os.path.getmtime)
                     images_arr = np.array([cv2.imread(file, 0) for file in img_path]).astype(np.float64)
                     unwrap_v, unwrap_h, phase_arr_v, phase_arr_h, orig_img, avg_arr, mod_arr = self.multifreq_analysis(images_arr, 
                                                                                                                        delta_deck_lst, 
@@ -702,15 +692,14 @@ class Calibration:
                     wrapv_lst.append(phase_arr_v)
                     wraph_lst.append(phase_arr_h)
                     wrapped_phase_lst = {"wrapv": wrapv_lst,
-                                        "wraph": wraph_lst
-                                         }
+                                         "wraph": wraph_lst}
                     unwrapv_lst.append(unwrap_v)
                     unwraph_lst.append(unwrap_h)
             
-        elif (self.data_type == 'npy') & (self.processing =='cpu'):
-            for x in tqdm(range(self.acquisation_index, (self.acquisation_index + self.no_pose)), desc='generating unwrapped phases map for {} pose'.format(self.no_pose)):
-                if os.path.exists(os.path.join(self.path, 'capt_%d_0.npy' %x)):
-                    img_data = np.load(os.path.join(self.path, 'capt_%d_0.npy' %x)).astype(np.float64)
+        elif (self.data_type == 'npy') & (self.processing == 'cpu'):
+            for x in tqdm(range(self.acquisition_index, (self.acquisition_index + self.no_pose)), desc='generating unwrapped phases map for {} pose'.format(self.no_pose)):
+                if os.path.exists(os.path.join(self.path, 'capt_%d_0.npy' % x)):
+                    img_data = np.load(os.path.join(self.path, 'capt_%d_0.npy' % x)).astype(np.float64)
                     unwrap_v, unwrap_h, phase_arr_v, phase_arr_h, orig_img, avg_arr, mod_arr = self.multifreq_analysis(img_data,
                                                                                                                        delta_deck_lst, 
                                                                                                                        delta_index)
@@ -720,15 +709,14 @@ class Calibration:
                     wrapv_lst.append(phase_arr_v)
                     wraph_lst.append(phase_arr_h)
                     wrapped_phase_lst = {"wrapv": wrapv_lst,
-                                        "wraph": wraph_lst
-                                         }
+                                         "wraph": wraph_lst}
                     unwrapv_lst.append(unwrap_v)
                     unwraph_lst.append(unwrap_h)
                 
-        elif (self.data_type == 'jpeg') & (self.processing =='gpu'):
-            for x in tqdm(range(self.acquisation_index, (self.acquisation_index + self.no_pose)), desc='generating unwrapped phases map for {} pose'.format(self.no_pose)):
-                if os.path.exists(os.path.join(self.path, 'capt_%d_0.jpg' %x)):
-                    img_path = sorted(glob.glob(os.path.join(self.path, 'capt_%d_*.jpg' %x)), key=os.path.getmtime)
+        elif (self.data_type == 'jpeg') & (self.processing == 'gpu'):
+            for x in tqdm(range(self.acquisition_index, (self.acquisition_index + self.no_pose)), desc='generating unwrapped phases map for {} pose'.format(self.no_pose)):
+                if os.path.exists(os.path.join(self.path, 'capt_%d_0.jpg' % x)):
+                    img_path = sorted(glob.glob(os.path.join(self.path, 'capt_%d_*.jpg' % x)), key=os.path.getmtime)
                     images_arr = cp.asarray([cv2.imread(file, 0) for file in img_path]).astype(cp.float64)
                     unwrap_v, unwrap_h, phase_arr_v, phase_arr_h, orig_img, avg_arr, mod_arr = self.multifreq_analysis_cupy(images_arr,
                                                                                                                             delta_deck_lst, 
@@ -739,33 +727,30 @@ class Calibration:
                     wrapv_lst.append(phase_arr_v)
                     wraph_lst.append(phase_arr_h)
                     wrapped_phase_lst = {"wrapv": wrapv_lst,
-                                        "wraph": wraph_lst
-                                         }
+                                         "wraph": wraph_lst}
                     unwrapv_lst.append(unwrap_v)
                     unwraph_lst.append(unwrap_h)
                 
             cp._default_memory_pool.free_all_blocks()
-        elif (self.data_type == 'npy') & (self.processing =='gpu'):
-            for x in tqdm(range(self.acquisation_index, (self.acquisation_index + self.no_pose)), desc='generating unwrapped phases map for {} pose'.format(self.no_pose)):
-                if os.path.exists(os.path.join(self.path, 'capt_%d_0.npy' %x)):
-                    img_data = cp.load(os.path.join(self.path, 'capt_%d_0.npy' %x)).astype(cp.float64)
-                    unwrap_v, unwrap_h, phase_arr_v, phase_arr_h, orig_img, avg_arr, mod_arr =self.multifreq_analysis_cupy(img_data,
-                                                                                                                           delta_deck_lst, 
-                                                                                                                           delta_index) 
+        elif (self.data_type == 'npy') & (self.processing == 'gpu'):
+            for x in tqdm(range(self.acquisition_index, (self.acquisition_index + self.no_pose)), desc='generating unwrapped phases map for {} pose'.format(self.no_pose)):
+                if os.path.exists(os.path.join(self.path, 'capt_%d_0.npy' % x)):
+                    img_data = cp.load(os.path.join(self.path, 'capt_%d_0.npy' % x)).astype(cp.float64)
+                    unwrap_v, unwrap_h, phase_arr_v, phase_arr_h, orig_img, avg_arr, mod_arr = self.multifreq_analysis_cupy(img_data,
+                                                                                                                            delta_deck_lst,
+                                                                                                                            delta_index)
                     avg_lst.append(avg_arr)
                     mod_lst.append(mod_arr)
                     white_lst.append(orig_img)
                     wrapv_lst.append(phase_arr_v)
                     wraph_lst.append(phase_arr_h)
                     wrapped_phase_lst = {"wrapv": wrapv_lst,
-                                         "wraph": wraph_lst
-                                         }
+                                         "wraph": wraph_lst}
                     unwrapv_lst.append(unwrap_v)
                     unwraph_lst.append(unwrap_h)
                 
             cp._default_memory_pool.free_all_blocks()
         return unwrapv_lst, unwraph_lst, white_lst, avg_lst, mod_lst, wrapped_phase_lst
-            
 
     def projcam_calib_img_multiwave(self):
         """
@@ -797,17 +782,17 @@ class Calibration:
         wraph_lst = []
         unwrapv_lst = []
         unwraph_lst = []
-        pitch_arr = self.pitch # there is manipulation of pitch
+        pitch_arr = self.pitch  # there is manipulation of pitch
         N_arr = self.N
         eq_wav12 = (pitch_arr[-1] * pitch_arr[1]) / (pitch_arr[1]-pitch_arr[-1])
-        eq_wav123 = pitch_arr[0] *eq_wav12 / (pitch_arr[0] - eq_wav12)
+        eq_wav123 = pitch_arr[0] * eq_wav12 / (pitch_arr[0] - eq_wav12)
         
-        pitch_arr=np.insert(pitch_arr, 0, eq_wav123)
-        pitch_arr=np.insert(pitch_arr, 2, eq_wav12)
+        pitch_arr = np.insert(pitch_arr, 0, eq_wav123)
+        pitch_arr = np.insert(pitch_arr, 2, eq_wav12)
         delta_deck_lst, delta_index = self.delta_deck_calculation()
-        for x in tqdm(range(self.acquisation_index, (self.acquisation_index + self.no_pose)), desc='generating unwrapped phases map for {} images'.format(self.no_pose)):
-            if os.path.exists(os.path.join(self.path, 'capt%d_0.jpg' %x)):
-                img_path = sorted(glob.glob(os.path.join(self.path, 'capt%d_*.jpg' %x)), key=os.path.getmtime)
+        for x in tqdm(range(self.acquisition_index, (self.acquisition_index + self.no_pose)), desc='generating unwrapped phases map for {} images'.format(self.no_pose)):
+            if os.path.exists(os.path.join(self.path, 'capt_%d_0.jpg' % x)):
+                img_path = sorted(glob.glob(os.path.join(self.path, 'capt_%d_*.jpg' % x)), key=os.path.getmtime)
                 images_arr = np.array([cv2.imread(file, 0) for file in img_path]).astype(np.float64)
                 multi_cos_v_int3, multi_mod_v3, multi_avg_v3, multi_phase_v3 = nstep.phase_cal(images_arr[0: N_arr[0]],
                                                                                                delta_deck_lst[delta_index[0]],
@@ -824,7 +809,7 @@ class Calibration:
                 multi_cos_v_int1, multi_mod_v1, multi_avg_v1, multi_phase_v1 = nstep.phase_cal(images_arr[2 * N_arr[0] + 2 * N_arr[1]:2 * N_arr[0] + 2 * N_arr[1] + N_arr[2]],
                                                                                                delta_deck_lst[delta_index[2]],
                                                                                                self.limit)
-                multi_cos_h_int1, multi_mod_h1, multi_avg_h1, multi_phase_h1 = nstep.phase_cal(images_arr[2 * N_arr[0] + 2 * N_arr[1]+ N_arr[2]:2 * N_arr[0] + 2 * N_arr[1] + 2 * N_arr[2]],
+                multi_cos_h_int1, multi_mod_h1, multi_avg_h1, multi_phase_h1 = nstep.phase_cal(images_arr[2 * N_arr[0] + 2 * N_arr[1] + N_arr[2]:2 * N_arr[0] + 2 * N_arr[1] + 2 * N_arr[2]],
                                                                                                delta_deck_lst[delta_index[2]],
                                                                                                self.limit)
                
@@ -849,10 +834,8 @@ class Calibration:
                 white_lst.append(orig_img)
                 wrapv_lst.append(phase_arr_v)
                 wraph_lst.append(phase_arr_h)
-                wrapped_phase_lst = {
-                    "wrapv": wrapv_lst,
-                    "wraph": wraph_lst
-                    }
+                wrapped_phase_lst = {"wrapv": wrapv_lst,
+                                     "wraph": wraph_lst}
                 kv_lst.append(k_arr_v)
                 kh_lst.append(k_arr_h)
                 unwrapv_lst.append(multiwav_unwrap_v)
@@ -866,7 +849,6 @@ class Calibration:
         for i in image_lst:
             resize_img_lst.append(cv2.resize(i, None, fx=fx, fy=fy))
         return resize_img_lst
-        
 
     def projector_img(self, unwrap_v_lst, unwrap_h_lst, white_lst, fx, fy):
         """
@@ -892,7 +874,7 @@ class Calibration:
         unwrap_v_lst = Calibration._image_resize(unwrap_v_lst, fx, fy)
         unwrap_h_lst = Calibration._image_resize(unwrap_h_lst, fx, fy)
         white_lst = Calibration._image_resize(white_lst, fx, fy)
-        proj_img=[]
+        proj_img = []
         for i in tqdm(range(0, len(unwrap_v_lst)), desc='projector images'):
             # Convert phase map to coordinates
             unwrap_proj_u = (unwrap_v_lst[i] - self.phase_st) * self.pitch[-1] / (2 * np.pi)
@@ -954,25 +936,25 @@ class Calibration:
                    Array of translational vectors for each calibration pose.
     
         """
-        #Set bob detector properties
+        # Set bob detector properties
         criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
         blobParams = cv2.SimpleBlobDetector_Params()
         
-        #color
-        blobParams.filterByColor=True
-        blobParams.blobColor=255
+        # color
+        blobParams.filterByColor = True
+        blobParams.blobColor = 255
     
         # Filter by Area.
         blobParams.filterByArea = True
-        blobParams.minArea = self.bobdetect_areamin#2000
+        blobParams.minArea = self.bobdetect_areamin  # 2000
         
-        #Convexity
+        # Convexity
         blobParams.filterByConvexity = True
         blobParams.minConvexity = self.bobdetect_convexity
         
         blobDetector = cv2.SimpleBlobDetector_create(blobParams)
-        objpoints = [] # 3d point in real world space
-        cam_imgpoints = [] # 2d points in image plane.
+        objpoints = []  # 3d point in real world space
+        cam_imgpoints = []  # 2d points in image plane.
         found = 0
         
         cv2.startWindowThread()
@@ -982,8 +964,8 @@ class Calibration:
         for i, white in enumerate(white_lst):
             # Convert float image to uint8 type image.
             white = cv2.normalize(white, None, 0, 255, cv2.NORM_MINMAX, cv2.CV_8U) 
-            white_color = cv2.cvtColor(white, cv2.COLOR_GRAY2RGB) #only for drawing purpose
-            keypoints = blobDetector.detect(white) # Detect blobs.
+            white_color = cv2.cvtColor(white, cv2.COLOR_GRAY2RGB)  # only for drawing purpose
+            keypoints = blobDetector.detect(white)  # Detect blobs.
           
             # Draw detected blobs as green circles. This helps cv2.findCirclesGrid() .
             im_with_keypoints = cv2.drawKeypoints(white_color, keypoints, np.array([]), (0, 255, 0),
@@ -993,7 +975,7 @@ class Calibration:
             
             ret, corners = cv2.findCirclesGrid(im_with_keypoints_gray, (self.board_gridrows, self.board_gridcolumns), None, 
                                                flags=cv2.CALIB_CB_ASYMMETRIC_GRID+cv2.CALIB_CB_CLUSTERING,
-                                              blobDetector=blobDetector)# Find the circle grid
+                                               blobDetector=blobDetector)  # Find the circle grid
             ret_lst.append(ret)
             
             if ret:
@@ -1009,28 +991,31 @@ class Calibration:
                                                                   (self.board_gridrows, self.board_gridcolumns),
                                                                   corners,
                                                                   ret)  # circles
-                    cv2.imshow("Camera calibration", im_with_keypoints) # display
+                    cv2.imshow("Camera calibration", im_with_keypoints)  # display
                     cv2.waitKey(100)
     
         cv2.destroyAllWindows()
         if not all(ret_lst):
             print('Warning: Centers are not detected for some poses. Modify bobdetect_areamin and bobdetect_areamin parameter')
-        #set flags to have tangential distortion = 0, k4 = 0, k5 = 0, k6 = 0 
+        # set flags to have tangential distortion = 0, k4 = 0, k5 = 0, k6 = 0
         flags = cv2.CALIB_ZERO_TANGENT_DIST + cv2.CALIB_FIX_K3 + cv2.CALIB_FIX_K4 + cv2.CALIB_FIX_K5 + cv2.CALIB_FIX_K6
-        #camera calibration
-        cam_ret, cam_mtx, cam_dist, cam_rvecs, cam_tvecs = cv2.calibrateCamera(objpoints, 
-                                                                             cam_imgpoints, white_lst[0].shape[::-1], 
-                                                                               None, None, flags=flags, criteria=criteria)
+        # camera calibration
+        cam_ret, cam_mtx, cam_dist, cam_rvecs, cam_tvecs = cv2.calibrateCamera(objpoints,
+                                                                               cam_imgpoints,
+                                                                               white_lst[0].shape[::-1],
+                                                                               None,
+                                                                               None,
+                                                                               flags=flags,
+                                                                               criteria=criteria)
        
-        #Average re projection error
-        tot_error=0
+        # Average re projection error
+        tot_error = 0
         for i in range(len(objpoints)):
-            cam_img2, _= cv2.projectPoints(objpoints[i], cam_rvecs[i], cam_tvecs[i], cam_mtx, cam_dist)
+            cam_img2, _ = cv2.projectPoints(objpoints[i], cam_rvecs[i], cam_tvecs[i], cam_mtx, cam_dist)
             error = cv2.norm(cam_imgpoints[i], cam_img2, cv2.NORM_L2) / len(cam_img2)
             tot_error += error
         r_error = tot_error/len(objpoints)
         print("Re projection error:", r_error)
-       
         return r_error, objpoints, cam_imgpoints, cam_mtx, cam_dist, cam_rvecs, cam_tvecs
     
     def proj_calib(self, 
@@ -1077,30 +1062,30 @@ class Calibration:
         centers = [i.reshape(cam_objpts[0].shape[0], 2) for i in cam_imgpts]
         proj_imgpts = []
         for x, c in enumerate(centers):
-            #Phase to coordinate conversion for each pose
+            # Phase to coordinate conversion for each pose
             u = (nstep.bilinear_interpolate(unwrap_v_lst[x], c) - self.phase_st) * self.pitch[-1] / (2*np.pi)
             v = (nstep.bilinear_interpolate(unwrap_h_lst[x], c) - self.phase_st) * self.pitch[-1] / (2*np.pi)
             coordi = np.column_stack((u, v)).reshape(cam_objpts[0].shape[0], 1, 2).astype(np.float32)
             proj_imgpts.append(coordi)
             if proj_img_lst is not None:
-                proj_color = cv2.cvtColor(proj_img_lst[x], cv2.COLOR_GRAY2RGB) #only for drawing
+                proj_color = cv2.cvtColor(proj_img_lst[x], cv2.COLOR_GRAY2RGB)  # only for drawing
                 proj_keypoints = cv2.drawChessboardCorners(proj_color, (self.board_gridrows, self.board_gridcolumns), coordi, True)
-                cv2.imshow("Projector calibration", proj_keypoints) # display
+                cv2.imshow("Projector calibration", proj_keypoints)  # display
                 cv2.waitKey(100)
         cv2.destroyAllWindows()
-        #Set all distortion =0. linear model assumption
-        flags=cv2.CALIB_ZERO_TANGENT_DIST + cv2.CALIB_FIX_K1 + cv2.CALIB_FIX_K2 + cv2.CALIB_FIX_K3 + cv2.CALIB_FIX_K4 + cv2.CALIB_FIX_K5 + cv2.CALIB_FIX_K6
+        # Set all distortion = 0. linear model assumption
+        flags = cv2.CALIB_ZERO_TANGENT_DIST + cv2.CALIB_FIX_K1 + cv2.CALIB_FIX_K2 + cv2.CALIB_FIX_K3 + cv2.CALIB_FIX_K4 + cv2.CALIB_FIX_K5 + cv2.CALIB_FIX_K6
        
-        #Projector calibration
+        # Projector calibration
         proj_ret, proj_mtx, proj_dist, proj_rvecs, proj_tvecs = cv2.calibrateCamera(cam_objpts,
                                                                                     proj_imgpts,
-                                                                                    (self.proj_width,self.proj_height),
+                                                                                    (self.proj_width, self.proj_height),
                                                                                     None,
                                                                                     None,
                                                                                     flags=flags,
                                                                                     criteria=(cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 2e-16))
-        tot_error=0
-        #Average re projection error
+        tot_error = 0
+        # Average re projection error
         for i in range(len(cam_objpts)):
             proj_img2, _ = cv2.projectPoints(cam_objpts[i], proj_rvecs[i], proj_tvecs[i], proj_mtx, proj_dist)
             error = cv2.norm(proj_imgpts[i], proj_img2, cv2.NORM_L2) / len(proj_img2)
@@ -1151,7 +1136,7 @@ class Calibration:
                     plt.figure()
                     plt.plot(wrapped_phase_lst['wraph'][i][:, 960])
                     plt.plot(wrapped_phase_lst['stepwraph'][i][:, 960])
-                plt.title('Wrap phase map %s' %direc, fontsize=20)
+                plt.title('Wrap phase map %s' % direc, fontsize=20)
                 plt.xlabel('Dimension', fontsize=20)
                 plt.ylabel('Phase', fontsize=20)
         elif self.type_unwrap in {'multifreq', 'multiwave'}:
@@ -1162,7 +1147,7 @@ class Calibration:
                     for i, wrapped_phase in enumerate(phase_arr_v):
                         plt.subplot(n_subplot, 1, i+1)
                         plt.plot(wrapped_phase[600])
-                    plt.title('Wrap phase map %s' %direc, fontsize=20)
+                    plt.title('Wrap phase map %s' % direc, fontsize=20)
                     plt.xlabel('Dimension', fontsize=20)
                     plt.ylabel('Phase', fontsize=20)
             if direc == 'h':
@@ -1172,7 +1157,7 @@ class Calibration:
                     for i, wrapped_phase in enumerate(phase_arr_h):
                         plt.subplot(n_subplot, 1, i+1)
                         plt.plot(wrapped_phase[:, 960])
-                    plt.title('Wrap phase map %s' %direc, fontsize=20)
+                    plt.title('Wrap phase map %s' % direc, fontsize=20)
                     plt.xlabel('Dimension', fontsize=20)
                     plt.ylabel('Phase', fontsize=20)
         else:
@@ -1219,8 +1204,9 @@ class Calibration:
         
         abs_error = np.array(abs_error)
         df_a, df_b, df_c = abs_error.shape
-        abs_df = pd.DataFrame(abs_error.reshape(df_a * df_b, df_c), index=np.repeat(np.arange(df_a), df_b),
-                            columns=['absdelta_x', 'absdelta_y'])
+        abs_df = pd.DataFrame(abs_error.reshape(df_a * df_b, df_c),
+                              index=np.repeat(np.arange(df_a), df_b),
+                              columns=['absdelta_x', 'absdelta_y'])
         abs_df = abs_df.reset_index().rename(columns={'index': 'image'})
         return mean_error, np.array(delta_lst), abs_df
 
@@ -1253,8 +1239,8 @@ class Calibration:
         plt.scatter(delta[:, :, 0].ravel(), delta[:, :, 1].ravel())
         plt.xlabel('x(pixel)', fontsize=30)
         plt.ylabel('y(pixel)', fontsize=30)
-        #axes = plt.gca()
-        #axes.set_aspect(1) #to set aspect equal
+        # axes = plt.gca()
+        # axes.set_aspect(1) #to set aspect equal
         plt.title('Re projection error for {} '.format(dev), fontsize=30)
         plt.xticks(fontsize=20)
         plt.yticks(fontsize=20)
@@ -1315,7 +1301,7 @@ class Calibration:
         return np.array(center_cordi_lst)
 
     # Projective coordinates based on camera - projector extrinsics
-    def project_validation(self, rvec, tvec, true_cordinates):
+    def project_validation(self, rvec, tvec, true_coordinates):
         """
         Function to generate world projective coordinates in camera coordinate system for each 
         calibration pose using pose extrinsic.
@@ -1326,27 +1312,27 @@ class Calibration:
               List of rotation vectors for each calibration pose.
         tvec: list.
               List of translational vectors for each calibration pose.
-        true_cordinates: list.
+        true_coordinates: list.
                          Defined world coordinates of circle centers.
         Returns
         -------
         proj_xyz_lst: list.
                       Array of projective coordinates each calibration poses.
         """
-        t=np.ones((true_cordinates.shape[0], 1))
-        homo_true_cordi = np.hstack((true_cordinates, t))
+        t = np.ones((true_coordinates.shape[0], 1))
+        homo_true_cordi = np.hstack((true_coordinates, t))
         homo_true_cordi = homo_true_cordi.reshape((homo_true_cordi.shape[0], homo_true_cordi.shape[1], 1))
         proj_xyz_lst = []
         for i in tqdm(range(0, len(tvec)), desc='projective centers'):
             rvec_mtx = cv2.Rodrigues(rvec[i])[0]
             h_vecs = np.hstack((rvec_mtx, tvec[i]))
-            updated_hvecs = np.repeat(h_vecs[np.newaxis, :, :], true_cordinates.shape[0], axis=0)
+            updated_hvecs = np.repeat(h_vecs[np.newaxis, :, :], true_coordinates.shape[0], axis=0)
             proj_xyz = updated_hvecs @ homo_true_cordi
             proj_xyz = proj_xyz.reshape((proj_xyz.shape[0], proj_xyz.shape[1]))
             proj_xyz_lst.append(proj_xyz)
         return np.array(proj_xyz_lst)
 
-    # Calculate error = center reconstruction - projectivr coordinates
+    # Calculate error = center reconstruction - projector coordinates
     def center_err_analysis(self, cordi_arr, proj_xyz_arr):
         """
         Function to compute error of 3d coordinates of detected circle centers from projective coordinates 
@@ -1379,25 +1365,25 @@ class Calibration:
         g_delta = delta_df.groupby(delta_df.index)
         delta_group = [g_delta.get_group(x) for x in g_delta.groups]
 
-        n_colors = len(delta_group)  #no. of poses
+        n_colors = len(delta_group)  # no. of poses
         cm = plt.get_cmap('gist_rainbow')
-        fig=plt.figure(figsize=(16, 15))
+        fig = plt.figure(figsize=(16, 15))
         fig.suptitle(' Error in reconstructed coordinates compared to true coordinates ', fontsize=20)
         ax = plt.axes(projection='3d')
         ax.set_prop_cycle(color=[cm(1.*i/n_colors) for i in range(n_colors)])
-        #cm = plt.get_cmap('gist_rainbow')
+        # cm = plt.get_cmap('gist_rainbow')
         for i in range(0, len(delta_group)):
             x1 = delta_group[i]['delta_x']
             y1 = delta_group[i]['delta_y']
             z1 = delta_group[i]['delta_z']
-            ax.scatter(x1, y1, z1, label='Pose %d' %i)
+            ax.scatter(x1, y1, z1, label='Pose %d' % i)
         ax.set_xlabel('$\Delta x$ (mm)', fontsize=20, labelpad=10)
         ax.set_ylabel('$\Delta y$ (mm)', fontsize=20, labelpad=10)
         ax.set_zlabel('$\Delta z$ (mm)', fontsize=20, labelpad=10)
         ax.tick_params(axis='x', labelsize=15)
         ax.tick_params(axis='y', labelsize=15)
         ax.tick_params(axis='z', labelsize=15)
-        #ax.legend(loc="upper left",bbox_to_anchor=(1.2, 1),fontsize=15)
+        # ax.legend(loc="upper left",bbox_to_anchor=(1.2, 1),fontsize=15)
         plt.tight_layout()
         plt.savefig(os.path.join(self.path, 'error.png'))
         fig, ax = plt.subplots()
@@ -1493,14 +1479,14 @@ class Calibration:
                     print('Please provide modulation images for mask.')
             elif mask_cond == 'intensity':
                 if w.size != 0:
-                    roi_mask[w > int_limit]= True
+                    roi_mask[w > int_limit] = True
                     point_cloud_dir = os.path.join(self.path, 'intensity_mask')
                     if not os.path.exists(point_cloud_dir):
                         os.makedirs(point_cloud_dir)
                 else:
                     print('Please provide intensity (texture) image.')
             else:
-                roi_mask = True # all pixels are sellected.
+                roi_mask = True  # all pixels are selected.
                 point_cloud_dir = os.path.join(self.path, 'no_mask')
                 if not os.path.exists(point_cloud_dir):
                     os.makedirs(point_cloud_dir)
@@ -1527,7 +1513,7 @@ class Calibration:
                 [
                     PlyElement.describe(np.array(xyz, dtype=[('x', 'f4'), ('y', 'f4'), ('z', 'f4')]), 'points'),
                     PlyElement.describe(np.array(color, dtype=[('r', 'f4'), ('g', 'f4'), ('b', 'f4')]), 'color'),
-                ]).write(os.path.join(point_cloud_dir, 'obj_%d.ply' %i))
+                ]).write(os.path.join(point_cloud_dir, 'obj_%d.ply' % i))
             
         if mask_cond == 'intensity':
             residual_lst, outlier_lst = self.white_center_planefit(cordi_lst, resid_outlier_limit)
@@ -1567,7 +1553,7 @@ class Calibration:
             zcord = zcord[~np.isnan(zcord)]
             fit, residual = plane_fit(xcord, ycord, zcord)
             outliers = residual[(residual < -resid_outlier_limit) | (residual > resid_outlier_limit)]
-            updated_resid = residual[(residual>-resid_outlier_limit) & (residual < resid_outlier_limit)]
+            updated_resid = residual[(residual > -resid_outlier_limit) & (residual < resid_outlier_limit)]
             residual_lst.append(updated_resid)
             outlier_lst.append(outliers)
         plane_resid_plot(residual_lst)
@@ -1589,12 +1575,12 @@ class Calibration:
         distances: pandas dataframe.
                    Dataframe of distance calculated for each calibration pose.
         """
-        dist =[]
-        true_cordinates = self.world_points()
-        true_dist = distance.pdist(true_cordinates, 'euclidean')
+        dist = []
+        true_coordinates = self.world_points()
+        true_dist = distance.pdist(true_coordinates, 'euclidean')
         true_dist = np.sort(true_dist)
         dist_diff = np.diff(true_dist)
-        dist_pos = np.where(dist_diff> abs(0.4))[0] + 1
+        dist_pos = np.where(dist_diff > abs(0.4))[0] + 1
         dist_split = np.split(true_dist, dist_pos)
         true_val, true_count = np.unique(true_dist, return_counts=True)
         true_val = np.around(true_val, decimals=3)
@@ -1603,12 +1589,12 @@ class Calibration:
         if val_label != true_val.all():
             distances = dist_l(center_cordi_lst, true_val)
             dist.append(distances)
-            fig, ax= plt.subplots()
+            fig, ax = plt.subplots()
             x = distances[val_label]-val_label
             sns.histplot(x)
             mean = x.mean()
             std = x.std()
-            #ax.set_xlim(mean-0.2,mean+0.5)
+            # ax.set_xlim(mean-0.2,mean+0.5)
             ax.text(0.75, 0.75, 'Mean:{0:.3f}'.format(mean), fontsize=20, horizontalalignment='center',
                     verticalalignment='center', transform=ax.transAxes)
             ax.text(0.75, 0.65, 'Std:{0:.3f}'.format(std), fontsize=20, horizontalalignment='center',
@@ -1635,14 +1621,14 @@ class Calibration:
                      Folder into which the selected poses data will be copied for calculations.
                        
         """
-        #empty destination folder
+        # empty destination folder
         for f in os.listdir(dest_folder):
             os.remove(os.path.join(dest_folder, f))
-        #copy contents
+        # copy contents
         if self.data_type == 'jpeg':    
-            to_be_moved = [glob.glob(os.path.join(source_folder, 'capt_%d_*.jpg'% x)) for x in sample_index_list]
-        elif self.data_type =='npy':
-            to_be_moved = [glob.glob(os.path.join(source_folder, 'capt_%d_0.npy'% x)) for x in sample_index_list]
+            to_be_moved = [glob.glob(os.path.join(source_folder, 'capt_%d_*.jpg' % x)) for x in sample_index_list]
+        elif self.data_type == 'npy':
+            to_be_moved = [glob.glob(os.path.join(source_folder, 'capt_%d_0.npy' % x)) for x in sample_index_list]
         flat_list = [item for sublist in to_be_moved for item in sublist]
         for t in flat_list:
             shutil.copy(t, dest_folder)
@@ -1697,27 +1683,27 @@ class Calibration:
             self.copy_tofolder(sample_index, source_folder, dest_folder)
             objp = self.world_points()
             unwrapv_lst, unwraph_lst, white_lst, avg_lst, mod_lst, wrapped_phase_lst = self.projcam_calib_img_multifreq()
-            #Camera calibration
+            # Camera calibration
             camr_error, cam_objpts, cam_imgpts, cam_mtx, cam_dist, cam_rvecs, cam_tvecs = self.camera_calib(objp, white_lst, display=False)
-            #Projector calibration
+            # Projector calibration
             proj_ret, proj_imgpts, proj_mtx, proj_dist, proj_rvecs, proj_tvecs = self.proj_calib(cam_objpts,
                                                                                                  cam_imgpts,
                                                                                                  unwrapv_lst,
                                                                                                  unwraph_lst)
-            #Stereo calibration
+            # Stereo calibration
             criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 40, 0.0001)
             stereocalibration_flags = cv2.CALIB_FIX_INTRINSIC + cv2.CALIB_ZERO_TANGENT_DIST + cv2.CALIB_FIX_K3+cv2.CALIB_FIX_K4 + cv2.CALIB_FIX_K5+cv2.CALIB_FIX_K6
             
-            st_retu, st_cam_mtx, st_cam_dist, st_proj_mtx, st_proj_dist, st_cam_proj_rmat, st_cam_proj_tvec, E, F=cv2.stereoCalibrate(cam_objpts,
-                                                                                                                                      cam_imgpts,
-                                                                                                                                      proj_imgpts,
-                                                                                                                                      cam_mtx,
-                                                                                                                                      cam_dist,
-                                                                                                                                      proj_mtx,
-                                                                                                                                      proj_dist,
-                                                                                                                                      white_lst[0].shape[::-1],
-                                                                                                                                      flags=stereocalibration_flags,
-                                                                                                                                      criteria=criteria)
+            st_retu, st_cam_mtx, st_cam_dist, st_proj_mtx, st_proj_dist, st_cam_proj_rmat, st_cam_proj_tvec, E, F = cv2.stereoCalibrate(cam_objpts,
+                                                                                                                                        cam_imgpts,
+                                                                                                                                        proj_imgpts,
+                                                                                                                                        cam_mtx,
+                                                                                                                                        cam_dist,
+                                                                                                                                        proj_mtx,
+                                                                                                                                        proj_dist,
+                                                                                                                                        white_lst[0].shape[::-1],
+                                                                                                                                        flags=stereocalibration_flags,
+                                                                                                                                        criteria=criteria)
             proj_h_mtx = np.dot(proj_mtx, np.hstack((st_cam_proj_rmat, st_cam_proj_tvec)))
             cam_h_mtx = np.dot(cam_mtx, np.hstack((np.identity(3), np.zeros((3, 1)))))
             cam_mtx_sample.append(cam_mtx)
@@ -1759,10 +1745,10 @@ def dist_l(center_cordi_lst, true_val):
     dist_df = pd.DataFrame()
     for i in range(len(center_cordi_lst)):
         dist = distance.pdist(center_cordi_lst[i], 'euclidean')
-        #group into different distances
+        # group into different distances
         dist = np.sort(dist)
         dist_diff = np.diff(dist)
-        dist_pos = np.where(dist_diff> abs(0.4))[0] + 1 # to find each group starting(+1 since difference, [0] np where returns tuple)
+        dist_pos = np.where(dist_diff > abs(0.4))[0] + 1  # to find each group starting(+1 since difference, [0] np where returns tuple)
         dist_split = np.split(dist, dist_pos)
         temp_df = pd.DataFrame(dist_split).T
         dist_df = dist_df.append(temp_df, ignore_index=True)
@@ -1786,7 +1772,7 @@ def obj(X, p):
     """
     plane_xyz = p[0:3]
     distance_pp = (plane_xyz * X.T).sum(axis=1) + p[3]
-    return distance_pp/ np.linalg.norm(plane_xyz)
+    return distance_pp / np.linalg.norm(plane_xyz)
 
 def residuals(p, X):
     """
@@ -1838,7 +1824,7 @@ def plane_resid_plot(residual_lst):
     """
     residual = np.concatenate(residual_lst, axis=0)
     rms = np.sqrt(np.mean(residual**2))
-    fig, ax= plt.subplots()
+    fig, ax = plt.subplots()
     plt.title('Residual from fitted planes', fontsize=20)
     sns.histplot(residual, legend=False)
     mean = np.mean(residual)
@@ -1858,13 +1844,13 @@ def plane_resid_plot(residual_lst):
 
 def main():
     
-    #Initial parameters for calibration and testing results
+    # Initial parameters for calibration and testing results
     # proj properties
     proj_width = 912
-    proj_height = 1140 # 800 1280 912 1140
+    proj_height = 1140  # 800 1280 912 1140
     cam_width = 1920
     cam_hieght = 1200
-    #type of unwrapping
+    # type of unwrapping
     type_unwrap = 'multifreq'
 
     # circle detection parameters
@@ -1872,39 +1858,40 @@ def main():
     bobdetect_convexity = 0.75
 
     # calibration board properties
-    dist_betw_circle = 25 #Distance between centers
+    dist_betw_circle = 25  # Distance between centers
     board_gridrows = 5
-    board_gridcolumns = 15 # calibration board parameters
+    board_gridcolumns = 15  # calibration board parameters
 
     # Define the path from which data is to be read. The calibration parameters will be saved in the same path.
     # reconstruction point clouds will also be saved in the same path
     root_dir = r'C:\Users\kl001\Documents\pyfringe_test'
-    path = os.path.join(root_dir, '%s_calib_images' %type_unwrap)
+    path = os.path.join(root_dir, '%s_calib_images' % type_unwrap)
     data_type = 'npy'
     processing = 'gpu'
-    #multifrequency unwrapping parameters
+    # multifrequency unwrapping parameters
     if type_unwrap == 'multifreq':
-        pitch_list =[1375, 275, 55, 11]
+        pitch_list = [1375, 275, 55, 11]
         N_list = [3, 3, 3, 9]
         kernel_v = 7
-        kernel_h= 7
+        kernel_h = 7
 
     # multi wavelength unwrapping parameters
     if type_unwrap == 'multiwave':
         pitch_list = [139, 21, 18]
-        N_list =[5, 5, 9]
+        N_list = [5, 5, 9]
         kernel_v = 9
-        kernel_h= 9
+        kernel_h = 9
 
     # phase coding unwrapping parameters
     if type_unwrap == 'phase':
-        pitch_list =[20]
-        N_list =[9]
+        pitch_list = [20]
+        N_list = [9]
         kernel_v = 25
-        kernel_h=25
+        kernel_h = 25
 
     # no_pose = int(len(glob.glob(os.path.join(path,'capt*.jpg'))) / np.sum(np.array(N_list)) / 2)
     no_pose = 2
+    acquisition_index = 0
 
     sigma_path = r'C:\Users\kl001\Documents\pyfringe_test\mean_pixel_std\mean_std_pixel.npy'
     quantile_limit = 1
@@ -1912,26 +1899,27 @@ def main():
     # Instantiate calibration class
 
     calib_inst = Calibration(proj_width=proj_width,
-                            proj_height=proj_height,
-                            cam_width=cam_width,
-                            cam_height=cam_hieght,
-                            no_pose=no_pose,
-                            mask_limit=limit,
-                            type_unwrap=type_unwrap,
-                            N_list=N_list,
-                            pitch_list=pitch_list,
-                            board_gridrows=board_gridrows,
-                            board_gridcolumns=board_gridcolumns,
-                            dist_betw_circle=dist_betw_circle,
-                            bobdetect_areamin=bobdetect_areamin,
-                            bobdetect_convexity=bobdetect_convexity,
-                            kernel_v=kernel_v,
-                            kernel_h=kernel_h,
-                            path=path,
-                            data_type=data_type,
-                            processing=processing)
+                             proj_height=proj_height,
+                             cam_width=cam_width,
+                             cam_height=cam_hieght,
+                             no_pose=no_pose,
+                             acquisition_index=acquisition_index,
+                             mask_limit=limit,
+                             type_unwrap=type_unwrap,
+                             N_list=N_list,
+                             pitch_list=pitch_list,
+                             board_gridrows=board_gridrows,
+                             board_gridcolumns=board_gridcolumns,
+                             dist_betw_circle=dist_betw_circle,
+                             bobdetect_areamin=bobdetect_areamin,
+                             bobdetect_convexity=bobdetect_convexity,
+                             kernel_v=kernel_v,
+                             kernel_h=kernel_h,
+                             path=path,
+                             data_type=data_type,
+                             processing=processing)
     unwrapv_lst, unwraph_lst, white_lst, mod_lst, proj_img_lst, cam_objpts, cam_imgpts, proj_imgpts, euler_angles, cam_mean_error, cam_delta, cam_df1, proj_mean_error, proj_delta, proj_df1 = calib_inst.calib(fx=1, fy=2)
-    #Plot for re projection error analysis
+    # Plot for re projection error analysis
     calib_inst.intrinsic_errors_plts(cam_mean_error, cam_delta, cam_df1, 'Camera')
     calib_inst.intrinsic_errors_plts(proj_mean_error, proj_delta, proj_df1, 'Projector')
     return
