@@ -171,10 +171,12 @@ class Calibration:
         objp = self.world_points()
         if self.type_unwrap == 'phase':
             unwrapv_lst, unwraph_lst, white_lst, avg_lst, mod_lst, wrapped_phase_lst = self.projcam_calib_img_phase()
-        elif self.type_unwrap == 'multifreq':
-            unwrapv_lst, unwraph_lst, white_lst, avg_lst, mod_lst, wrapped_phase_lst = self.projcam_calib_img_multifreq()
         elif self.type_unwrap == 'multiwave':
             unwrapv_lst, unwraph_lst, white_lst, avg_lst, mod_lst, wrapped_phase_lst = self.projcam_calib_img_multiwave()
+        else:
+            if self.type_unwrap != 'multifreq':
+                print("phase unwrapping type is not recognized, use 'multifreq'")
+            unwrapv_lst, unwraph_lst, white_lst, avg_lst, mod_lst, wrapped_phase_lst = self.projcam_calib_img_multifreq()
             
         # Projector images
         proj_img_lst = self.projector_img(unwrapv_lst, unwraph_lst, white_lst, fx, fy)
@@ -700,15 +702,18 @@ class Calibration:
                 print("ERROR: data type is not supported, must be '.jpeg' or '.npy'.")
                 images_arr = None
 
-            if (self.processing == 'cpu') and (images_arr is not None):
-                unwrap_v, unwrap_h, phase_arr_v, phase_arr_h, orig_img, avg_arr, mod_arr = self.multifreq_analysis(images_arr,
-                                                                                                                   delta_deck_lst,
-                                                                                                                   delta_index)
-            elif (self.processing == 'gpu') and (images_arr is not None):
-                unwrap_v, unwrap_h, phase_arr_v, phase_arr_h, orig_img, avg_arr, mod_arr = self.multifreq_analysis_cupy(images_arr,
-                                                                                                                        delta_deck_lst,
-                                                                                                                        delta_index)
-                cp.get_default_memory_pool().free_all_blocks()
+            if images_arr is not None:
+                if self.processing == 'cpu':
+                    unwrap_v, unwrap_h, phase_arr_v, phase_arr_h, orig_img, avg_arr, mod_arr = self.multifreq_analysis(images_arr,
+                                                                                                                       delta_deck_lst,
+                                                                                                                       delta_index)
+                else:
+                    if self.processing != 'gpu':
+                        print("WARNING: processing type is not recognized, use 'gpu'")
+                    unwrap_v, unwrap_h, phase_arr_v, phase_arr_h, orig_img, avg_arr, mod_arr = self.multifreq_analysis_cupy(images_arr,
+                                                                                                                            delta_deck_lst,
+                                                                                                                            delta_index)
+                    cp.get_default_memory_pool().free_all_blocks()
             else:
                 unwrap_v = None
                 unwrap_h = None
@@ -717,10 +722,6 @@ class Calibration:
                 orig_img = None
                 avg_arr = None
                 mod_arr = None
-                if self.processing in {'cpu', 'gpu'}:
-                    pass
-                else:
-                    print("ERROR: processing type is not supported, must be 'cpu' or 'gpu'.")
 
             avg_lst.append(avg_arr)
             mod_lst.append(mod_arr)
@@ -1461,6 +1462,7 @@ class Calibration:
                         os.makedirs(point_cloud_dir)  
                 else:
                     print('Please provide modulation images for mask.')
+                    point_cloud_dir = None
             elif mask_cond == 'intensity':
                 if w.size != 0:
                     roi_mask[w > int_limit] = True
@@ -1469,6 +1471,7 @@ class Calibration:
                         os.makedirs(point_cloud_dir)
                 else:
                     print('Please provide intensity (texture) image.')
+                    point_cloud_dir = None
             else:
                 roi_mask = True  # all pixels are selected.
                 point_cloud_dir = os.path.join(self.path, 'no_mask')
@@ -1493,11 +1496,14 @@ class Calibration:
             color = list(map(tuple, up_rgb_intensity_vect))
             cordi_lst.append(up_cordi)
             color_lst.append(up_rgb_intensity_vect)
-            PlyData(
-                [
-                    PlyElement.describe(np.array(xyz, dtype=[('x', 'f4'), ('y', 'f4'), ('z', 'f4')]), 'points'),
-                    PlyElement.describe(np.array(color, dtype=[('r', 'f4'), ('g', 'f4'), ('b', 'f4')]), 'color'),
-                ]).write(os.path.join(point_cloud_dir, 'obj_%d.ply' % i))
+            if point_cloud_dir is not None:
+                PlyData(
+                    [
+                        PlyElement.describe(np.array(xyz, dtype=[('x', 'f4'), ('y', 'f4'), ('z', 'f4')]), 'points'),
+                        PlyElement.describe(np.array(color, dtype=[('r', 'f4'), ('g', 'f4'), ('b', 'f4')]), 'color'),
+                    ]).write(os.path.join(point_cloud_dir, 'obj_%d.ply' % i))
+            else:
+                print('ERROR: point_cloud_dir is not provided. No .ply file is saved.')
             
         if mask_cond == 'intensity':
             residual_lst, outlier_lst = self.white_center_planefit(cordi_lst, resid_outlier_limit)
@@ -1611,7 +1617,9 @@ class Calibration:
         # copy contents
         if self.data_type == 'jpeg':    
             to_be_moved = [glob.glob(os.path.join(source_folder, 'capt_%d_*.jpg' % x)) for x in sample_index_list]
-        elif self.data_type == 'npy':
+        else:
+            if self.data_type != 'npy':
+                print("Data type is not recognized, use '.npy'.")
             to_be_moved = [glob.glob(os.path.join(source_folder, 'capt_%d_0.npy' % x)) for x in sample_index_list]
         flat_list = [item for sublist in to_be_moved for item in sublist]
         for t in flat_list:
@@ -1852,12 +1860,6 @@ def main():
     path = os.path.join(root_dir, '%s_calib_images' % type_unwrap)
     data_type = 'npy'
     processing = 'gpu'
-    # multifrequency unwrapping parameters
-    if type_unwrap == 'multifreq':
-        pitch_list = [1375, 275, 55, 11]
-        N_list = [3, 3, 3, 9]
-        kernel_v = 7
-        kernel_h = 7
 
     # multi wavelength unwrapping parameters
     if type_unwrap == 'multiwave':
@@ -1867,11 +1869,20 @@ def main():
         kernel_h = 9
 
     # phase coding unwrapping parameters
-    if type_unwrap == 'phase':
+    elif type_unwrap == 'phase':
         pitch_list = [20]
         N_list = [9]
         kernel_v = 25
         kernel_h = 25
+
+    # multifrequency unwrapping parameters
+    else:
+        if type_unwrap != 'multifreq':
+            print("Unwrap type is not recognized, use 'multifreq'.")
+        pitch_list = [1375, 275, 55, 11]
+        N_list = [3, 3, 3, 9]
+        kernel_v = 7
+        kernel_h = 7
 
     # no_pose = int(len(glob.glob(os.path.join(path,'capt*.jpg'))) / np.sum(np.array(N_list)) / 2)
     no_pose = 2
