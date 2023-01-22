@@ -648,7 +648,7 @@ class Calibration:
         
         return cp.asnumpy(multifreq_unwrap_v), cp.asnumpy(multifreq_unwrap_h), cp.asnumpy(cp.asarray(phase_arr_v)), cp.asnumpy(cp.asarray(phase_arr_h)), cp.asnumpy(orig_img), avg_arr, mod_arr
 
-    def projcam_calib_img_multifreq(self,):
+    def projcam_calib_img_multifreq(self):
         """
         Function is used to generate absolute phase map and true (single channel gray) images 
         (object image without fringe patterns)from fringe image for camera and projector calibration from raw captured
@@ -678,78 +678,62 @@ class Calibration:
         unwrapv_lst = []
         unwraph_lst = []
         delta_deck_lst, delta_index = self.delta_deck_calculation()
-        if (self.data_type == 'jpeg') and (self.processing == 'cpu'):
-            for x in tqdm(range(self.acquisition_index, (self.acquisition_index + self.no_pose)), desc='generating unwrapped phases map for {} pose'.format(self.no_pose)):
+
+        for x in tqdm(range(self.acquisition_index, (self.acquisition_index + self.no_pose)),
+                      desc='generating unwrapped phases map for {} pose'.format(self.no_pose)):
+
+            if self.data_type == 'jpeg':
                 if os.path.exists(os.path.join(self.path, 'capt_%d_0.jpg' % x)):
                     img_path = sorted(glob.glob(os.path.join(self.path, 'capt_%d_*.jpg' % x)), key=os.path.getmtime)
                     images_arr = np.array([cv2.imread(file, 0) for file in img_path]).astype(np.float64)
-                    unwrap_v, unwrap_h, phase_arr_v, phase_arr_h, orig_img, avg_arr, mod_arr = self.multifreq_analysis(images_arr, 
-                                                                                                                       delta_deck_lst, 
-                                                                                                                       delta_index)  
-                    avg_lst.append(avg_arr)
-                    mod_lst.append(mod_arr)
-                    white_lst.append(orig_img)
-                    wrapv_lst.append(phase_arr_v)
-                    wraph_lst.append(phase_arr_h)
-                    wrapped_phase_lst = {"wrapv": wrapv_lst,
-                                         "wraph": wraph_lst}
-                    unwrapv_lst.append(unwrap_v)
-                    unwraph_lst.append(unwrap_h)
-            
-        elif (self.data_type == 'npy') & (self.processing == 'cpu'):
-            for x in tqdm(range(self.acquisition_index, (self.acquisition_index + self.no_pose)), desc='generating unwrapped phases map for {} pose'.format(self.no_pose)):
+                else:
+                    print("ERROR: path is not exist!")
+                    images_arr = None
+            elif self.data_type == 'npy':
                 if os.path.exists(os.path.join(self.path, 'capt_%d_0.npy' % x)):
-                    img_data = np.load(os.path.join(self.path, 'capt_%d_0.npy' % x)).astype(np.float64)
-                    unwrap_v, unwrap_h, phase_arr_v, phase_arr_h, orig_img, avg_arr, mod_arr = self.multifreq_analysis(img_data,
-                                                                                                                       delta_deck_lst, 
-                                                                                                                       delta_index)
-                    avg_lst.append(avg_arr)
-                    mod_lst.append(mod_arr)
-                    white_lst.append(orig_img)
-                    wrapv_lst.append(phase_arr_v)
-                    wraph_lst.append(phase_arr_h)
-                    wrapped_phase_lst = {"wrapv": wrapv_lst,
-                                         "wraph": wraph_lst}
-                    unwrapv_lst.append(unwrap_v)
-                    unwraph_lst.append(unwrap_h)
-                
-        elif (self.data_type == 'jpeg') & (self.processing == 'gpu'):
-            for x in tqdm(range(self.acquisition_index, (self.acquisition_index + self.no_pose)), desc='generating unwrapped phases map for {} pose'.format(self.no_pose)):
-                if os.path.exists(os.path.join(self.path, 'capt_%d_0.jpg' % x)):
-                    img_path = sorted(glob.glob(os.path.join(self.path, 'capt_%d_*.jpg' % x)), key=os.path.getmtime)
-                    images_arr = cp.asarray([cv2.imread(file, 0) for file in img_path]).astype(cp.float64)
-                    unwrap_v, unwrap_h, phase_arr_v, phase_arr_h, orig_img, avg_arr, mod_arr = self.multifreq_analysis_cupy(images_arr,
-                                                                                                                            delta_deck_lst, 
-                                                                                                                            delta_index)
-                    avg_lst.append(avg_arr)
-                    mod_lst.append(mod_arr)
-                    white_lst.append(orig_img)
-                    wrapv_lst.append(phase_arr_v)
-                    wraph_lst.append(phase_arr_h)
-                    wrapped_phase_lst = {"wrapv": wrapv_lst,
-                                         "wraph": wraph_lst}
-                    unwrapv_lst.append(unwrap_v)
-                    unwraph_lst.append(unwrap_h)
-                
-            cp._default_memory_pool.free_all_blocks()
-        elif (self.data_type == 'npy') & (self.processing == 'gpu'):
-            for x in tqdm(range(self.acquisition_index, (self.acquisition_index + self.no_pose)), desc='generating unwrapped phases map for {} pose'.format(self.no_pose)):
-                if os.path.exists(os.path.join(self.path, 'capt_%d_0.npy' % x)):
-                    img_data = cp.load(os.path.join(self.path, 'capt_%d_0.npy' % x)).astype(cp.float64)
-                    unwrap_v, unwrap_h, phase_arr_v, phase_arr_h, orig_img, avg_arr, mod_arr = self.multifreq_analysis_cupy(img_data,
-                                                                                                                            delta_deck_lst,
-                                                                                                                            delta_index)
-                    avg_lst.append(avg_arr)
-                    mod_lst.append(mod_arr)
-                    white_lst.append(orig_img)
-                    wrapv_lst.append(phase_arr_v)
-                    wraph_lst.append(phase_arr_h)
-                    wrapped_phase_lst = {"wrapv": wrapv_lst,
-                                         "wraph": wraph_lst}
-                    unwrapv_lst.append(unwrap_v)
-                    unwraph_lst.append(unwrap_h)
-                
-            cp._default_memory_pool.free_all_blocks()
+                    images_arr = np.load(os.path.join(self.path, 'capt_%d_0.npy' % x)).astype(np.float64)
+                else:
+                    print("ERROR: path is not exist!")
+                    images_arr = None
+            else:
+                print("ERROR: data type is not supported, must be '.jpeg' or '.npy'.")
+                images_arr = None
+
+            if (self.processing == 'cpu') and (images_arr is not None):
+                unwrap_v, unwrap_h, phase_arr_v, phase_arr_h, orig_img, avg_arr, mod_arr = self.multifreq_analysis(images_arr,
+                                                                                                                   delta_deck_lst,
+                                                                                                                   delta_index)
+            elif (self.processing == 'gpu') and (images_arr is not None):
+                unwrap_v, unwrap_h, phase_arr_v, phase_arr_h, orig_img, avg_arr, mod_arr = self.multifreq_analysis_cupy(images_arr,
+                                                                                                                        delta_deck_lst,
+                                                                                                                        delta_index)
+                cp.get_default_memory_pool().free_all_blocks()
+            else:
+                unwrap_v = None
+                unwrap_h = None
+                phase_arr_v = None
+                phase_arr_h = None
+                orig_img = None
+                avg_arr = None
+                mod_arr = None
+                if self.processing in {'cpu', 'gpu'}:
+                    pass
+                else:
+                    print("ERROR: processing type is not supported, must be 'cpu' or 'gpu'.")
+
+            avg_lst.append(avg_arr)
+            mod_lst.append(mod_arr)
+            white_lst.append(orig_img)
+            wrapv_lst.append(phase_arr_v)
+            wraph_lst.append(phase_arr_h)
+            unwrapv_lst.append(unwrap_v)
+            unwraph_lst.append(unwrap_h)
+
+        if None in (avg_lst + mod_lst + white_lst + wrapv_lst + wraph_lst + unwrapv_lst + unwraph_lst):
+            print("WARNING: Some computational results are None")
+
+        wrapped_phase_lst = {"wrapv": wrapv_lst,
+                             "wraph": wraph_lst}
         return unwrapv_lst, unwraph_lst, white_lst, avg_lst, mod_lst, wrapped_phase_lst
 
     def projcam_calib_img_multiwave(self):
@@ -834,13 +818,12 @@ class Calibration:
                 white_lst.append(orig_img)
                 wrapv_lst.append(phase_arr_v)
                 wraph_lst.append(phase_arr_h)
-                wrapped_phase_lst = {"wrapv": wrapv_lst,
-                                     "wraph": wraph_lst}
                 kv_lst.append(k_arr_v)
                 kh_lst.append(k_arr_h)
                 unwrapv_lst.append(multiwav_unwrap_v)
                 unwraph_lst.append(multiwav_unwrap_h)
-                
+        wrapped_phase_lst = {"wrapv": wrapv_lst,
+                             "wraph": wraph_lst}
         return unwrapv_lst, unwraph_lst, white_lst, avg_lst, mod_lst, wrapped_phase_lst
     
     @staticmethod
