@@ -92,7 +92,7 @@ def reconstruction_pts(uv_true, unwrapv, c_mtx, c_dist, p_mtx, cp_rot_mtx, cp_tr
     vc = uv[:,1].reshape(no_pts,1)
     
     # Determinate 'up' from circle center
-    up = (nstep.bilinear_interpolate(unwrapv, uv_true) - phase_st) * (pitch / (2*np.pi))
+    up = (nstep.bilinear_interpolate(unwrapv, uv_true) - phase_st) * pitch / (2*np.pi)
     up = up.reshape(no_pts, 1)
     
     # Calculate H matrix for proj from intrinsics and extrinsics

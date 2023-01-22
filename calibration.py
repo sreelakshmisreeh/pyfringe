@@ -1078,8 +1078,8 @@ class Calibration:
         proj_imgpts = []
         for x, c in enumerate(centers):
             #Phase to coordinate conversion for each pose
-            u = (nstep.bilinear_interpolate(unwrap_v_lst[x], c) - self.phase_st) * (self.pitch[-1] / (2*np.pi)) 
-            v = (nstep.bilinear_interpolate(unwrap_h_lst[x], c) - self.phase_st) * (self.pitch[-1] / (2*np.pi)) 
+            u = (nstep.bilinear_interpolate(unwrap_v_lst[x], c) - self.phase_st) * self.pitch[-1] / (2*np.pi)
+            v = (nstep.bilinear_interpolate(unwrap_h_lst[x], c) - self.phase_st) * self.pitch[-1] / (2*np.pi)
             coordi = np.column_stack((u, v)).reshape(cam_objpts[0].shape[0], 1, 2).astype(np.float32)
             proj_imgpts.append(coordi)
             if proj_img_lst is not None:
