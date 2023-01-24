@@ -32,8 +32,6 @@ class Calibration:
                  proj_height,
                  cam_width,
                  cam_height,
-                 no_pose,
-                 acquisition_index,
                  mask_limit,
                  type_unwrap,
                  N_list,
@@ -63,8 +61,6 @@ class Calibration:
                     Modulation limit for applying mask to captured images.
         no_pose: int.
                  Number of calibration poses.
-        acquisition_index: int.
-                           Starting acquisition index
         type_unwrap: string.
                      Type of temporal unwrapping to be applied.
                      'phase' = phase coded unwrapping method,
@@ -98,8 +94,6 @@ class Calibration:
         self.proj_height = proj_height
         self.cam_width = cam_width
         self.cam_height = cam_height
-        self.no_pose = no_pose
-        self.acquisition_index = acquisition_index
         self.limit = mask_limit
         self.type_unwrap = type_unwrap
         self.N = N_list
@@ -436,8 +430,10 @@ class Calibration:
         coswraph_lst = []
         stepwrapv_lst = []
         stepwraph_lst = []
+        all_img_paths= sorted(glob.glob(os.path.join(self.path, 'capt_*')),key=os.path.getmtime)
+        acquistition_index = [int(i[-14:-11]) for i in all_img_paths]
         delta_deck_lst, delta_index = self.delta_deck_calculation()
-        for x in tqdm(range(self.acquisition_index, (self.acquisition_index + self.no_pose)), desc='generating unwrapped phases map for {} images'.format(self.no_pose)):
+        for x in tqdm(acquistition_index, desc='generating unwrapped phases map for {} images'.format(len(acquistition_index))):
             if os.path.exists(os.path.join(self.path, 'capt_%d_0.jpg' % x)):
                 # Read and apply mask to each captured images for cosine and stair patterns
                 img_path = sorted(glob.glob(os.path.join(self.path, 'capt_%d_*.jpg' % x)), key=os.path.getmtime)
@@ -681,9 +677,11 @@ class Calibration:
         unwrapv_lst = []
         unwraph_lst = []
         delta_deck_lst, delta_index = self.delta_deck_calculation()
+        all_img_paths= sorted(glob.glob(os.path.join(self.path, 'capt_*')),key=os.path.getmtime)
+        acquistition_index = [int(i[-14:-11]) for i in all_img_paths]
 
-        for x in tqdm(range(self.acquisition_index, (self.acquisition_index + self.no_pose)),
-                      desc='generating unwrapped phases map for {} pose'.format(self.no_pose)):
+        for x in tqdm(acquistition_index,
+                      desc='generating unwrapped phases map for {} poses'.format(len(acquistition_index))):
 
             if self.data_type == 'jpeg':
                 if os.path.exists(os.path.join(self.path, 'capt_%d_0.jpg' % x)):
@@ -780,8 +778,10 @@ class Calibration:
         
         pitch_arr = np.insert(pitch_arr, 0, eq_wav123)
         pitch_arr = np.insert(pitch_arr, 2, eq_wav12)
+        all_img_paths= sorted(glob.glob(os.path.join(self.path, 'capt_*')),key=os.path.getmtime)
+        acquistition_index = [int(i[-14:-11]) for i in all_img_paths]
         delta_deck_lst, delta_index = self.delta_deck_calculation()
-        for x in tqdm(range(self.acquisition_index, (self.acquisition_index + self.no_pose)), desc='generating unwrapped phases map for {} images'.format(self.no_pose)):
+        for x in tqdm(acquistition_index, desc='generating unwrapped phases map for {} images'.format(len(acquistition_index))):
             if os.path.exists(os.path.join(self.path, 'capt_%d_0.jpg' % x)):
                 img_path = sorted(glob.glob(os.path.join(self.path, 'capt_%d_*.jpg' % x)), key=os.path.getmtime)
                 images_arr = np.array([cv2.imread(file, 0) for file in img_path]).astype(np.float64)
@@ -1495,12 +1495,8 @@ class Calibration:
                     os.makedirs(point_cloud_dir)
                 print("The input mask_cond is not supported, no mask is applied.")
             u_copy[~roi_mask] = np.nan
-            x, y, z = rc.reconstruction_obj(u_copy, c_mtx, c_dist, p_mtx, cp_rot_mtx, cp_trans_mtx, self.phase_st, self.pitch[-1])
-            
             w_copy[~roi_mask] = False
-            x[~roi_mask] = np.nan
-            y[~roi_mask] = np.nan
-            z[~roi_mask] = np.nan
+            x, y, z = rc.reconstruction_obj(u_copy, c_mtx, c_dist, p_mtx, cp_rot_mtx, cp_trans_mtx, self.phase_st, self.pitch[-1])
             cordi = np.vstack((x.ravel(), y.ravel(), z.ravel())).T
             nan_mask = np.isnan(cordi)
             up_cordi = cordi[~nan_mask.all(axis=1)]
