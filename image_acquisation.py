@@ -16,8 +16,11 @@ import PySpin
 import matplotlib.pyplot as plt
 os.environ["KMP_DUPLICATE_LIB_OK"] = "True"  # needed when openCV and matplotlib used at the same time
     
-#NOTE: According to manufacturer projector buffer time is 230 microseconds. 
-#But due to limitation of hardware the buffer loading time at certain times can be more. Hence it is advisable to keep frame period longer.
+#NOTE: For projector frame period = pattern exposure period + blackfill time. 
+#Based on complexity of images the buffer loading time of projector varies. 
+#Since it is a camera projector due system the blackfill time depends on projector buffer loading time and camera readout time. 
+# The projector loading time should be >= 24 bit image loading time of most complex image and for camera the readout time is 6250.
+#Hence the blackfil time is atleast the highest of the two timings.
 #Also camera requires certain time to activate its trigger mode, this issue is currently fixed by adding a sleep time after activating the trigger
 #and befor starting the projector. If this is not set the camera may drop some initial frames while switching between preview and aquisition mode.
 
