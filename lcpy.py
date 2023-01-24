@@ -147,10 +147,9 @@ class dlpc350(object):
                 com2,
                 data=None):
         """
-        #TODO: check and edit next 3 line
         Sends a command to the dlpc.The order of the command always be 
-        {[read (120) or write (80) mode], [sequency], [CMD3], [CMD2], [Data]}. If there are second commend requested,
-        the second one only contains {[Data]}.
+        {[read (120) or write (80) mode], [sequence], [data length byte includes[CMD3], [CMD2]], [Data]}. 
+        If there are second commend requested, the second one only contains {[Data]}.
         When read form projector, the first 4 space always be occupied by those order.
         From DLPC Programming guide:
         Byte0 report ID byte: User don't need to setup this parameter. Report ID = 0.
@@ -214,7 +213,11 @@ class dlpc350(object):
 
             self.dlpc.write(1, buffer)
             buffer = []
-
+            
+            # One command includes 64 bytes starting from{[Report ID][flagstring][sequence][data length][CMD3][CMD2]}
+            # that occupies 6 bytes on the very begining, then is data bytes. The next few lines determine how 
+            # many commands are neede. Since the first command includes 6 bytes instraction information, the data bytes
+            # starting from 7 byte.
             j = 0
             while j < len(data) - 58:
                 buffer.append(data[j + 58])
