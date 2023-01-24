@@ -296,7 +296,7 @@ def run_proj_cam_capt(cam,
                     return_array = False
                 if save_jpeg:
                     save_path_jpeg = os.path.join(savedir,
-                                                  'capt_%d_%d.jpeg' % (acquisition_index, count))
+                                                  'capt_%3d_%6d.jpeg' % (acquisition_index, count))
                 else:
                     save_path_jpeg = None
                 ret, image_array = gspy.capture_image(cam=cam, save_path=save_path_jpeg, return_array=return_array)
@@ -312,7 +312,7 @@ def run_proj_cam_capt(cam,
                     image_array_list.append(image_array)
                     if (count % image_section_size) == (image_section_size - 1):
                         section_id = count // image_section_size
-                        save_path = os.path.join(savedir, 'capt_%d_%d.npy' % (acquisition_index, section_id))
+                        save_path = os.path.join(savedir, 'capt_%3d_%6d.npy' % (acquisition_index, section_id))
                         np.save(save_path, image_array_list)
                         image_array_list = []
                 count += 1
@@ -736,7 +736,7 @@ def gamma_curve(gamma_image_index_list,
                                     proj_frame_period=33334,
                                     do_insert_black=True,
                                     preview_image_index=21,
-                                    focus_image_index=34,
+                                    focus_image_index=None,
                                     pprint_status=True,
                                     save_npy=True,
                                     save_jpeg=False)
@@ -785,7 +785,7 @@ def calib_capture(image_index_list,
                                     proj_frame_period=66668,#33334,
                                     do_insert_black=True,
                                     preview_image_index=21,
-                                    focus_image_index=34,
+                                    focus_image_index=None,
                                     pprint_status=True,
                                     save_npy=True)
     return result
@@ -854,11 +854,29 @@ def meanpixel_std(savedir,
         print('ERROR: Capture failure ')
     return mean_std_pixel, std_pixel
 
+def optimal_frame_rate(image_indices, no_iterations):
+    device = usb.core.find(idVendor=0x0451, idProduct=0x6401)  # find the projector usb port
+    device.set_configuration()
+    lcr = lcpy.dlpc350(device)
+    result = lcr.pattern_display('stop')
+    max_time_list = []
+    for i in range(no_iterations):
+        result, time_list_microsec = lcr.image_loading_time(image_indices)
+        max_time_list.append(max(time_list_microsec))
+    pattern_frame_period = (max(max_time_list) + 500)/3
+    pattern_exposure_period = pattern_frame_period - 6250
+    print('Approx. 8 bit pattern frame period = %6.3f'%pattern_frame_period)
+    print('Approx. 8 bit pattern exposure period = %6.3f'%pattern_exposure_period)
+    device.reset()
+    del lcr
+    del device
+    return
+
 def main():
     """
     Example main function.
     """
-    option = input("Please choose:\n1-- test\n2 -- gamma curve\n3--calibration capture")
+    option = input("Please choose:\n1-- test\n2-- Approx. frame period and exposure time \n3-- gamma curve\n4-- calibration capture")
     result = True
     if option == '1':
         image_index_list = np.repeat(np.arange(0, 5), 3).tolist()
@@ -875,7 +893,7 @@ def main():
                                          cam_capt_timeout=10,
                                          cam_black_level=0,
                                          cam_ExposureCompensation=0,
-                                         proj_exposure_period=60418,#27084,
+                                         proj_exposure_period=27084,#27084,
                                          proj_frame_period=66668,#33334,
                                          do_insert_black=True,
                                          preview_image_index=21,
@@ -885,6 +903,12 @@ def main():
                                          save_npy=False,
                                          save_jpeg=True)
     elif option == '2':
+        starting_index = int(input("\nEnter starting image index of the sequence:"))
+        no_images = int(input("\nEnter number of images in the sequence:"))
+        no_iterations = int(input("\nNo. of iterations:"))
+        image_indices = np.arange(starting_index, starting_index+no_images).tolist()
+        optimal_frame_rate(image_indices, no_iterations)
+    elif option == '3':
         gamma_image_index_list = np.repeat(np.arange(5, 22), 3).tolist()
         gamma_pattern_num_list = [0, 1, 2] * len(set(image_index_list))
         savedir = r'C:\Users\kl001\Documents\pyfringe_test\gamma_images'
@@ -894,7 +918,7 @@ def main():
                               cam_width=1920,
                               cam_height=1200,
                               half_cross_length=100)
-    elif option == '3':
+    elif option == '4':
         image_index_list = np.repeat(np.arange(22, 34), 3).tolist()
         pattern_num_list = [0, 1, 2] * len(set(image_index_list))
         savedir =r'C:\Users\kl001\Documents\pyfringe_test\multifreq_calib_images' 
