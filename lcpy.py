@@ -149,7 +149,7 @@ class dlpc350(object):
         """
         #TODO: check and edit next 3 line
         Sends a command to the dlpc.The order of the command always be 
-        {[read (120) or write (80) mode], [sequency], [CMD3], [CMD2], [Data]}. If there are second commend requested,
+        {[read (120) or write (80) mode], [sequence], [CMD3], [CMD2], [Data]}. If there are second commend requested,
         the second one only contains {[Data]}.
         When read form projector, the first 4 space always be occupied by those order.
         From DLPC Programming guide:
