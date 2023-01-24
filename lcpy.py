@@ -147,10 +147,6 @@ class dlpc350(object):
                 com2,
                 data=None):
         """
-        Sends a command to the dlpc.The order of the command always be 
-        {[read (120) or write (80) mode], [sequence], [data length byte includes[CMD3], [CMD2]], [Data]}. 
-        If there are second commend requested, the second one only contains {[Data]}.
-        When read form projector, the first 4 space always be occupied by those order.
         From DLPC Programming guide:
         Byte0 report ID byte: User don't need to setup this parameter. Report ID = 0.
         Byte1 Flag byte: Bits 2:0 are set to 0x0 for regular DLPC350 operation, set 0x7 for debugging assistance.
@@ -163,6 +159,8 @@ class dlpc350(object):
                        This length denotes the number of data bytes in the packet and excludes the number of bytes 0-4.
         Subcommand bytes: CMD2 and CMD3.
         Byte5 and beyond: Data byte. 
+        After completion of this command, DLPC3500 responds with a packet that includes:
+        Requested data, Length of the data packet, and byte with the command.
     
         :param str rw_mode: Whether reading or writing.
         :param sequence_byte:
@@ -214,10 +212,13 @@ class dlpc350(object):
             self.dlpc.write(1, buffer)
             buffer = []
             
-            # One command includes 64 bytes starting from{[Report ID][flagstring][sequence][data length][CMD3][CMD2]}
-            # that occupies 6 bytes on the very begining, then is data bytes. The next few lines determine how 
-            # many commands are neede. Since the first command includes 6 bytes instraction information, the data bytes
-            # starting from 7 byte.
+	        # One packet includes 64 bytes starting from
+	        # {[flagstring (1byte)][sequence(1 byte)][data length(2 bytes)][CMD3(1 byte)][CMD2(1 byte)]}
+            # that occupies 6 bytes on the very begining, then is data bytes. 
+	        # Only the first packet includes 6 bytes packet header, the data bytes starting from 7th byte.
+            # The number 58 is the remaining bytes in the first packet (64 bytes - 6 bytes packet header), 
+	        # When a signal command is more than 64 bytes, the command is sent as multiple packets(64 bytes each) 
+	        # and padding all unused bytes as '0'.
             j = 0
             while j < len(data) - 58:
                 buffer.append(data[j + 58])
