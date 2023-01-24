@@ -5,7 +5,7 @@ Created on Sat Dec 24 13:27:49 2022
 @author: kl001
 """
 # TODO: Assemble files and set root directory
-#TODO: Time image loading. pattern period * no.of patterns per image > image load time
+
 import numpy as np
 import os
 import sys
@@ -330,6 +330,24 @@ class dlpc350(object):
         else:
             self.images_on_flash = None
         return result
+#TODO: Time image loading. pattern period * no.of patterns per image > image load time    
+    def image_loading_time(self, image_indices):
+        result = True
+        time_list_microsec = []
+        for i in image_indices:
+            starting_index = conv_len(i,8)
+            no_images = conv_len(1,8)
+            payload = no_images + starting_index
+            payload = bits_to_bytes(payload)
+            result &= self.command('w', 0x00, 0x1a, 0x3a, payload)
+            if result:
+                result &= self.command('r',0x00, 0x1a, 0x3a, [])
+                ans = self.ans
+                time_microsec = (ans[4] + ans[5]*256 + ans[6]*256**2 + ans[7]*256**3)*1e3/18667
+                time_list_microsec.append(time_microsec)
+            else:
+                print('ERROR: Requested image indexe:%d not valid, appending None'%i)
+        return result, time_list_microsec 
        
     def read_mode(self):  # default mode is 'pattern'
         """
@@ -1263,7 +1281,6 @@ def main():
         result &= proj_pattern_LUT(image_index_list,
                                    pattern_num_list)
     return result
-
 
 if __name__ == '__main__':
     if main():
