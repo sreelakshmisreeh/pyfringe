@@ -986,7 +986,7 @@ class Calibration:
                                                                       corners,
                                                                       ret)  # circles
                         cv2.imshow("Camera calibration", im_with_keypoints)  # display
-                        cv2.waitKey(100)
+                        cv2.waitKey(200)
     
         cv2.destroyAllWindows()
         if not all(ret_lst):
@@ -1065,7 +1065,7 @@ class Calibration:
                 proj_color = cv2.cvtColor(proj_img_lst[x], cv2.COLOR_GRAY2RGB)  # only for drawing
                 proj_keypoints = cv2.drawChessboardCorners(proj_color, (self.board_gridrows, self.board_gridcolumns), coordi, True)
                 cv2.imshow("Projector calibration", proj_keypoints)  # display
-                cv2.waitKey(100)
+                cv2.waitKey(200)
         cv2.destroyAllWindows()
         # Set all distortion = 0. linear model assumption
         flags = cv2.CALIB_ZERO_TANGENT_DIST + cv2.CALIB_FIX_K1 + cv2.CALIB_FIX_K2 + cv2.CALIB_FIX_K3 + cv2.CALIB_FIX_K4 + cv2.CALIB_FIX_K5 + cv2.CALIB_FIX_K6
