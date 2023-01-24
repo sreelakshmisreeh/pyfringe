@@ -15,14 +15,35 @@ import usb.core
 import PySpin
 import matplotlib.pyplot as plt
 os.environ["KMP_DUPLICATE_LIB_OK"] = "True"  # needed when openCV and matplotlib used at the same time
-    
-#NOTE: For projector frame period = pattern exposure period + blackfill time. 
-#Based on complexity of images the buffer loading time of projector varies. 
-#Since it is a camera projector due system the blackfill time depends on projector buffer loading time and camera readout time. 
-# The projector loading time should be >= 24 bit image loading time of most complex image and for camera the readout time is 6250.
-#Hence the blackfil time is atleast the highest of the two timings.
-#Also camera requires certain time to activate its trigger mode, this issue is currently fixed by adding a sleep time after activating the trigger
-#and befor starting the projector. If this is not set the camera may drop some initial frames while switching between preview and aquisition mode.
+
+"""    
+NOTE: Regarding projector, there are four key time durations: 
+1) 8-bit pattern frame period; 
+2) pattern exposure time; 
+3) black fill time; 
+4) 24-bit image loading time 
+
+8-bit pattern frame period = pattern exposure time + black fill time
+
+Pattern exposure time is the duration of each pattern projected onto the object's surface and defines the camera triggering period (trigger width). 
+No specific requirement for this value, hence it should be determined last (i.e., after the back fill and pattern frame period).
+
+The black fill time depends on the larger value of 
+1) the DMD pattern loading time (230 us from the TI document) and 
+2) the camera sensor readout time (conservatively 6250 us for Grasshopper3 GS3-U3-23S6M-C 163 FPS), hence our system uses 6250 us as the black fill time.
+
+The projector's 8-bit pattern frame period should satisfy the following requirement to accommodate image buffer loading:
+(8-bit pattern frame period x 3) >= (worst/longest 24-bit image loading time)
+
+Hence the workflow should be: 
+1) the 24-bit image loading time should be characterized for all images, 
+2) find the worst case and then add a small time period to it, say 500 us 
+3) divide the resulting number by three as the 8-bit pattern frame period
+4) exposure time = (8-bit pattern frame period) - 6250 us 
+
+Also camera requires certain time to activate its trigger mode, this issue is currently fixed by adding a sleep time after sending the trigger activation command
+and before starting the projector. If this is not set the camera may drop some initial frames while switching between preview and acquisition mode.
+"""
 
 def proj_cam_preview(cam, 
                      nodemap,
