@@ -157,6 +157,7 @@ class dlpc350(object):
                              so the device can assemble them in the right sequence.
         Byte3 & Byte4: Length LSB and MSB. User don't need to setup this parameter, it be calculated in function. 
                        This length denotes the number of data bytes in the packet and excludes the number of bytes 0-4.
+                       It denote the total number of bytes sent in command bytes and data bytes.
         Subcommand bytes: CMD2 and CMD3.
         Byte5 and beyond: Data byte. 
         After completion of this command, DLPC3500 responds with a packet that includes:
