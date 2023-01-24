@@ -10,7 +10,7 @@ import numpy as np
 import gspy
 import lcpy
 import cv2
-from time import perf_counter_ns
+from time import perf_counter_ns, sleep
 import usb.core
 import PySpin
 import matplotlib.pyplot as plt
@@ -253,6 +253,7 @@ def run_proj_cam_capt(cam,
                                          triggerType='hardware')
     if result:
         gspy.activate_trigger(nodemap)
+        sleep(0.05)
         cam.BeginAcquisition()
         start = perf_counter_ns()
         count = 0
@@ -753,7 +754,7 @@ def calib_capture(image_index_list,
                                     cam_black_level=0,
                                     cam_ExposureCompensation=0,
                                     proj_exposure_period=27084,
-                                    proj_frame_period=33334,
+                                    proj_frame_period=66668,#33334,
                                     do_insert_black=True,
                                     preview_image_index=21,
                                     focus_image_index=34,
@@ -806,7 +807,7 @@ def meanpixel_std(savedir,
                                     proj_exposure_period=27084,
                                     proj_frame_period=33334,
                                     do_insert_black=True,
-                                    preview_image_index=21,
+                                    preview_image_index=None,#21,
                                     focus_image_index=None,
                                     pprint_status=True,
                                     save_npy=True,
@@ -846,8 +847,8 @@ def main():
                                          cam_capt_timeout=10,
                                          cam_black_level=0,
                                          cam_ExposureCompensation=0,
-                                         proj_exposure_period=27084,
-                                         proj_frame_period=33334,
+                                         proj_exposure_period=60418,#27084,
+                                         proj_frame_period=66668,#33334,
                                          do_insert_black=True,
                                          preview_image_index=21,
                                          focus_image_index=34,
