@@ -434,9 +434,9 @@ class Calibration:
         acquistition_index = [int(i[-14:-11]) for i in all_img_paths]
         delta_deck_lst, delta_index = self.delta_deck_calculation()
         for x in tqdm(acquistition_index, desc='generating unwrapped phases map for {} images'.format(len(acquistition_index))):
-            if os.path.exists(os.path.join(self.path, 'capt_%d_0.jpg' % x)):
+            if os.path.exists(os.path.join(self.path, 'capt_%3d_     0.jpg' % x)):
                 # Read and apply mask to each captured images for cosine and stair patterns
-                img_path = sorted(glob.glob(os.path.join(self.path, 'capt_%d_*.jpg' % x)), key=os.path.getmtime)
+                img_path = sorted(glob.glob(os.path.join(self.path, 'capt_%3d*.jpg' % x)), key=os.path.getmtime)
                 images_arr = np.array([cv2.imread(file, 0) for file in img_path]).astype(np.float64)
                 cos_v_int8,  mod1, avg1, phase_cosv = nstep.phase_cal(images_arr[0:self.N[0]], delta_deck_lst[0], self.limit)
                 cos_h_int8,  mod2, avg2, phase_cosh = nstep.phase_cal(images_arr[self.N[0]:2*self.N[0]], delta_deck_lst[0], self.limit)
@@ -679,20 +679,20 @@ class Calibration:
         delta_deck_lst, delta_index = self.delta_deck_calculation()
         all_img_paths= sorted(glob.glob(os.path.join(self.path, 'capt_*')),key=os.path.getmtime)
         acquistition_index = [int(i[-14:-11]) for i in all_img_paths]
-
+        print(acquistition_index)
         for x in tqdm(acquistition_index,
                       desc='generating unwrapped phases map for {} poses'.format(len(acquistition_index))):
 
             if self.data_type == 'jpeg':
-                if os.path.exists(os.path.join(self.path, 'capt_%d_0.jpg' % x)):
-                    img_path = sorted(glob.glob(os.path.join(self.path, 'capt_%d_*.jpg' % x)), key=os.path.getmtime)
+                if os.path.exists(os.path.join(self.path, 'capt_%3d_     0.jpg' % x)):
+                    img_path = sorted(glob.glob(os.path.join(self.path, 'capt_%3d*.jpg' % x)), key=os.path.getmtime)
                     images_arr = np.array([cv2.imread(file, 0) for file in img_path]).astype(np.float64)
                 else:
                     print("ERROR: path is not exist! None item appended to the result")
                     images_arr = None
             elif self.data_type == 'npy':
-                if os.path.exists(os.path.join(self.path, 'capt_%d_0.npy' % x)):
-                    images_arr = np.load(os.path.join(self.path, 'capt_%d_0.npy' % x)).astype(np.float64)
+                if os.path.exists(os.path.join(self.path, 'capt_%3d_     0.npy' % x)):
+                    images_arr = np.load(os.path.join(self.path, 'capt_%3d_     0.npy' % x)).astype(np.float64)
                 else:
                     print("ERROR: path is not exist! None item appended to the result")
                     images_arr = None
@@ -728,17 +728,16 @@ class Calibration:
                     unwraph_lst.append(unwrap_h)
                     wrapped_phase_lst = {"wrapv": wrapv_lst,
                                          "wraph": wraph_lst}
-            # else:
-            #     unwrap_v = None        #None value creating problems in opencv
-            #     unwrap_h = None
-            #     phase_arr_v = None
-            #     phase_arr_h = None
-            #     orig_img = None
-            #     avg_arr = None
-            #     mod_arr = None
+            else:
+                unwrap_v = None        #None value creating problems in opencv
+                unwrap_h = None
+                phase_arr_v = None
+                phase_arr_h = None
+                orig_img = None
+                avg_arr = None
+                mod_arr = None
+                wrapped_phase_lst = None
 
-
-       
         return unwrapv_lst, unwraph_lst, white_lst, avg_lst, mod_lst, wrapped_phase_lst
 
     def projcam_calib_img_multiwave(self):
@@ -782,8 +781,8 @@ class Calibration:
         acquistition_index = [int(i[-14:-11]) for i in all_img_paths]
         delta_deck_lst, delta_index = self.delta_deck_calculation()
         for x in tqdm(acquistition_index, desc='generating unwrapped phases map for {} images'.format(len(acquistition_index))):
-            if os.path.exists(os.path.join(self.path, 'capt_%d_0.jpg' % x)):
-                img_path = sorted(glob.glob(os.path.join(self.path, 'capt_%d_*.jpg' % x)), key=os.path.getmtime)
+            if os.path.exists(os.path.join(self.path, 'capt_%3d_     0.jpg' % x)):
+                img_path = sorted(glob.glob(os.path.join(self.path, 'capt_%3d*.jpg' % x)), key=os.path.getmtime)
                 images_arr = np.array([cv2.imread(file, 0) for file in img_path]).astype(np.float64)
                 multi_cos_v_int3, multi_mod_v3, multi_avg_v3, multi_phase_v3 = nstep.phase_cal(images_arr[0: N_arr[0]],
                                                                                                delta_deck_lst[delta_index[0]],
@@ -1235,8 +1234,8 @@ class Calibration:
         plt.scatter((delta[:, :, 0]*pixel_size[0]).ravel(), (delta[:, :, 1]*pixel_size[0]).ravel())
         plt.xlabel('x(mm)', fontsize=30)
         plt.ylabel('y(mm)', fontsize=30)
-        # plt.xlim(-pixel_size[0], pixel_size[0])
-        # plt.ylim(-pixel_size[1], pixel_size[1])
+        plt.xlim(-1, 1)
+        plt.ylim(-1, 1)
         axes = plt.gca()
         axes.set_aspect(1) #to set aspect equal
         axes.ticklabel_format(style='sci', axis='both', scilimits=(0, 0))
