@@ -147,8 +147,9 @@ class dlpc350(object):
                 com2,
                 data=None):
         """
+        #TODO: check and edit next 3 line
         Sends a command to the dlpc.The order of the command always be 
-        {[read (120) or write (80) mode], [sequency], [CMD2], [CMD3], [Data]}. If there are second commend requested,
+        {[read (120) or write (80) mode], [sequency], [CMD3], [CMD2], [Data]}. If there are second commend requested,
         the second one only contains {[Data]}.
         When read form projector, the first 4 space always be occupied by those order.
         From DLPC Programming guide:
@@ -162,7 +163,7 @@ class dlpc350(object):
         Byte3 & Byte4: Length LSB and MSB. User don't need to setup this parameter, it be calculated in function. 
                        This length denotes the number of data bytes in the packet and excludes the number of bytes 0-4.
         Subcommand bytes: CMD2 and CMD3.
-        Byte5 Data byte. 
+        Byte5 and beyond: Data byte. 
     
         :param str rw_mode: Whether reading or writing.
         :param sequence_byte:
@@ -686,6 +687,7 @@ class dlpc350(object):
         """
         This API opens the specified Mailbox within the DLPC350 controller. This API must be called before sending data
         to the mailbox/LUT using DLPC350_SendPatLut() or DLPC350_SendImageLut() APIs.
+        Opening and closing maibox must occur in pairs.
         :param mbox_num :0: Disable (close) the mailboxes.
                         :1: Open the mailbox for image index configuration.
                         :2: Open the mailbox for pattern definition.
@@ -762,6 +764,7 @@ class dlpc350(object):
         :param pattern_num_list:  pattern number for each pattern in image_index_list.
         :param do_invert_pat: invert pattern if true.
         :param do_insert_black: Insert black-fill pattern after current pattern if true.
+                                This setting requires 230 μs of time before the start of the next pattern.
         :param do_trig_out_prev:Trigger Out 1 will continue to be high when set true.
         :type trig_type: int
         :type bit_depth: int
@@ -816,7 +819,7 @@ class dlpc350(object):
                          do_trig_out_prev=False):
         """
         Mailbox content to set up pattern definition. See table 2-65 in programmer's guide for detailed description of
-        pattern LUT entries.
+        pattern LUT entries; Table 2-69 for Pattern Definition.
         :param trig_type: Select the trigger type for the pattern.
                               :0: Internal trigger.
                               :1: External positive.
@@ -843,11 +846,11 @@ class dlpc350(object):
         :param swap_location_list: list of indices to perform a buffer swap if true.
         :param image_index_list: projector pattern sequence to create and project.
         :param pattern_num_list: Pattern number (0 based index). For pattern number ``0x3F``, there is no pattern display.
-                                    The maximum number supported is 24 for 1 bit-depth patterns. Setting the pattern
-                                    number to be 25, with a bit-depth of 1 will insert a white-fill pattern.
-                                    These patterns will have the same exposure time as defined in the Pattern Display
-                                    Exposure and Frame Period command. Table 2-70 in the programmer's guide
-                                    illustrates which bit planes are illuminated by each pattern number.
+                                 The maximum number supported is 24 for 1 bit-depth patterns. Setting the pattern
+                                 number to be 25, with a bit-depth of 1 will insert a white-fill pattern.
+                                 These patterns will have the same exposure time as defined in the Pattern Display
+                                 Exposure and Frame Period command. Table 2-70 in the programmer's guide
+                                 illustrates which bit planes are illuminated by each pattern number.
         :param starting_address: Defines the offset within the selected (opened) LUT to write/read data to/from (0-127).
         :param bool do_invert_pat: Invert pattern if true.
         :param bool do_insert_black: Insert black-fill pattern after current pattern if true.
@@ -936,6 +939,15 @@ class dlpc350(object):
 def get_image_LUT_swap_location(image_index_list):
     """
     Function creates buffer swap location index list and image index according to image_index_list pattern list.
+    DLPC350 stores two 24-bit frames in its internal memory buffer.This 48 bit-plane
+    display buffer allows the DLPC350 to send one 24-bit buffer to the DMD array while the second
+    buffer is filled from flash or streamed in through the 24-bit parallel RGB or FPD-link interface.
+    In streaming mode, the DMD array displays the previous 24-bit frame while the current frame fills the second 24-bit
+    frame of the display buffer. Once a 24-bit frame is displayed, the buffer rotates providing the next 24-bit
+    frame to the DMD.
+    If there are only 2 images(24bits each), DLPC350 will fill buffer0, swap, then fill buffer1, but no projecting.
+    To get the correct order of pattern, need to do switch the order of pattern(set temp1 as entry0 and set temp0 as entry1).
+    If more than 2 images in LUT, DLPC350 only load half of the internal buffer, the projector plot same order as LUT. 
     :param image_index_list:  projector pattern sequence to create and project.
     :type image_index_list: list
     :return image_LUT_entries: user image index LUT list.
