@@ -10,12 +10,40 @@ import numpy as np
 import gspy
 import lcpy
 import cv2
-from time import perf_counter_ns
+from time import perf_counter_ns, sleep
 import usb.core
 import PySpin
 import matplotlib.pyplot as plt
 os.environ["KMP_DUPLICATE_LIB_OK"] = "True"  # needed when openCV and matplotlib used at the same time
-    
+
+"""    
+NOTE: Regarding projector, there are four key time durations: 
+1) 8-bit pattern frame period; 
+2) pattern exposure time; 
+3) black fill time; 
+4) 24-bit image loading time 
+
+8-bit pattern frame period = pattern exposure time + black fill time
+
+Pattern exposure time is the duration of each pattern projected onto the object's surface and defines the camera triggering period (trigger width). 
+No specific requirement for this value, hence it should be determined last (i.e., after the back fill and pattern frame period).
+
+The black fill time depends on the larger value of 
+1) the DMD pattern loading time (230 us from the TI document) and 
+2) the camera sensor readout time (conservatively 6250 us for Grasshopper3 GS3-U3-23S6M-C 163 FPS), hence our system uses 6250 us as the black fill time.
+
+The projector's 8-bit pattern frame period should satisfy the following requirement to accommodate image buffer loading:
+(8-bit pattern frame period x 3) >= (worst/longest 24-bit image loading time)
+
+Hence the workflow should be: 
+1) the 24-bit image loading time should be characterized for all images, 
+2) find the worst case and then add a small time period to it, say 500 us 
+3) divide the resulting number by three as the 8-bit pattern frame period
+4) exposure time = (8-bit pattern frame period) - 6250 us 
+
+Also camera requires certain time to activate its trigger mode, this issue is currently fixed by adding a sleep time after sending the trigger activation command
+and before starting the projector. If this is not set the camera may drop some initial frames while switching between preview and acquisition mode.
+"""
 
 def proj_cam_preview(cam, 
                      nodemap,
@@ -253,6 +281,7 @@ def run_proj_cam_capt(cam,
                                          triggerType='hardware')
     if result:
         gspy.activate_trigger(nodemap)
+        sleep(0.05)
         cam.BeginAcquisition()
         start = perf_counter_ns()
         count = 0
@@ -753,7 +782,7 @@ def calib_capture(image_index_list,
                                     cam_black_level=0,
                                     cam_ExposureCompensation=0,
                                     proj_exposure_period=27084,
-                                    proj_frame_period=33334,
+                                    proj_frame_period=66668,#33334,
                                     do_insert_black=True,
                                     preview_image_index=21,
                                     focus_image_index=34,
@@ -806,7 +835,7 @@ def meanpixel_std(savedir,
                                     proj_exposure_period=27084,
                                     proj_frame_period=33334,
                                     do_insert_black=True,
-                                    preview_image_index=21,
+                                    preview_image_index=None,#21,
                                     focus_image_index=None,
                                     pprint_status=True,
                                     save_npy=True,
@@ -846,8 +875,8 @@ def main():
                                          cam_capt_timeout=10,
                                          cam_black_level=0,
                                          cam_ExposureCompensation=0,
-                                         proj_exposure_period=27084,
-                                         proj_frame_period=33334,
+                                         proj_exposure_period=60418,#27084,
+                                         proj_frame_period=66668,#33334,
                                          do_insert_black=True,
                                          preview_image_index=21,
                                          focus_image_index=34,

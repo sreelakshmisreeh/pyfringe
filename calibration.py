@@ -24,7 +24,7 @@ EPSILON = -0.5
 TAU = 5.5
 class Calibration:
     """
-    Calibration class is used to calibrate camera and projector setting. User can choose between phase coded , multifrequency and multiwavelength temporal unwrapping.
+    Calibration class is used to calibrate camera and projector setting. User can choose between phase coded , multi frequency and multi wavelength temporal unwrapping.
     After calibration the camera and projector parameters are saved as npz file at the given calibration image path.
     """
     def __init__(self,
@@ -690,13 +690,13 @@ class Calibration:
                     img_path = sorted(glob.glob(os.path.join(self.path, 'capt_%d_*.jpg' % x)), key=os.path.getmtime)
                     images_arr = np.array([cv2.imread(file, 0) for file in img_path]).astype(np.float64)
                 else:
-                    print("ERROR: path is not exist!")
+                    print("ERROR: path is not exist! None item appended to the result")
                     images_arr = None
             elif self.data_type == 'npy':
                 if os.path.exists(os.path.join(self.path, 'capt_%d_0.npy' % x)):
                     images_arr = np.load(os.path.join(self.path, 'capt_%d_0.npy' % x)).astype(np.float64)
                 else:
-                    print("ERROR: path is not exist!")
+                    print("ERROR: path is not exist! None item appended to the result")
                     images_arr = None
             else:
                 print("ERROR: data type is not supported, must be '.jpeg' or '.npy'.")
@@ -707,35 +707,40 @@ class Calibration:
                     unwrap_v, unwrap_h, phase_arr_v, phase_arr_h, orig_img, avg_arr, mod_arr = self.multifreq_analysis(images_arr,
                                                                                                                        delta_deck_lst,
                                                                                                                        delta_index)
+                    avg_lst.append(avg_arr)
+                    mod_lst.append(mod_arr)
+                    white_lst.append(orig_img)
+                    wrapv_lst.append(phase_arr_v)
+                    wraph_lst.append(phase_arr_h)
+                    unwrapv_lst.append(unwrap_v)
+                    unwraph_lst.append(unwrap_h)
                 else:
                     if self.processing != 'gpu':
                         print("WARNING: processing type is not recognized, use 'gpu'")
+                    images_arr = cp.asarray(images_arr)
                     unwrap_v, unwrap_h, phase_arr_v, phase_arr_h, orig_img, avg_arr, mod_arr = self.multifreq_analysis_cupy(images_arr,
                                                                                                                             delta_deck_lst,
                                                                                                                             delta_index)
-                    cp.get_default_memory_pool().free_all_blocks()
-            else:
-                unwrap_v = None
-                unwrap_h = None
-                phase_arr_v = None
-                phase_arr_h = None
-                orig_img = None
-                avg_arr = None
-                mod_arr = None
+                    avg_lst.append(avg_arr)
+                    mod_lst.append(mod_arr)
+                    white_lst.append(orig_img)
+                    wrapv_lst.append(phase_arr_v)
+                    wraph_lst.append(phase_arr_h)
+                    unwrapv_lst.append(unwrap_v)
+                    unwraph_lst.append(unwrap_h)
+                    wrapped_phase_lst = {"wrapv": wrapv_lst,
+                                         "wraph": wraph_lst}
+            # else:
+            #     unwrap_v = None        #None value creating problems in opencv
+            #     unwrap_h = None
+            #     phase_arr_v = None
+            #     phase_arr_h = None
+            #     orig_img = None
+            #     avg_arr = None
+            #     mod_arr = None
 
-            avg_lst.append(avg_arr)
-            mod_lst.append(mod_arr)
-            white_lst.append(orig_img)
-            wrapv_lst.append(phase_arr_v)
-            wraph_lst.append(phase_arr_h)
-            unwrapv_lst.append(unwrap_v)
-            unwraph_lst.append(unwrap_h)
 
-        if None in (avg_lst + mod_lst + white_lst + wrapv_lst + wraph_lst + unwrapv_lst + unwraph_lst):
-            print("WARNING: Some computational results are None")
-
-        wrapped_phase_lst = {"wrapv": wrapv_lst,
-                             "wraph": wraph_lst}
+       
         return unwrapv_lst, unwraph_lst, white_lst, avg_lst, mod_lst, wrapped_phase_lst
 
     def projcam_calib_img_multiwave(self):
@@ -832,7 +837,8 @@ class Calibration:
     def _image_resize(image_lst, fx, fy):
         resize_img_lst = []
         for i in image_lst:
-            resize_img_lst.append(cv2.resize(i, None, fx=fx, fy=fy))
+            if i is not None:
+                resize_img_lst.append(cv2.resize(i, None, fx=fx, fy=fy))
         return resize_img_lst
 
     def projector_img(self, unwrap_v_lst, unwrap_h_lst, white_lst, fx, fy):
@@ -862,32 +868,34 @@ class Calibration:
         proj_img = []
         for i in tqdm(range(0, len(unwrap_v_lst)), desc='projector images'):
             # Convert phase map to coordinates
-            unwrap_proj_u = (unwrap_v_lst[i] - self.phase_st) * self.pitch[-1] / (2 * np.pi)
-            unwrap_proj_v = (unwrap_h_lst[i] - self.phase_st) * self.pitch[-1] / (2 * np.pi)
-            unwrap_proj_u = unwrap_proj_u.astype(int)
-            unwrap_proj_v = unwrap_proj_v.astype(int)
-            
-            orig_u = unwrap_proj_u.ravel()
-            orig_v = unwrap_proj_v.ravel()
-            orig_int = white_lst[i].ravel()
-            orig_data = np.column_stack((orig_u, orig_v, orig_int))
-            orig_df = pd.DataFrame(orig_data, columns=['u', 'v', 'int'])
-            orig_new = orig_df.groupby(['u', 'v'])['int'].mean().reset_index()
-            
-            proj_y = np.arange(0, self.proj_height)
-            proj_x = np.arange(0, self.proj_width)
-            proj_u, proj_v = np.meshgrid(proj_x, proj_y)
-            proj_data = np.column_stack((proj_u.ravel(), proj_v.ravel()))
-            proj_df = pd.DataFrame(proj_data, columns=['u', 'v'])
-    
-            proj_df_merge = pd.merge(proj_df, orig_new, how='left', on=['u', 'v'])
-            proj_df_merge['int'] = proj_df_merge['int'].fillna(0)
-    
-            proj_mean_img = proj_df_merge['int'].to_numpy()
-            proj_mean_img = proj_mean_img.reshape(self.proj_height, self.proj_width)
-            proj_mean_img = cv2.normalize(proj_mean_img, None, 0, 255, cv2.NORM_MINMAX, cv2.CV_8U)
-            proj_img.append(proj_mean_img)
-            
+            if white_lst[i] is not None:
+                unwrap_proj_u = (unwrap_v_lst[i] - self.phase_st) * self.pitch[-1] / (2 * np.pi)
+                unwrap_proj_v = (unwrap_h_lst[i] - self.phase_st) * self.pitch[-1] / (2 * np.pi)
+                unwrap_proj_u = unwrap_proj_u.astype(int)
+                unwrap_proj_v = unwrap_proj_v.astype(int)
+                
+                orig_u = unwrap_proj_u.ravel()
+                orig_v = unwrap_proj_v.ravel()
+                orig_int = white_lst[i].ravel()
+                orig_data = np.column_stack((orig_u, orig_v, orig_int))
+                orig_df = pd.DataFrame(orig_data, columns=['u', 'v', 'int'])
+                orig_new = orig_df.groupby(['u', 'v'])['int'].mean().reset_index()
+                
+                proj_y = np.arange(0, self.proj_height)
+                proj_x = np.arange(0, self.proj_width)
+                proj_u, proj_v = np.meshgrid(proj_x, proj_y)
+                proj_data = np.column_stack((proj_u.ravel(), proj_v.ravel()))
+                proj_df = pd.DataFrame(proj_data, columns=['u', 'v'])
+        
+                proj_df_merge = pd.merge(proj_df, orig_new, how='left', on=['u', 'v'])
+                proj_df_merge['int'] = proj_df_merge['int'].fillna(0)
+        
+                proj_mean_img = proj_df_merge['int'].to_numpy()
+                proj_mean_img = proj_mean_img.reshape(self.proj_height, self.proj_width)
+                proj_mean_img = cv2.normalize(proj_mean_img, None, 0, 255, cv2.NORM_MINMAX, cv2.CV_8U)
+                proj_img.append(proj_mean_img)
+            else:
+                proj_img.append(None)        
         return proj_img
     
     def camera_calib(self, objp, white_lst, display=True):
@@ -946,38 +954,39 @@ class Calibration:
         count_lst = []
         ret_lst = []
         
-        for i, white in enumerate(white_lst):
+        for white in white_lst:
             # Convert float image to uint8 type image.
-            white = cv2.normalize(white, None, 0, 255, cv2.NORM_MINMAX, cv2.CV_8U) 
-            white_color = cv2.cvtColor(white, cv2.COLOR_GRAY2RGB)  # only for drawing purpose
-            keypoints = blobDetector.detect(white)  # Detect blobs.
-          
-            # Draw detected blobs as green circles. This helps cv2.findCirclesGrid() .
-            im_with_keypoints = cv2.drawKeypoints(white_color, keypoints, np.array([]), (0, 255, 0),
-                                                  cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS,
-                                                  )
-            im_with_keypoints_gray = cv2.cvtColor(im_with_keypoints, cv2.COLOR_BGR2GRAY)
-            
-            ret, corners = cv2.findCirclesGrid(im_with_keypoints_gray, (self.board_gridrows, self.board_gridcolumns), None, 
-                                               flags=cv2.CALIB_CB_ASYMMETRIC_GRID+cv2.CALIB_CB_CLUSTERING,
-                                               blobDetector=blobDetector)  # Find the circle grid
-            ret_lst.append(ret)
-            
-            if ret:
-        
-                objpoints.append(objp)  # Certainly, every loop objp is the same, in 3D.
+            if white is not None:
+                white = cv2.normalize(white, None, 0, 255, cv2.NORM_MINMAX, cv2.CV_8U) 
+                white_color = cv2.cvtColor(white, cv2.COLOR_GRAY2RGB)  # only for drawing purpose
+                keypoints = blobDetector.detect(white)  # Detect blobs.
+              
+                # Draw detected blobs as green circles. This helps cv2.findCirclesGrid() .
+                im_with_keypoints = cv2.drawKeypoints(white_color, keypoints, np.array([]), (0, 255, 0),
+                                                      cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS,
+                                                      )
+                im_with_keypoints_gray = cv2.cvtColor(im_with_keypoints, cv2.COLOR_BGR2GRAY)
                 
-                cam_imgpoints.append(corners)
-                count_lst.append(found)
-                found += 1
-                if display:
-                    # Draw and display the centers.
-                    im_with_keypoints = cv2.drawChessboardCorners(white_color,
-                                                                  (self.board_gridrows, self.board_gridcolumns),
-                                                                  corners,
-                                                                  ret)  # circles
-                    cv2.imshow("Camera calibration", im_with_keypoints)  # display
-                    cv2.waitKey(100)
+                ret, corners = cv2.findCirclesGrid(im_with_keypoints_gray, (self.board_gridrows, self.board_gridcolumns), None, 
+                                                   flags=cv2.CALIB_CB_ASYMMETRIC_GRID+cv2.CALIB_CB_CLUSTERING,
+                                                   blobDetector=blobDetector)  # Find the circle grid
+                ret_lst.append(ret)
+                
+                if ret:
+            
+                    objpoints.append(objp)  # Certainly, every loop objp is the same, in 3D.
+                    
+                    cam_imgpoints.append(corners)
+                    count_lst.append(found)
+                    found += 1
+                    if display:
+                        # Draw and display the centers.
+                        im_with_keypoints = cv2.drawChessboardCorners(white_color,
+                                                                      (self.board_gridrows, self.board_gridcolumns),
+                                                                      corners,
+                                                                      ret)  # circles
+                        cv2.imshow("Camera calibration", im_with_keypoints)  # display
+                        cv2.waitKey(200)
     
         cv2.destroyAllWindows()
         if not all(ret_lst):
@@ -987,7 +996,7 @@ class Calibration:
         # camera calibration
         cam_ret, cam_mtx, cam_dist, cam_rvecs, cam_tvecs = cv2.calibrateCamera(objpoints,
                                                                                cam_imgpoints,
-                                                                               white_lst[0].shape[::-1],
+                                                                               (self.cam_width, self.cam_height),
                                                                                None,
                                                                                None,
                                                                                flags=flags,
@@ -1056,7 +1065,7 @@ class Calibration:
                 proj_color = cv2.cvtColor(proj_img_lst[x], cv2.COLOR_GRAY2RGB)  # only for drawing
                 proj_keypoints = cv2.drawChessboardCorners(proj_color, (self.board_gridrows, self.board_gridcolumns), coordi, True)
                 cv2.imshow("Projector calibration", proj_keypoints)  # display
-                cv2.waitKey(100)
+                cv2.waitKey(200)
         cv2.destroyAllWindows()
         # Set all distortion = 0. linear model assumption
         flags = cv2.CALIB_ZERO_TANGENT_DIST + cv2.CALIB_FIX_K1 + cv2.CALIB_FIX_K2 + cv2.CALIB_FIX_K3 + cv2.CALIB_FIX_K4 + cv2.CALIB_FIX_K5 + cv2.CALIB_FIX_K6
@@ -1195,7 +1204,7 @@ class Calibration:
         abs_df = abs_df.reset_index().rename(columns={'index': 'image'})
         return mean_error, np.array(delta_lst), abs_df
 
-    def intrinsic_errors_plts(self, mean_error, delta, df, dev):
+    def intrinsic_errors_plts(self, mean_error, delta, df, dev, pixel_size):
         """
         Function to plot mean error per calibration pose, re projection error and absolute
         re projection errors in x and y directions.
@@ -1209,6 +1218,8 @@ class Calibration:
             Dataframe of absolute re projection error for each calibration pose.
         dev: str.
              Device name: Camera or projector
+        pixel_size: list.
+                    x,y direction dimension of a pixel.
         """
         xaxis = np.arange(0, len(mean_error), dtype=int)
         ax = plt.figure().gca()
@@ -1221,12 +1232,17 @@ class Calibration:
         plt.xticks(fontsize=15, rotation=45)
         plt.yticks(fontsize=20)
         plt.figure()
-        plt.scatter(delta[:, :, 0].ravel(), delta[:, :, 1].ravel())
-        plt.xlabel('x(pixel)', fontsize=30)
-        plt.ylabel('y(pixel)', fontsize=30)
-        # axes = plt.gca()
-        # axes.set_aspect(1) #to set aspect equal
-        plt.title('Re projection error for {} '.format(dev), fontsize=30)
+        plt.scatter((delta[:, :, 0]*pixel_size[0]).ravel(), (delta[:, :, 1]*pixel_size[0]).ravel())
+        plt.xlabel('x(mm)', fontsize=30)
+        plt.ylabel('y(mm)', fontsize=30)
+        # plt.xlim(-pixel_size[0], pixel_size[0])
+        # plt.ylim(-pixel_size[1], pixel_size[1])
+        axes = plt.gca()
+        axes.set_aspect(1) #to set aspect equal
+        axes.ticklabel_format(style='sci', axis='both', scilimits=(0, 0))
+        axes.yaxis.offsetText.set_fontsize(15)
+        axes.xaxis.offsetText.set_fontsize(15)
+        plt.title('Re projection error for {}\n '.format(dev), fontsize=30)
         plt.xticks(fontsize=20)
         plt.yticks(fontsize=20)
         plt.figure()
@@ -1915,8 +1931,8 @@ def main():
                              processing=processing)
     unwrapv_lst, unwraph_lst, white_lst, mod_lst, proj_img_lst, cam_objpts, cam_imgpts, proj_imgpts, euler_angles, cam_mean_error, cam_delta, cam_df1, proj_mean_error, proj_delta, proj_df1 = calib_inst.calib(fx=1, fy=2)
     # Plot for re projection error analysis
-    calib_inst.intrinsic_errors_plts(cam_mean_error, cam_delta, cam_df1, 'Camera')
-    calib_inst.intrinsic_errors_plts(proj_mean_error, proj_delta, proj_df1, 'Projector')
+    calib_inst.intrinsic_errors_plts(cam_mean_error, cam_delta, cam_df1, 'Camera', pixel_size=[5.86e-3, 5.86e-3])
+    calib_inst.intrinsic_errors_plts(proj_mean_error, proj_delta, proj_df1, 'Projector', pixel_size=[10.8e-3, 5.4e-3])
     return
 
 
