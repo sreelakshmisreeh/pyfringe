@@ -148,16 +148,16 @@ class dlpc350(object):
                 data=None):
         """
         From DLPC Programming guide:
-        Byte0 report ID byte: User don't need to setup this parameter. Report ID = 0.
+        Byte0 report ID byte: User don't need to set up this parameter. Report ID = 0.
         Byte1 Flag byte: Bits 2:0 are set to 0x0 for regular DLPC350 operation, set 0x7 for debugging assistance.
                          Bit 6 set to 0x1 indicates host needs reply from device.
                          Bit 7 set to 0x1 indicates a read transaction, 0x0 as write. 
         Byte2 Sequence byte: A signal command contains no more than 64 bytes (contains up to 20 patterns or 6 images with RGB channel)
                              the command is sent as multiple USB packets and the sequence byte numbers the packets 
                              so the device can assemble them in the right sequence.
-        Byte3 & Byte4: Length LSB and MSB. User don't need to setup this parameter, it be calculated in function. 
+        Byte3 & Byte4: Length LSB and MSB. User don't need to set up this parameter, it is calculated in function.
                        This length denotes the number of data bytes in the packet and excludes the number of bytes 0-4.
-                       It denote the total number of bytes sent in command bytes and data bytes.
+                       It denotes the total number of bytes sent in command bytes and data bytes.
         Subcommand bytes: CMD2 and CMD3.
         Byte5 and beyond: Data byte. 
         After completion of this command, DLPC3500 responds with a packet that includes:
@@ -213,13 +213,14 @@ class dlpc350(object):
             self.dlpc.write(1, buffer)
             buffer = []
             
-	        # One packet includes 64 bytes starting from
-	        # {[flagstring (1byte)][sequence(1 byte)][data length(2 bytes)][CMD3(1 byte)][CMD2(1 byte)]}
-            # that occupies 6 bytes on the very begining, then is data bytes. 
-	        # Only the first packet includes 6 bytes packet header, the data bytes starting from 7th byte.
-            # The number 58 is the remaining bytes in the first packet (64 bytes - 6 bytes packet header), 
-	        # When a signal command is more than 64 bytes, the command is sent as multiple packets(64 bytes each) 
-	        # and padding all unused bytes as '0'.
+            # One packet includes 64 bytes starting from
+            # {[flagstring (1byte)][sequence(1 byte)][data length(2 bytes)][CMD3(1 byte)][CMD2(1 byte)]}
+            # that occupies 6 bytes on the very beginning, then is data bytes.
+            # Only the first packet includes 6 bytes packet header, the data bytes starting from 7th byte.
+            # The number 58 is the remaining bytes in the first packet (64 bytes - 6 bytes packet header),
+            # When a signal command is more than 64 bytes, the command is sent as multiple packets(64 bytes each)
+            # and padding all unused bytes as '0'.
+
             j = 0
             while j < len(data) - 58:
                 buffer.append(data[j + 58])
@@ -294,7 +295,7 @@ class dlpc350(object):
         """
         result = self.command('r', 0x00, 0x1a, 0x0c, [])  # rw_mode, sequence,com1=0x1a,com2=0x0c for main status, data
         if result:            
-            ans = format(self.ans[4], '08b')  # convert int into 8bit binary, 08: paded '0' on left side.
+            ans = format(self.ans[4], '08b')  # convert int into 8bit binary, 08: paddled '0' on left side.
             
             if int(ans[-1]):
                 self.mirrorStatus = 'parked'
@@ -332,23 +333,23 @@ class dlpc350(object):
         else:
             self.images_on_flash = None
         return result
-#TODO: Time image loading. pattern period * no.of patterns per image > image load time    
+
     def image_loading_time(self, image_indices):
         result = True
         time_list_microsec = []
         for i in image_indices:
-            starting_index = conv_len(i,8)
-            no_images = conv_len(1,8)
+            starting_index = conv_len(i, 8)
+            no_images = conv_len(1, 8)
             payload = no_images + starting_index
             payload = bits_to_bytes(payload)
             result &= self.command('w', 0x00, 0x1a, 0x3a, payload)
             if result:
-                result &= self.command('r',0x00, 0x1a, 0x3a, [])
+                result &= self.command('r', 0x00, 0x1a, 0x3a, [])
                 ans = self.ans
                 time_microsec = (ans[4] + ans[5]*256 + ans[6]*256**2 + ans[7]*256**3)*1e3/18667
                 time_list_microsec.append(time_microsec)
             else:
-                print('ERROR: Requested image indexe:%d not valid, appending None'%i)
+                print('ERROR: Requested image index: %d not valid, appending None' % i)
         return result, time_list_microsec 
        
     def read_mode(self):  # default mode is 'pattern'
@@ -658,7 +659,7 @@ class dlpc350(object):
             Bit1: Patten number in LUT.
             Bit2: Tigger out1 setting.
             Bit3: Post sector setting.
-            Bit4: Frame period and exposure differece.
+            Bit4: Frame period and exposure difference.
             Bit6 & Bit5: Reserved.
             Bit7: Status of DLPC350 validating.
         First make every bit to invalid(0b11111111) which gives enough time(10 sec) for validation,
@@ -710,7 +711,7 @@ class dlpc350(object):
         """
         This API opens the specified Mailbox within the DLPC350 controller. This API must be called before sending data
         to the mailbox/LUT using DLPC350_SendPatLut() or DLPC350_SendImageLut() APIs.
-        Opening and closing maibox must occur in pairs.
+        Opening and closing mailbox must occur in pairs.
         :param mbox_num :0: Disable (close) the mailboxes.
                         :1: Open the mailbox for image index configuration.
                         :2: Open the mailbox for pattern definition.
@@ -1283,6 +1284,7 @@ def main():
         result &= proj_pattern_LUT(image_index_list,
                                    pattern_num_list)
     return result
+
 
 if __name__ == '__main__':
     if main():
