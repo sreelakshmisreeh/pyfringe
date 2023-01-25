@@ -26,11 +26,12 @@ NOTE: Regarding projector, there are four key time durations:
 8-bit pattern frame period = pattern exposure time + black fill time
 
 Pattern exposure time is the duration of each pattern projected onto the object's surface and defines the camera triggering period (trigger width). 
-No specific requirement for this value, hence it should be determined last (i.e., after the back fill and pattern frame period).
+No specific requirement for the shortest exposure time while longest exposure time will be determined by the minimum black fill time, hence it should be 
+determined last (i.e., after the minimum back fill time and pattern frame period).
 
-The black fill time depends on the larger value of 
+The minimum black fill time depends on the larger value of 
 1) the DMD pattern loading time (230 us from the TI document) and 
-2) the camera sensor readout time (conservatively 6250 us for Grasshopper3 GS3-U3-23S6M-C 163 FPS), hence our system uses 6250 us as the black fill time.
+2) the camera sensor readout time (conservatively 6250 us for Grasshopper3 GS3-U3-23S6M-C 163 FPS), hence our system uses 6250 us as the minimum black fill time.
 
 The projector's 8-bit pattern frame period should satisfy the following requirement to accommodate image buffer loading:
 (8-bit pattern frame period x 3) >= (worst/longest 24-bit image loading time)
@@ -39,7 +40,7 @@ Hence the workflow should be:
 1) the 24-bit image loading time should be characterized for all images, 
 2) find the worst case and then add a small time period to it, say 500 us 
 3) divide the resulting number by three as the 8-bit pattern frame period
-4) exposure time = (8-bit pattern frame period) - 6250 us 
+4) exposure time <= (8-bit pattern frame period) - 6250 us, to avoid over exposure, usually a smaller number of preferred. 
 
 Also camera requires certain time to activate its trigger mode, this issue is currently fixed by adding a sleep time after sending the trigger activation command
 and before starting the projector. If this is not set the camera may drop some initial frames while switching between preview and acquisition mode.
@@ -865,8 +866,8 @@ def optimal_frame_rate(image_indices, no_iterations):
         max_time_list.append(max(time_list_microsec))
     pattern_frame_period = (max(max_time_list) + 500)/3
     pattern_exposure_period = pattern_frame_period - 6250
-    print('Approx. 8 bit pattern frame period = %6.3f'%pattern_frame_period)
-    print('Approx. 8 bit pattern exposure period = %6.3f'%pattern_exposure_period)
+    print('Approx. 8 bit pattern frame period = %6.3f' % pattern_frame_period)
+    print('Approx. 8 bit pattern exposure period = %6.3f' % pattern_exposure_period)
     device.reset()
     del lcr
     del device
@@ -910,7 +911,7 @@ def main():
         optimal_frame_rate(image_indices, no_iterations)
     elif option == '3':
         gamma_image_index_list = np.repeat(np.arange(5, 22), 3).tolist()
-        gamma_pattern_num_list = [0, 1, 2] * len(set(image_index_list))
+        gamma_pattern_num_list = [0, 1, 2] * len(set(gamma_image_index_list))
         savedir = r'C:\Users\kl001\Documents\pyfringe_test\gamma_images'
         result &= gamma_curve(gamma_image_index_list,
                               gamma_pattern_num_list,
@@ -921,9 +922,9 @@ def main():
     elif option == '4':
         image_index_list = np.repeat(np.arange(22, 34), 3).tolist()
         pattern_num_list = [0, 1, 2] * len(set(image_index_list))
-        savedir =r'C:\Users\kl001\Documents\pyfringe_test\multifreq_calib_images' 
+        savedir = r'C:\Users\kl001\Documents\pyfringe_test\multifreq_calib_images'
         number_scan = int(input("\nEnter number of scans"))
-        acquisition_index = int(input("\nEnter acquisation index"))
+        acquisition_index = int(input("\nEnter acquisition index"))
         result &= calib_capture(image_index_list=image_index_list,
                                 pattern_num_list=pattern_num_list,
                                 savedir=savedir,
