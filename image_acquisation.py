@@ -313,7 +313,7 @@ def run_proj_cam_capt(cam,
                     image_array_list.append(image_array)
                     if (count % image_section_size) == (image_section_size - 1):
                         section_id = count // image_section_size
-                        save_path = os.path.join(savedir, 'capt_%3d_%6d.npy' % (acquisition_index, section_id))
+                        save_path = os.path.join(savedir, 'capt_%03d_%06d.npy' % (acquisition_index, section_id))
                         np.save(save_path, image_array_list)
                         image_array_list = []
                 count += 1
@@ -337,7 +337,7 @@ def run_proj_cam_capt(cam,
             if image_array_list:
                 print('WARNING: The last image section is shorter with number of images less than %d.' % image_section_size)
                 section_id = (count - 1) // image_section_size
-                save_path = os.path.join(savedir, 'capt_%d_%d.npy' % (acquisition_index, section_id))
+                save_path = os.path.join(savedir, 'capt_%03d_%06d.npy' % (acquisition_index, section_id))
                 np.save(save_path, image_array_list)
                 print('Last section of scanned images saved as %s' % save_path)
 
@@ -661,8 +661,8 @@ def run_proj_single_camera(savedir,
     try:
         result, system, cam_list, num_cameras = gspy.sysScan()
         cam = cam_list[0]
-        if savedir is not None:
-            gspy.clearDir(savedir)
+        # if savedir is not None:
+        #     gspy.clearDir(savedir)
         device = usb.core.find(idVendor=0x0451, idProduct=0x6401)  # find the projector usb port
         device.set_configuration()
 
@@ -782,7 +782,7 @@ def calib_capture(image_index_list,
                                     cam_capt_timeout=10,
                                     cam_black_level=0,
                                     cam_ExposureCompensation=0,
-                                    proj_exposure_period=27800,#27084,
+                                    proj_exposure_period=27084,
                                     proj_frame_period=34000,#66668,#33334,
                                     do_insert_black=True,
                                     preview_image_index=21,
@@ -885,7 +885,7 @@ def main():
         savedir = r'C:\Users\kl001\Documents\grasshopper3_python\images'
         result &= run_proj_single_camera(savedir=savedir,
                                          preview_option='Always',
-                                         number_scan=2,
+                                         number_scan=1,
                                          acquisition_index=0,
                                          image_index_list=image_index_list,
                                          pattern_num_list=pattern_num_list,
