@@ -434,7 +434,7 @@ class Calibration:
         acquistition_index = [int(i[-14:-11]) for i in all_img_paths]
         delta_deck_lst, delta_index = self.delta_deck_calculation()
         for x in tqdm(acquistition_index, desc='generating unwrapped phases map for {} images'.format(len(acquistition_index))):
-            if os.path.exists(os.path.join(self.path, 'capt_%3d_     0.jpg' % x)):
+            if os.path.exists(os.path.join(self.path, 'capt_%03d_000000.jpg' % x)):
                 # Read and apply mask to each captured images for cosine and stair patterns
                 img_path = sorted(glob.glob(os.path.join(self.path, 'capt_%3d*.jpg' % x)), key=os.path.getmtime)
                 images_arr = np.array([cv2.imread(file, 0) for file in img_path]).astype(np.float64)
@@ -679,20 +679,19 @@ class Calibration:
         delta_deck_lst, delta_index = self.delta_deck_calculation()
         all_img_paths= sorted(glob.glob(os.path.join(self.path, 'capt_*')),key=os.path.getmtime)
         acquistition_index = [int(i[-14:-11]) for i in all_img_paths]
-        print(acquistition_index)
         for x in tqdm(acquistition_index,
                       desc='generating unwrapped phases map for {} poses'.format(len(acquistition_index))):
 
             if self.data_type == 'jpeg':
-                if os.path.exists(os.path.join(self.path, 'capt_%3d_     0.jpg' % x)):
-                    img_path = sorted(glob.glob(os.path.join(self.path, 'capt_%3d*.jpg' % x)), key=os.path.getmtime)
+                if os.path.exists(os.path.join(self.path, 'capt_%03d_000000.jpg' % x)):
+                    img_path = sorted(glob.glob(os.path.join(self.path, 'capt_%03d*.jpg' % x)), key=os.path.getmtime)
                     images_arr = np.array([cv2.imread(file, 0) for file in img_path]).astype(np.float64)
                 else:
                     print("ERROR: path is not exist! None item appended to the result")
                     images_arr = None
             elif self.data_type == 'npy':
-                if os.path.exists(os.path.join(self.path, 'capt_%3d_     0.npy' % x)):
-                    images_arr = np.load(os.path.join(self.path, 'capt_%3d_     0.npy' % x)).astype(np.float64)
+                if os.path.exists(os.path.join(self.path, 'capt_%03d_000000.npy' % x)):
+                    images_arr = np.load(os.path.join(self.path, 'capt_%03d_000000.npy' % x)).astype(np.float64)
                 else:
                     print("ERROR: path is not exist! None item appended to the result")
                     images_arr = None
@@ -781,7 +780,7 @@ class Calibration:
         acquistition_index = [int(i[-14:-11]) for i in all_img_paths]
         delta_deck_lst, delta_index = self.delta_deck_calculation()
         for x in tqdm(acquistition_index, desc='generating unwrapped phases map for {} images'.format(len(acquistition_index))):
-            if os.path.exists(os.path.join(self.path, 'capt_%3d_     0.jpg' % x)):
+            if os.path.exists(os.path.join(self.path, 'capt_%03d_000000.jpg' % x)):
                 img_path = sorted(glob.glob(os.path.join(self.path, 'capt_%3d*.jpg' % x)), key=os.path.getmtime)
                 images_arr = np.array([cv2.imread(file, 0) for file in img_path]).astype(np.float64)
                 multi_cos_v_int3, multi_mod_v3, multi_avg_v3, multi_phase_v3 = nstep.phase_cal(images_arr[0: N_arr[0]],
