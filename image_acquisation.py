@@ -69,6 +69,7 @@ def proj_cam_preview(cam,
     :param lcr : lcr4500 USB projector device.
     :param proj_exposure_period: projector exposure period.
     :param proj_frame_period: projector frame period.
+    :param led_select: projector light source color.
     :param preview_type: 'focus' or 'preview'.
     :param image_index: image index on projector flash.
     :param cam_trig_reconfig: switch to reconfigure camera trigger. If consecutively the function is called, it can be set to False.
@@ -79,6 +80,7 @@ def proj_cam_preview(cam,
     :type lcr : class instance.
     :type proj_exposure_period : int.
     :type proj_frame_period: int.
+    :type led_select: int.
     :type preview_type: str.
     :type image_index: int.
     :type cam_trig_reconfig: bool.
@@ -198,6 +200,7 @@ def run_proj_cam_capt(cam,
     :param proj_frame_period : projector frame period in microseconds. 
     :param do_insert_black: insert black-fill pattern after each pattern. This setting requires 230 us of time before the
                             start of the next pattern.
+    :param led_select: projector light source color.
     :param pprint_status: pretty print projector and camera current parameters.
     :param do_repeat: do repeat projection
     :param total_image_number: total number of images to capture. If None is given, using len(image_index_list).
@@ -216,6 +219,7 @@ def run_proj_cam_capt(cam,
     :type proj_exposure_period : int.
     :type proj_frame_period: int.
     :type do_insert_black: bool.
+    :type led_select: int.
     :type pprint_status: bool.
     :type do_repeat: bool.
     :type total_image_number: int.
@@ -394,6 +398,7 @@ def proj_cam_acquire_images(cam,
     :param proj_frame_period: projector frame period in microseconds.
     :param do_insert_black: insert black-fill pattern after each pattern. This setting requires 230 us of time before the
                             start of the next pattern.
+    :param led_select: projector light source color.
     :param preview_image_index: image to be projected for adjusting camera exposure.
     :param focus_image_index: image to be projected to adjust projector and camera focus. If set to None this will be skipped.
     :param pprint_status: pretty print projector and camera current parameters.
@@ -416,7 +421,8 @@ def proj_cam_acquire_images(cam,
     :type proj_exposure_period: int
     :type proj_frame_period: int
     :type do_insert_black: bool
-    :type preview_image_index: int
+    :type led_select: int
+    :type preview_image_index: int/None
     :type focus_image_index: int
     :type pprint_status: bool
     :type image_section_size: int / None
@@ -638,6 +644,7 @@ def run_proj_single_camera(savedir,
     :param proj_frame_period: projector frame period in microseconds.
     :param do_insert_black: insert black-fill pattern after each pattern. This setting requires 230 us of time before the
                             start of the next pattern.
+    :param led_select: projector light source color.
     :param preview_image_index: image to be projected for adjusting camera exposure.
     :param number_scan: number of times the projector camera system scans the object.
     :param acquisition_index: the index number of the current acquisition.
@@ -658,7 +665,8 @@ def run_proj_single_camera(savedir,
     :type proj_exposure_period: int
     :type proj_frame_period: int
     :type do_insert_black: bool
-    :type preview_image_index: int
+    :type led_select: int.
+    :type preview_image_index: int/None
     :type number_scan: int
     :type acquisition_index: int
     :type pprint_status: bool
@@ -887,7 +895,7 @@ def optimal_frame_rate(image_indices, no_iterations):
     device.reset()
     del lcr
     del device
-    return
+    return result
 
 def main():
     """
@@ -925,7 +933,7 @@ def main():
         no_images = int(input("\nEnter number of images in the sequence:"))
         no_iterations = int(input("\nNo. of iterations:"))
         image_indices = np.arange(starting_index, starting_index+no_images).tolist()
-        optimal_frame_rate(image_indices, no_iterations)
+        result &= optimal_frame_rate(image_indices, no_iterations)
     elif option == '3':
         gamma_image_index_list = np.repeat(np.arange(5, 22), 3).tolist()
         gamma_pattern_num_list = [0, 1, 2] * len(set(gamma_image_index_list))
