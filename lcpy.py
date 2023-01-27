@@ -1278,9 +1278,18 @@ def main():
     option = input("Please choose: 1 -- project single image; 2 -- project pattern sequence\n")
     result = True
     if option == '1':
-        result &= proj_single_img(image_index=21)
+        received_image_index = input("Please provide the image index, if using default, press Enter: [default is 21]\n")
+        if received_image_index == '':
+            image_index = 21
+        else:
+            image_index = int(received_image_index)
+        result &= proj_single_img(image_index=image_index)
     if option == '2':
-        image_index_list = np.repeat(np.arange(0, 5), 3).tolist()
+        received_image_index_list = [int(item) for item in input("Please provide image indices for each pattern, using space as the seperator, if using default, press Enter: [default is 0 0 0 1 1 1 2 2 2 3 3 3 4 4 4]").split()]
+        if received_image_index_list:
+            image_index_list = received_image_index_list
+        else:
+            image_index_list = np.repeat(np.arange(0, 5), 3).tolist()
         pattern_num_list = [0, 1, 2] * len(set(image_index_list))
         result &= proj_pattern_LUT(image_index_list,
                                    pattern_num_list)
