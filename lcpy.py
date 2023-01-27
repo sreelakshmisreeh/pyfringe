@@ -867,6 +867,7 @@ class dlpc350(object):
                           :4: 0b100 Blue
                           :5: 0b101 Magenta (Blue + Red)
                           :6: 0b110 Cyan (Blue + Green)
+                          :7: ob111 White (Blue + Green + Red)
         :param swap_location_list: list of indices to perform a buffer swap if true.
         :param image_index_list: projector pattern sequence to create and project.
         :param pattern_num_list: Pattern number (0 based index). For pattern number ``0x3F``, there is no pattern display.
