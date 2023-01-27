@@ -59,8 +59,6 @@ class Calibration:
                     Height of camera.
         mask_limit: float.
                     Modulation limit for applying mask to captured images.
-        no_pose: int.
-                 Number of calibration poses.
         type_unwrap: string.
                      Type of temporal unwrapping to be applied.
                      'phase' = phase coded unwrapping method,
@@ -430,10 +428,10 @@ class Calibration:
         coswraph_lst = []
         stepwrapv_lst = []
         stepwraph_lst = []
-        all_img_paths= sorted(glob.glob(os.path.join(self.path, 'capt_*')),key=os.path.getmtime)
-        acquistition_index = [int(i[-14:-11]) for i in all_img_paths]
+        all_img_paths = sorted(glob.glob(os.path.join(self.path, 'capt_*')), key=os.path.getmtime)
+        acquisition_index_list = [int(i[-14:-11]) for i in all_img_paths]
         delta_deck_lst, delta_index = self.delta_deck_calculation()
-        for x in tqdm(acquistition_index, desc='generating unwrapped phases map for {} images'.format(len(acquistition_index))):
+        for x in tqdm(acquisition_index_list, desc='generating unwrapped phases map for {} images'.format(len(acquisition_index_list))):
             if os.path.exists(os.path.join(self.path, 'capt_%03d_000000.jpg' % x)):
                 # Read and apply mask to each captured images for cosine and stair patterns
                 img_path = sorted(glob.glob(os.path.join(self.path, 'capt_%3d*.jpg' % x)), key=os.path.getmtime)
@@ -677,10 +675,10 @@ class Calibration:
         unwrapv_lst = []
         unwraph_lst = []
         delta_deck_lst, delta_index = self.delta_deck_calculation()
-        all_img_paths= sorted(glob.glob(os.path.join(self.path, 'capt_*')),key=os.path.getmtime)
-        acquistition_index = [int(i[-14:-11]) for i in all_img_paths]
-        for x in tqdm(acquistition_index,
-                      desc='generating unwrapped phases map for {} poses'.format(len(acquistition_index))):
+        all_img_paths = sorted(glob.glob(os.path.join(self.path, 'capt_*')), key=os.path.getmtime)
+        acquisition_index_list = [int(i[-14:-11]) for i in all_img_paths]
+        for x in tqdm(acquisition_index_list,
+                      desc='generating unwrapped phases map for {} poses'.format(len(acquisition_index_list))):
 
             if self.data_type == 'jpeg':
                 if os.path.exists(os.path.join(self.path, 'capt_%03d_000000.jpg' % x)):
@@ -704,13 +702,6 @@ class Calibration:
                     unwrap_v, unwrap_h, phase_arr_v, phase_arr_h, orig_img, avg_arr, mod_arr = self.multifreq_analysis(images_arr,
                                                                                                                        delta_deck_lst,
                                                                                                                        delta_index)
-                    avg_lst.append(avg_arr)
-                    mod_lst.append(mod_arr)
-                    white_lst.append(orig_img)
-                    wrapv_lst.append(phase_arr_v)
-                    wraph_lst.append(phase_arr_h)
-                    unwrapv_lst.append(unwrap_v)
-                    unwraph_lst.append(unwrap_h)
                 else:
                     if self.processing != 'gpu':
                         print("WARNING: processing type is not recognized, use 'gpu'")
@@ -718,24 +709,25 @@ class Calibration:
                     unwrap_v, unwrap_h, phase_arr_v, phase_arr_h, orig_img, avg_arr, mod_arr = self.multifreq_analysis_cupy(images_arr,
                                                                                                                             delta_deck_lst,
                                                                                                                             delta_index)
-                    avg_lst.append(avg_arr)
-                    mod_lst.append(mod_arr)
-                    white_lst.append(orig_img)
-                    wrapv_lst.append(phase_arr_v)
-                    wraph_lst.append(phase_arr_h)
-                    unwrapv_lst.append(unwrap_v)
-                    unwraph_lst.append(unwrap_h)
-                    wrapped_phase_lst = {"wrapv": wrapv_lst,
-                                         "wraph": wraph_lst}
             else:
-                unwrap_v = None        #None value creating problems in opencv
+                unwrap_v = None
                 unwrap_h = None
                 phase_arr_v = None
                 phase_arr_h = None
                 orig_img = None
                 avg_arr = None
                 mod_arr = None
-                wrapped_phase_lst = None
+
+            avg_lst.append(avg_arr)
+            mod_lst.append(mod_arr)
+            white_lst.append(orig_img)
+            wrapv_lst.append(phase_arr_v)
+            wraph_lst.append(phase_arr_h)
+            unwrapv_lst.append(unwrap_v)
+            unwraph_lst.append(unwrap_h)
+
+        wrapped_phase_lst = {"wrapv": wrapv_lst,
+                             "wraph": wraph_lst}
 
         return unwrapv_lst, unwraph_lst, white_lst, avg_lst, mod_lst, wrapped_phase_lst
 
@@ -776,10 +768,10 @@ class Calibration:
         
         pitch_arr = np.insert(pitch_arr, 0, eq_wav123)
         pitch_arr = np.insert(pitch_arr, 2, eq_wav12)
-        all_img_paths= sorted(glob.glob(os.path.join(self.path, 'capt_*')),key=os.path.getmtime)
-        acquistition_index = [int(i[-14:-11]) for i in all_img_paths]
+        all_img_paths = sorted(glob.glob(os.path.join(self.path, 'capt_*')), key=os.path.getmtime)
+        acquisition_index_list = [int(i[-14:-11]) for i in all_img_paths]
         delta_deck_lst, delta_index = self.delta_deck_calculation()
-        for x in tqdm(acquistition_index, desc='generating unwrapped phases map for {} images'.format(len(acquistition_index))):
+        for x in tqdm(acquisition_index_list, desc='generating unwrapped phases map for {} images'.format(len(acquisition_index_list))):
             if os.path.exists(os.path.join(self.path, 'capt_%03d_000000.jpg' % x)):
                 img_path = sorted(glob.glob(os.path.join(self.path, 'capt_%3d*.jpg' % x)), key=os.path.getmtime)
                 images_arr = np.array([cv2.imread(file, 0) for file in img_path]).astype(np.float64)
@@ -1236,7 +1228,7 @@ class Calibration:
         plt.xlim(-1, 1)
         plt.ylim(-1, 1)
         axes = plt.gca()
-        axes.set_aspect(1) #to set aspect equal
+        axes.set_aspect(1)  # to set aspect equal
         axes.ticklabel_format(style='sci', axis='both', scilimits=(0, 0))
         axes.yaxis.offsetText.set_fontsize(15)
         axes.xaxis.offsetText.set_fontsize(15)
@@ -1894,10 +1886,6 @@ def main():
         kernel_v = 7
         kernel_h = 7
 
-    # no_pose = int(len(glob.glob(os.path.join(path,'capt*.jpg'))) / np.sum(np.array(N_list)) / 2)
-    no_pose = 2
-    acquisition_index = 0
-
     sigma_path = r'C:\Users\kl001\Documents\pyfringe_test\mean_pixel_std\mean_std_pixel.npy'
     quantile_limit = 1
     limit = nstep.B_cutoff_limit(sigma_path, quantile_limit, N_list, pitch_list)
@@ -1907,8 +1895,6 @@ def main():
                              proj_height=proj_height,
                              cam_width=cam_width,
                              cam_height=cam_hieght,
-                             no_pose=no_pose,
-                             acquisition_index=acquisition_index,
                              mask_limit=limit,
                              type_unwrap=type_unwrap,
                              N_list=N_list,
