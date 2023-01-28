@@ -87,9 +87,7 @@ def proj_cam_preview(cam,
     :type pprint_status: bool.
     :return True if successful, False otherwise. 
     :rtype: bool.
-    """
-    
-    delta = 100      
+    """     
   
     # set projector configuration
     result = lcr.set_pattern_config(num_lut_entries=1,
@@ -136,6 +134,8 @@ def proj_cam_preview(cam,
 
     # live view
     if result:
+        delta_time = 50
+        delta_cross = 100
         result &= lcr.pattern_display('start')
         cam.BeginAcquisition()
         while True:                
@@ -150,17 +150,29 @@ def proj_cam_preview(cam,
             # draw the cross
             center_y = int(img_show.shape[0]/2)
             center_x = int(img_show.shape[1]/2)
-            cv2.line(img_show_color, (center_x, center_y - delta), (center_x, center_y + delta), (0, 255, 0), 5)
-            cv2.line(img_show_color, (center_x - delta, center_y), (center_x + delta, center_y), (0, 255, 0), 5)
-
+            cv2.line(img_show_color, (center_x, center_y - delta_cross), (center_x, center_y + delta_cross), (0, 255, 0), 5)
+            cv2.line(img_show_color, (center_x - delta_cross, center_y), (center_x + delta_cross, center_y), (0, 255, 0), 5)
+            font = cv2.FONT_HERSHEY_SIMPLEX
+            cv2.putText(img_show_color,'Exposure time:%s'%str(proj_exposure_period),(0,50),font,1,(0,255,255),3)  #text,coordinate,font,size of text,color,thickness of font
+            cv2.putText(img_show_color,'Delta:%s'%str(delta_time),(0,75),font,1,(0,255,255),3)
             cv2.imshow("press q to quit", img_show_color)
-            key = cv2.waitKey(1)        
-            if key == ord("q"):
+            key = cv2.waitKey(1)
+            if key ==ord("+"):
+                proj_exposure_period +=delta_time
+                result &= gspy.setExposureTime(nodemap, exposureTime=proj_exposure_period)
+            elif key == ord("-"):
+                proj_exposure_period -=delta_time
+                result &= gspy.setExposureTime(nodemap, exposureTime=proj_exposure_period)
+            elif key == ord(">"):
+                delta_time +=5
+            elif key == ord("<"):
+                delta_time -=5
+            elif key == ord("q"):
                 break
         cam.EndAcquisition()
         cv2.destroyAllWindows()
         result &= lcr.pattern_display('stop')
-    return result
+    return result, proj_exposure_period
 
 def run_proj_cam_capt(cam, 
                       nodemap,
@@ -453,54 +465,54 @@ def proj_cam_acquire_images(cam,
                                      verbose=pprint_status)
     cam_trig_reconfig = True
     if focus_image_index is not None:
-        result &= proj_cam_preview(cam=cam,
-                                   nodemap=nodemap,
-                                   s_node_map=s_node_map,
-                                   lcr=lcr,
-                                   proj_exposure_period=proj_preview_exp_period,
-                                   proj_frame_period=proj_preview_frame_period,
-                                   led_select=led_select,
-                                   preview_type='focus',
-                                   image_index=focus_image_index,
-                                   cam_trig_reconfig=True,
-                                   pprint_status=pprint_status)
+        ret,_ = proj_cam_preview(cam=cam,
+                                 nodemap=nodemap,
+                                 s_node_map=s_node_map,
+                                 lcr=lcr,
+                                 proj_exposure_period=proj_preview_exp_period,
+                                 proj_frame_period=proj_preview_frame_period,
+                                 led_select=led_select,
+                                 preview_type='focus',
+                                 image_index=focus_image_index,
+                                 cam_trig_reconfig=True,
+                                 pprint_status=pprint_status)
     if (focus_image_index is not None) or (preview_option is not None):
         cam_trig_reconfig = False
     if (number_scan == 1) & ((preview_option == 'Once') or (preview_option == 'Always')):
         do_repeat = False
         total_image_number = len(image_index_list)
         image_section_size = total_image_number
-        result &= proj_cam_preview(cam=cam,
-                                   nodemap=nodemap,
-                                   s_node_map=s_node_map,
-                                   lcr=lcr,
-                                   proj_exposure_period=proj_preview_exp_period,
-                                   proj_frame_period=proj_preview_frame_period,
-                                   led_select=led_select,
-                                   preview_type='preview',
-                                   image_index=preview_image_index,
-                                   cam_trig_reconfig=cam_trig_reconfig,
-                                   pprint_status=pprint_status)
+        ret, proj_exposure_period = proj_cam_preview(cam=cam,
+                                                     nodemap=nodemap,
+                                                     s_node_map=s_node_map,
+                                                     lcr=lcr,
+                                                     proj_exposure_period=proj_preview_exp_period,
+                                                     proj_frame_period=proj_preview_frame_period,
+                                                     led_select=led_select,
+                                                     preview_type='preview',
+                                                     image_index=preview_image_index,
+                                                     cam_trig_reconfig=cam_trig_reconfig,
+                                                     pprint_status=pprint_status)
         
-        ret = run_proj_cam_capt(cam=cam,
-                                nodemap=nodemap,
-                                s_node_map=s_node_map,
-                                lcr=lcr,
-                                savedir=savedir,
-                                acquisition_index=acquisition_index,
-                                image_index_list=image_index_list,
-                                pattern_num_list=pattern_num_list,
-                                cam_capt_timeout=cam_capt_timeout,
-                                proj_exposure_period=proj_exposure_period,
-                                proj_frame_period=proj_frame_period,
-                                do_insert_black=do_insert_black,
-                                led_select=led_select,
-                                do_repeat=do_repeat,
-                                total_image_number=total_image_number,
-                                image_section_size=image_section_size,
-                                pprint_status=pprint_status,
-                                save_npy=save_npy,
-                                save_jpeg=save_jpeg)
+        ret &= run_proj_cam_capt(cam=cam,
+                                 nodemap=nodemap,
+                                 s_node_map=s_node_map,
+                                 lcr=lcr,
+                                 savedir=savedir,
+                                 acquisition_index=acquisition_index,
+                                 image_index_list=image_index_list,
+                                 pattern_num_list=pattern_num_list,
+                                 cam_capt_timeout=cam_capt_timeout,
+                                 proj_exposure_period=proj_exposure_period,
+                                 proj_frame_period=proj_frame_period,
+                                 do_insert_black=do_insert_black,
+                                 led_select=led_select,
+                                 do_repeat=do_repeat,
+                                 total_image_number=total_image_number,
+                                 image_section_size=image_section_size,
+                                 pprint_status=pprint_status,
+                                 save_npy=save_npy,
+                                 save_jpeg=save_jpeg)
         
     elif (number_scan > 1) & (preview_option == 'Always'):
         # if preview option is Always the projector LUT has to be rewritten hence do_validation must be True
@@ -511,71 +523,73 @@ def proj_cam_acquire_images(cam,
         for i in range(number_scan):
             if i > 0:
                 cam_trig_reconfig = True
-            result &= proj_cam_preview(cam=cam,
-                                       nodemap=nodemap,
-                                       s_node_map=s_node_map,
-                                       lcr=lcr,
-                                       proj_exposure_period=proj_preview_exp_period,
-                                       proj_frame_period=proj_preview_frame_period,
-                                       led_select=led_select,
-                                       preview_type='preview',
-                                       image_index=preview_image_index,
-                                       cam_trig_reconfig=cam_trig_reconfig,
-                                       pprint_status=pprint_status)
+                proj_preview_exp_period = proj_exposure_period
+                proj_preview_frame_period = proj_preview_exp_period
+            ret, proj_exposure_period = proj_cam_preview(cam=cam,
+                                                         nodemap=nodemap,
+                                                         s_node_map=s_node_map,
+                                                         lcr=lcr,
+                                                         proj_exposure_period=proj_preview_exp_period,
+                                                         proj_frame_period=proj_preview_frame_period,
+                                                         led_select=led_select,
+                                                         preview_type='preview',
+                                                         image_index=preview_image_index,
+                                                         cam_trig_reconfig=cam_trig_reconfig,
+                                                         pprint_status=pprint_status)
             
-            ret = run_proj_cam_capt(cam=cam,
-                                    nodemap=nodemap,
-                                    s_node_map=s_node_map,
-                                    lcr=lcr,
-                                    savedir=savedir,
-                                    acquisition_index=initial_acq_index,
-                                    image_index_list=image_index_list,
-                                    pattern_num_list=pattern_num_list,
-                                    cam_capt_timeout=cam_capt_timeout,
-                                    proj_exposure_period=proj_exposure_period,
-                                    proj_frame_period=proj_frame_period,
-                                    do_insert_black=do_insert_black,
-                                    led_select=led_select,
-                                    do_repeat=do_repeat,
-                                    total_image_number=total_image_number,
-                                    image_section_size=image_section_size,
-                                    pprint_status=pprint_status,
-                                    save_npy=save_npy,
-                                    save_jpeg=save_jpeg)
+            ret &= run_proj_cam_capt(cam=cam,
+                                     nodemap=nodemap,
+                                     s_node_map=s_node_map,
+                                     lcr=lcr,
+                                     savedir=savedir,
+                                     acquisition_index=initial_acq_index,
+                                     image_index_list=image_index_list,
+                                     pattern_num_list=pattern_num_list,
+                                     cam_capt_timeout=cam_capt_timeout,
+                                     proj_exposure_period=proj_exposure_period,
+                                     proj_frame_period=proj_frame_period,
+                                     do_insert_black=do_insert_black,
+                                     led_select=led_select,
+                                     do_repeat=do_repeat,
+                                     total_image_number=total_image_number,
+                                     image_section_size=image_section_size,
+                                     pprint_status=pprint_status,
+                                     save_npy=save_npy,
+                                     save_jpeg=save_jpeg)
             initial_acq_index += 1
             
     elif (number_scan > 1) & (preview_option == 'Once'):
         do_repeat = True
         total_image_number = number_scan * len(image_index_list)
-        result &= proj_cam_preview(cam=cam,
-                                   nodemap=nodemap,
-                                   s_node_map=s_node_map,
-                                   lcr=lcr,
-                                   proj_exposure_period=proj_preview_exp_period,
-                                   proj_frame_period=proj_preview_frame_period,
-                                   led_select=led_select,
-                                   preview_type='preview',
-                                   image_index=preview_image_index,
-                                   pprint_status=pprint_status)
-        ret = run_proj_cam_capt(cam=cam,
-                                nodemap=nodemap,
-                                s_node_map=s_node_map,
-                                lcr=lcr,
-                                savedir=savedir,
-                                acquisition_index=acquisition_index,
-                                image_index_list=image_index_list,
-                                pattern_num_list=pattern_num_list,
-                                cam_capt_timeout=cam_capt_timeout,
-                                proj_exposure_period=proj_exposure_period,
-                                proj_frame_period=proj_frame_period,
-                                do_insert_black=do_insert_black,
-                                led_select=led_select,
-                                do_repeat=do_repeat,
-                                total_image_number=total_image_number,
-                                image_section_size=image_section_size,
-                                pprint_status=pprint_status,
-                                save_npy=save_npy,
-                                save_jpeg=save_jpeg)
+        ret, proj_exposure_period = proj_cam_preview(cam=cam,
+                                                     nodemap=nodemap,
+                                                     s_node_map=s_node_map,
+                                                     lcr=lcr,
+                                                     proj_exposure_period=proj_preview_exp_period,
+                                                     proj_frame_period=proj_preview_frame_period,
+                                                     led_select=led_select,
+                                                     preview_type='preview',
+                                                     image_index=preview_image_index,
+                                                     pprint_status=pprint_status)
+        ret &= run_proj_cam_capt(cam=cam,
+                                 nodemap=nodemap,
+                                 s_node_map=s_node_map,
+                                 lcr=lcr,
+                                 savedir=savedir,
+                                 acquisition_index=acquisition_index,
+                                 image_index_list=image_index_list,
+                                 pattern_num_list=pattern_num_list,
+                                 cam_capt_timeout=cam_capt_timeout,
+                                 proj_exposure_period=proj_exposure_period,
+                                 proj_frame_period=proj_frame_period,
+                                 do_insert_black=do_insert_black,
+                                 led_select=led_select,
+                                 do_repeat=do_repeat,
+                                 total_image_number=total_image_number,
+                                 image_section_size=image_section_size,
+                                 pprint_status=pprint_status,
+                                 save_npy=save_npy,
+                                 save_jpeg=save_jpeg)
             
     elif preview_option == 'Never':
         if number_scan == 1:
@@ -681,8 +695,8 @@ def run_proj_single_camera(savedir,
     try:
         result, system, cam_list, num_cameras = gspy.sysScan()
         cam = cam_list[0]
-        # if savedir is not None:
-        #     gspy.clearDir(savedir)
+        if savedir is not None:
+            gspy.clearDir(savedir)
         device = usb.core.find(idVendor=0x0451, idProduct=0x6401)  # find the projector usb port
         device.set_configuration()
 
@@ -804,7 +818,7 @@ def calib_capture(image_index_list,
                                     cam_capt_timeout=10,
                                     cam_black_level=0,
                                     cam_ExposureCompensation=0,
-                                    proj_exposure_period=27084,
+                                    proj_exposure_period=25000,
                                     proj_frame_period=34000,#66668,#33334,
                                     do_insert_black=True,
                                     led_select=4,
@@ -918,7 +932,7 @@ def main():
                                          cam_capt_timeout=10,
                                          cam_black_level=0,
                                          cam_ExposureCompensation=0,
-                                         proj_exposure_period=27084,#27084,
+                                         proj_exposure_period=25000,#27084,
                                          proj_frame_period=66668,#33334,
                                          do_insert_black=True,
                                          led_select=4,
