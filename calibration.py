@@ -430,16 +430,15 @@ class Calibration:
         stepwraph_lst = []
         all_img_paths = sorted(glob.glob(os.path.join(self.path, 'capt_*')), key=os.path.getmtime)
         acquisition_index_list = [int(i[-14:-11]) for i in all_img_paths]
-        delta_deck_lst, delta_index = self.delta_deck_calculation()
         for x in tqdm(acquisition_index_list, desc='generating unwrapped phases map for {} images'.format(len(acquisition_index_list))):
             if os.path.exists(os.path.join(self.path, 'capt_%03d_000000.jpg' % x)):
                 # Read and apply mask to each captured images for cosine and stair patterns
                 img_path = sorted(glob.glob(os.path.join(self.path, 'capt_%3d*.jpg' % x)), key=os.path.getmtime)
                 images_arr = np.array([cv2.imread(file, 0) for file in img_path]).astype(np.float64)
-                cos_v_int8,  mod1, avg1, phase_cosv = nstep.phase_cal(images_arr[0:self.N[0]], delta_deck_lst[0], self.limit)
-                cos_h_int8,  mod2, avg2, phase_cosh = nstep.phase_cal(images_arr[self.N[0]:2*self.N[0]], delta_deck_lst[0], self.limit)
-                step_v_int8, mod3, avg3, phase_stepv = nstep.phase_cal(images_arr[2*self.N[0]:3*self.N[0]], delta_deck_lst[0], self.limit)
-                step_h_int8, mod4, avg4, phase_steph = nstep.phase_cal(images_arr[3*self.N[0]:4*self.N[0]], delta_deck_lst[0], self.limit)
+                mod1, avg1, phase_cosv = nstep.phase_cal(images_arr[0:self.N[0]], self.limit)
+                mod2, avg2, phase_cosh = nstep.phase_cal(images_arr[self.N[0]:2*self.N[0]], self.limit)
+                mod3, avg3, phase_stepv = nstep.phase_cal(images_arr[2*self.N[0]:3*self.N[0]], self.limit)
+                mod4, avg4, phase_steph = nstep.phase_cal(images_arr[3*self.N[0]:4*self.N[0]], self.limit)
                 unwrap_v, unwrap_h, k0_v, k0_h, cos_wrap_v, cos_wrap_h, step_wrap_v, step_wrap_h = nstep.ph_temp_unwrap(phase_cosv, 
                                                                                                                         phase_cosh,
                                                                                                                         phase_stepv, 
@@ -469,43 +468,13 @@ class Calibration:
                              "stepwraph": stepwraph_lst}
         return unwrap_v_lst, unwrap_h_lst, white_lst, avg_lst, mod_lst, wrapped_phase_lst
     
-    def delta_deck_calculation(self):
-        """
-        Function computes phase shift δ  values used in N-step phase shifting algorithm for each unique N values
-        compatible to type of data processing chosen.
-        Returns
-        -------
-        delta_deck_lst: list.
-                        List of delta arrays for each unique N values.
-        delta_index: list.
-                     List indicating which delta_deck to use.
-        """
-        unique_N_list = list(dict.fromkeys(self.N))
-        delta_deck_lst = []
-        for n in unique_N_list:
-            if self.processing == 'cpu':
-                delta_deck = nstep.delta_deck_gen(n, self.cam_height, self.cam_width)
-            else:
-                delta_deck = nstep_cp.delta_deck_gen_cp(n, self.cam_height, self.cam_width)
-            delta_deck_lst.append(delta_deck)
-        delta_index = []
-        N_list_array = np.array(self.N)
-        for i, n in enumerate(unique_N_list):
-            count = np.sum(N_list_array == n)
-            delta_index.extend([i] * count)
-        return delta_deck_lst, delta_index
-    
-    def multifreq_analysis(self, data_array, delta_deck_lst, delta_index):
+    def multifreq_analysis(self, data_array):
         """
         Helper function to compute unwrapped phase maps using multi frequency unwrapping on CPU.
         Parameters
         ----------
         data_array: np.ndarray:float64.
                     Array of images used in 4 level phase unwrapping.
-        delta_deck_lst: List of np.ndarray
-                        Delta images for each N.
-        delta_index: list.
-                     List indicating which delta_deck to use.
         Returns
         -------
         multifreq_unwrap_v: np.ndarray.
@@ -523,30 +492,22 @@ class Calibration:
         mod_arr: np.ndarray.
                  Modulation intensity image of each pitch.
         """
-        multi_cos_v_int1, multi_mod_v1, multi_avg_v1, multi_phase_v1 = nstep.phase_cal(data_array[0:self.N[0]],
-                                                                                       delta_deck_lst[delta_index[0]], 
-                                                                                       self.limit)
-        multi_cos_h_int1, multi_mod_h1, multi_avg_h1, multi_phase_h1 = nstep.phase_cal(data_array[self.N[0]:2 * self.N[0]], 
-                                                                                       delta_deck_lst[delta_index[0]],
-                                                                                       self.limit)
-        multi_cos_v_int2, multi_mod_v2, multi_avg_v2, multi_phase_v2 = nstep.phase_cal(data_array[2 * self.N[0]:2 * self.N[0] + self.N[1]],
-                                                                                       delta_deck_lst[delta_index[1]], 
-                                                                                       self.limit)
-        multi_cos_h_int2, multi_mod_h2, multi_avg_h2, multi_phase_h2 = nstep.phase_cal(data_array[2 * self.N[0] + self.N[1]:2 * self.N[0] + 2 * self.N[1]],
-                                                                                       delta_deck_lst[delta_index[1]], 
-                                                                                       self.limit)
-        multi_cos_v_int3, multi_mod_v3, multi_avg_v3, multi_phase_v3 = nstep.phase_cal(data_array[2 * self.N[0] + 2 * self.N[1]:2 * self.N[0] + 2 * self.N[1] + self.N[2]],
-                                                                                       delta_deck_lst[delta_index[2]], 
-                                                                                       self.limit)
-        multi_cos_h_int3, multi_mod_h3, multi_avg_h3, multi_phase_h3 = nstep.phase_cal(data_array[2 * self.N[0] + 2 * self.N[1] + self.N[2]:2 * self.N[0] + 2 * self.N[1] + 2 * self.N[2]],
-                                                                                       delta_deck_lst[delta_index[2]], 
-                                                                                       self.limit)
-        multi_cos_v_int4, multi_mod_v4, multi_avg_v4, multi_phase_v4 = nstep.phase_cal(data_array[2 * self.N[0] + 2 * self.N[1] + 2 * self.N[2]:2 * self.N[0] + 2 * self.N[1] + 2*self.N[2]+self.N[3]], 
-                                                                                       delta_deck_lst[delta_index[3]], 
-                                                                                       self.limit)
-        multi_cos_h_int4, multi_mod_h4, multi_avg_h4, multi_phase_h4 = nstep.phase_cal(data_array[2 * self.N[0] + 2 * self.N[1] + 2*self.N[2] + self.N[3]: 2 * self.N[0] + 2 * self.N[1] + 2*self.N[2] + 2 * self.N[3]], 
-                                                                                       delta_deck_lst[delta_index[3]],
-                                                                                       self.limit)
+        multi_mod_v1, multi_avg_v1, multi_phase_v1 = nstep.phase_cal(data_array[0:self.N[0]],
+                                                                     self.limit)
+        multi_mod_h1, multi_avg_h1, multi_phase_h1 = nstep.phase_cal(data_array[self.N[0]:2 * self.N[0]],
+                                                                     self.limit)
+        multi_mod_v2, multi_avg_v2, multi_phase_v2 = nstep.phase_cal(data_array[2 * self.N[0]:2 * self.N[0] + self.N[1]],
+                                                                     self.limit)
+        multi_mod_h2, multi_avg_h2, multi_phase_h2 = nstep.phase_cal(data_array[2 * self.N[0] + self.N[1]:2 * self.N[0] + 2 * self.N[1]],
+                                                                     self.limit)
+        multi_mod_v3, multi_avg_v3, multi_phase_v3 = nstep.phase_cal(data_array[2 * self.N[0] + 2 * self.N[1]:2 * self.N[0] + 2 * self.N[1] + self.N[2]],
+                                                                     self.limit)
+        multi_mod_h3, multi_avg_h3, multi_phase_h3 = nstep.phase_cal(data_array[2 * self.N[0] + 2 * self.N[1] + self.N[2]:2 * self.N[0] + 2 * self.N[1] + 2 * self.N[2]],
+                                                                     self.limit)
+        multi_mod_v4, multi_avg_v4, multi_phase_v4 = nstep.phase_cal(data_array[2 * self.N[0] + 2 * self.N[1] + 2 * self.N[2]:2 * self.N[0] + 2 * self.N[1] + 2*self.N[2]+self.N[3]],
+                                                                     self.limit)
+        multi_mod_h4, multi_avg_h4, multi_phase_h4 = nstep.phase_cal(data_array[2 * self.N[0] + 2 * self.N[1] + 2*self.N[2] + self.N[3]: 2 * self.N[0] + 2 * self.N[1] + 2*self.N[2] + 2 * self.N[3]],
+                                                                     self.limit)
         
         orig_img = multi_avg_h4 + multi_mod_h4
 
@@ -564,7 +525,7 @@ class Calibration:
         
         return multifreq_unwrap_v, multifreq_unwrap_h, phase_arr_v, phase_arr_h, orig_img, avg_arr, mod_arr
     
-    def multifreq_analysis_cupy(self, data_array, delta_deck_lst, delta_index):
+    def multifreq_analysis_cupy(self, data_array):
         """
         Helper function to compute unwrapped phase maps using multi frequency unwrapping on GPU.
         After computation all arrays are returned as numpy.
@@ -572,10 +533,6 @@ class Calibration:
         ----------
         data_array: cp.ndarray:float64.
                     Cupy array of images used in 4 level phase unwrapping.
-        delta_deck_lst: List of cp.ndarray
-                       Delta images for each N.
-        delta_index: list.
-                    List indicating which delta_deck to use.
         Returns
         -------
         multifreq_unwrap_v: np.ndarray.
@@ -593,30 +550,22 @@ class Calibration:
         mod_arr: np.ndarray.
                  Modulation intensity image of each pitch.
         """
-        multi_cos_v_int1, multi_mod_v1, multi_avg_v1, multi_phase_v1 = nstep_cp.phase_cal_cp(data_array[0:self.N[0]], 
-                                                                                             delta_deck_lst[delta_index[0]],
-                                                                                             self.limit)
-        multi_cos_h_int1, multi_mod_h1, multi_avg_h1, multi_phase_h1 = nstep_cp.phase_cal_cp(data_array[self.N[0]:2 * self.N[0]], 
-                                                                                             delta_deck_lst[delta_index[0]], 
-                                                                                             self.limit)
-        multi_cos_v_int2, multi_mod_v2, multi_avg_v2, multi_phase_v2 = nstep_cp.phase_cal_cp(data_array[2 * self.N[0]:2 * self.N[0] + self.N[1]],
-                                                                                             delta_deck_lst[delta_index[1]],
-                                                                                             self.limit)
-        multi_cos_h_int2, multi_mod_h2, multi_avg_h2, multi_phase_h2 = nstep_cp.phase_cal_cp(data_array[2 * self.N[0] + self.N[1]:2 * self.N[0] + 2 * self.N[1]], 
-                                                                                             delta_deck_lst[delta_index[1]],
-                                                                                             self.limit)
-        multi_cos_v_int3, multi_mod_v3, multi_avg_v3, multi_phase_v3 = nstep_cp.phase_cal_cp(data_array[2 * self.N[0] + 2 * self.N[1]:2 * self.N[0] + 2 * self.N[1] + self.N[2]],
-                                                                                             delta_deck_lst[delta_index[2]],
-                                                                                             self.limit)
-        multi_cos_h_int3, multi_mod_h3, multi_avg_h3, multi_phase_h3 = nstep_cp.phase_cal_cp(data_array[2 * self.N[0] + 2 * self.N[1] + self.N[2]:2 * self.N[0] + 2 * self.N[1] + 2 * self.N[2]],
-                                                                                             delta_deck_lst[delta_index[2]],
-                                                                                             self.limit)
-        multi_cos_v_int4, multi_mod_v4, multi_avg_v4, multi_phase_v4 = nstep_cp.phase_cal_cp(data_array[2 * self.N[0] + 2 * self.N[1] + 2 * self.N[2]:2 * self.N[0] + 2 * self.N[1] + 2 * self.N[2] + self.N[3]],
-                                                                                             delta_deck_lst[delta_index[3]],
-                                                                                             self.limit)
-        multi_cos_h_int4, multi_mod_h4, multi_avg_h4, multi_phase_h4 = nstep_cp.phase_cal_cp(data_array[2 * self.N[0] + 2 * self.N[1] + 2*self.N[2] + self.N[3]: 2 * self.N[0] + 2 * self.N[1] + 2 * self.N[2] + 2 * self.N[3]],
-                                                                                             delta_deck_lst[delta_index[3]],
-                                                                                             self.limit)
+        multi_mod_v1, multi_avg_v1, multi_phase_v1 = nstep_cp.phase_cal_cp(data_array[0:self.N[0]],
+                                                                           self.limit)
+        multi_mod_h1, multi_avg_h1, multi_phase_h1 = nstep_cp.phase_cal_cp(data_array[self.N[0]:2 * self.N[0]],
+                                                                           self.limit)
+        multi_mod_v2, multi_avg_v2, multi_phase_v2 = nstep_cp.phase_cal_cp(data_array[2 * self.N[0]:2 * self.N[0] + self.N[1]],
+                                                                           self.limit)
+        multi_mod_h2, multi_avg_h2, multi_phase_h2 = nstep_cp.phase_cal_cp(data_array[2 * self.N[0] + self.N[1]:2 * self.N[0] + 2 * self.N[1]],
+                                                                           self.limit)
+        multi_mod_v3, multi_avg_v3, multi_phase_v3 = nstep_cp.phase_cal_cp(data_array[2 * self.N[0] + 2 * self.N[1]:2 * self.N[0] + 2 * self.N[1] + self.N[2]],
+                                                                           self.limit)
+        multi_mod_h3, multi_avg_h3, multi_phase_h3 = nstep_cp.phase_cal_cp(data_array[2 * self.N[0] + 2 * self.N[1] + self.N[2]:2 * self.N[0] + 2 * self.N[1] + 2 * self.N[2]],
+                                                                           self.limit)
+        multi_mod_v4, multi_avg_v4, multi_phase_v4 = nstep_cp.phase_cal_cp(data_array[2 * self.N[0] + 2 * self.N[1] + 2 * self.N[2]:2 * self.N[0] + 2 * self.N[1] + 2 * self.N[2] + self.N[3]],
+                                                                           self.limit)
+        multi_mod_h4, multi_avg_h4, multi_phase_h4 = nstep_cp.phase_cal_cp(data_array[2 * self.N[0] + 2 * self.N[1] + 2*self.N[2] + self.N[3]: 2 * self.N[0] + 2 * self.N[1] + 2 * self.N[2] + 2 * self.N[3]],
+                                                                           self.limit)
         
         orig_img = multi_avg_h4 + multi_mod_h4
 
@@ -674,7 +623,6 @@ class Calibration:
         wraph_lst = []
         unwrapv_lst = []
         unwraph_lst = []
-        delta_deck_lst, delta_index = self.delta_deck_calculation()
         all_img_paths = sorted(glob.glob(os.path.join(self.path, 'capt_*')), key=os.path.getmtime)
         acquisition_index_list = [int(i[-14:-11]) for i in all_img_paths]
         for x in tqdm(acquisition_index_list,
@@ -699,16 +647,12 @@ class Calibration:
 
             if images_arr is not None:
                 if self.processing == 'cpu':
-                    unwrap_v, unwrap_h, phase_arr_v, phase_arr_h, orig_img, avg_arr, mod_arr = self.multifreq_analysis(images_arr,
-                                                                                                                       delta_deck_lst,
-                                                                                                                       delta_index)
+                    unwrap_v, unwrap_h, phase_arr_v, phase_arr_h, orig_img, avg_arr, mod_arr = self.multifreq_analysis(images_arr)
                 else:
                     if self.processing != 'gpu':
                         print("WARNING: processing type is not recognized, use 'gpu'")
                     images_arr = cp.asarray(images_arr)
-                    unwrap_v, unwrap_h, phase_arr_v, phase_arr_h, orig_img, avg_arr, mod_arr = self.multifreq_analysis_cupy(images_arr,
-                                                                                                                            delta_deck_lst,
-                                                                                                                            delta_index)
+                    unwrap_v, unwrap_h, phase_arr_v, phase_arr_h, orig_img, avg_arr, mod_arr = self.multifreq_analysis_cupy(images_arr)
             else:
                 unwrap_v = None
                 unwrap_h = None
@@ -770,29 +714,22 @@ class Calibration:
         pitch_arr = np.insert(pitch_arr, 2, eq_wav12)
         all_img_paths = sorted(glob.glob(os.path.join(self.path, 'capt_*')), key=os.path.getmtime)
         acquisition_index_list = [int(i[-14:-11]) for i in all_img_paths]
-        delta_deck_lst, delta_index = self.delta_deck_calculation()
         for x in tqdm(acquisition_index_list, desc='generating unwrapped phases map for {} images'.format(len(acquisition_index_list))):
             if os.path.exists(os.path.join(self.path, 'capt_%03d_000000.jpg' % x)):
                 img_path = sorted(glob.glob(os.path.join(self.path, 'capt_%3d*.jpg' % x)), key=os.path.getmtime)
                 images_arr = np.array([cv2.imread(file, 0) for file in img_path]).astype(np.float64)
-                multi_cos_v_int3, multi_mod_v3, multi_avg_v3, multi_phase_v3 = nstep.phase_cal(images_arr[0: N_arr[0]],
-                                                                                               delta_deck_lst[delta_index[0]],
-                                                                                               self.limit)
-                multi_cos_h_int3, multi_mod_h3, multi_avg_h3, multi_phase_h3 = nstep.phase_cal(images_arr[N_arr[0]:2 * N_arr[0]],
-                                                                                               delta_deck_lst[delta_index[0]],
-                                                                                               self.limit)
-                multi_cos_v_int2, multi_mod_v2, multi_avg_v2, multi_phase_v2 = nstep.phase_cal(images_arr[2 * N_arr[0]:2 * N_arr[0] + N_arr[1]],
-                                                                                               delta_deck_lst[delta_index[1]],
-                                                                                               self.limit)
-                multi_cos_h_int2, multi_mod_h2, multi_avg_h2, multi_phase_h2 = nstep.phase_cal(images_arr[2 * N_arr[0] + N_arr[1]:2 * N_arr[0] + 2 * N_arr[1]],
-                                                                                               delta_deck_lst[delta_index[1]],
-                                                                                               self.limit)
-                multi_cos_v_int1, multi_mod_v1, multi_avg_v1, multi_phase_v1 = nstep.phase_cal(images_arr[2 * N_arr[0] + 2 * N_arr[1]:2 * N_arr[0] + 2 * N_arr[1] + N_arr[2]],
-                                                                                               delta_deck_lst[delta_index[2]],
-                                                                                               self.limit)
-                multi_cos_h_int1, multi_mod_h1, multi_avg_h1, multi_phase_h1 = nstep.phase_cal(images_arr[2 * N_arr[0] + 2 * N_arr[1] + N_arr[2]:2 * N_arr[0] + 2 * N_arr[1] + 2 * N_arr[2]],
-                                                                                               delta_deck_lst[delta_index[2]],
-                                                                                               self.limit)
+                multi_mod_v3, multi_avg_v3, multi_phase_v3 = nstep.phase_cal(images_arr[0: N_arr[0]],
+                                                                             self.limit)
+                multi_mod_h3, multi_avg_h3, multi_phase_h3 = nstep.phase_cal(images_arr[N_arr[0]:2 * N_arr[0]],
+                                                                             self.limit)
+                multi_mod_v2, multi_avg_v2, multi_phase_v2 = nstep.phase_cal(images_arr[2 * N_arr[0]:2 * N_arr[0] + N_arr[1]],
+                                                                             self.limit)
+                multi_mod_h2, multi_avg_h2, multi_phase_h2 = nstep.phase_cal(images_arr[2 * N_arr[0] + N_arr[1]:2 * N_arr[0] + 2 * N_arr[1]],
+                                                                             self.limit)
+                multi_mod_v1, multi_avg_v1, multi_phase_v1 = nstep.phase_cal(images_arr[2 * N_arr[0] + 2 * N_arr[1]:2 * N_arr[0] + 2 * N_arr[1] + N_arr[2]],
+                                                                             self.limit)
+                multi_mod_h1, multi_avg_h1, multi_phase_h1 = nstep.phase_cal(images_arr[2 * N_arr[0] + 2 * N_arr[1] + N_arr[2]:2 * N_arr[0] + 2 * N_arr[1] + 2 * N_arr[2]],
+                                                                             self.limit)
                
                 orig_img = multi_avg_h1 + multi_mod_h1
                 

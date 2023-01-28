@@ -181,6 +181,10 @@ def calib_generate(width: int,
             fringe_lst.append(cos_h)
             delta_deck_list.append(delta_deck)
         fringe_arr = np.ceil(np.vstack(fringe_lst)).astype('uint8')
+    else:
+        print('ERROR:Invalid unwrapping type')
+        fringe_arr = None
+        delta_deck_list = None
     np.save(os.path.join(path, '{}_fringes.npy'.format(type_unwrap)), fringe_arr) 
     
     return fringe_arr, delta_deck_list 
@@ -228,6 +232,10 @@ def recon_generate(width: int,
         elif direc == 'h':    
             step = step_func(inte_rang, pitch_list[0], 'h', delta_deck_list)
             cos, absolute_phi_h = cos_func(inte_rang, pitch_list[0], 'h', phase_st, delta_deck_list)
+        else:
+            print('ERROR:Invalid direction. Directions should be \'v\'for vertical fringes and \'h\'for horizontal fringes')
+            cos = None
+            step = None
         fringe_lst = np.concatenate((cos, step), axis=0)
         fringe_arr = np.ceil(fringe_lst).astype('uint8')
     elif type_unwrap == 'multifreq' or type_unwrap == 'multiwave':
@@ -237,9 +245,16 @@ def recon_generate(width: int,
                 cos, absolute_phi = cos_func(inte_rang, p, 'v', phase_st, delta_deck)
             elif direc == 'h':
                 cos, absolute_phi = cos_func(inte_rang, p, 'h', phase_st, delta_deck)
+            else:
+                print('ERROR:Invalid direction. Directions should be \'v\'for vertical fringes and \'h\'for horizontal fringes')
+                cos = None
             fringe_lst.append(cos)
             delta_deck_list.append(delta_deck)
         fringe_arr = np.ceil(np.vstack(fringe_lst)).astype('uint8')
+    else:
+        print('ERROR:Invalid unwrapping type')
+        fringe_arr = None
+        delta_deck_list = None
     np.save(os.path.join(path, '{}_fringes.npy'.format(type_unwrap)), fringe_arr) 
     return fringe_arr, delta_deck_list
 
@@ -267,8 +282,7 @@ def B_cutoff_limit(sigma_path: str,
     return np.sqrt(modulation_limit_sq)
 
 def phase_cal(images: np.ndarray,
-              delta_deck: np.ndarray,
-              limit: float) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+              limit: float) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Function that computes and applies mask to captured image based on data modulation (relative modulation) of each pixel
     and computes phase map.
@@ -278,8 +292,6 @@ def phase_cal(images: np.ndarray,
     ----------
     images: np.ndarray:np.float64.
             Captured fringe images.
-    delta_deck: np.ndarray:np.float64
-            Phase shift matrix, see function delta_deck_gen() for more details.
     limit: float.
            Data modulation limit. Regions with data modulation lower than limit will be masked out.
 
@@ -295,24 +307,23 @@ def phase_cal(images: np.ndarray,
            Delta values at each pixel for each captured image
 
     """
-    N = delta_deck.shape[0]
-    sin_delta = np.sin(delta_deck)
+    N = images.shape[0]
+    delta = 2 * np.pi * np.arange(1, N + 1) / N
+    sin_delta = np.sin(delta)
     sin_delta[np.abs(sin_delta) < 1e-15] = 0 
-    sin_lst = (np.sum(images * sin_delta, axis=0))
-    cos_delta = np.cos(delta_deck)
+    sin_lst = np.einsum('kij,k->ij', images, sin_delta)
+    cos_delta = np.cos(delta)
     cos_delta[np.abs(cos_delta) < 1e-15] = 0
-    cos_lst = (np.sum(images * cos_delta, axis=0))
+    cos_lst = np.einsum('kij,k->ij', images, cos_delta)
     modulation = 2 * np.sqrt(sin_lst**2 + cos_lst**2) / N
     average_int = np.sum(images, axis=0) / N
     mask = np.full(modulation.shape, True)
     mask[modulation > limit] = False
-    mask_deck = np.repeat(mask[np.newaxis, :, :], images.shape[0], axis=0)
-    images[mask_deck] = np.nan
     # wrapped phase
     sin_lst[mask] = np.nan
     cos_lst[mask] = np.nan
     phase_map = -np.arctan2(sin_lst, cos_lst)  # wrapped phase;
-    return images, modulation, average_int, phase_map
+    return modulation, average_int, phase_map
 
 
 def step_rectification(step_ph: np.ndarray,
@@ -370,6 +381,9 @@ def unwrap_cal(step_wrap: np.ndarray,
         n_fring = np.ceil(width/pitch)
     elif direc == 'h':
         n_fring = np.ceil(height/pitch)
+    else:
+        print("ERROR:Invalid directions.Directions should be \'v\'for vertical fringes and \'h\'for horizontal fringes")
+        n_fring = None
     k = np.round((n_fring - 1) * (step_wrap + np.pi) / (2 * np.pi))
     cos_unwrap = (2 * np.pi * k) + cos_wrap
     return cos_unwrap, k
@@ -404,6 +418,9 @@ def filt(unwrap: np.ndarray,
         k = (1, kernel)  # kernel size
     elif direc == 'h':
         k = (kernel, 1)
+    else:
+        print("ERROR:Invalid directions.Directions should be \'v\'for vertical fringes and \'h\'for horizontal fringes")
+        k = None
     med_fil = scipy.ndimage.median_filter(dup_img, k)
     k_array = np.round((dup_img - med_fil) / (2 * np.pi))
     correct_unwrap = dup_img - (k_array * 2 * np.pi)
@@ -625,7 +642,6 @@ def trend(x_grid, y_grid, coeff):
 def main():
     test_limit = 0.9
     pitch_list = [50, 20]
-    N_list = [3, 3]
 
     fringe_arr_np = np.load("test_data/toy_data.npy")
     with open(r'test_data\vertical_fringes_np.pickle', 'rb') as f:
@@ -633,35 +649,31 @@ def main():
     with open(r'test_data\horizontal_fringes_np.pickle', 'rb') as f:
         horizontal_fringes = pickle.load(f)
     # testing #1:
-    delta_deck_np = delta_deck_gen(N_list[0], height=fringe_arr_np.shape[1], width=fringe_arr_np.shape[2])
-    if delta_deck_np.all() == vertical_fringes['delta_deck_np'].all():
-        print('Delta deck test successful')
-        masked_img_np_v1, modulation_np_v1, average_int_np_v1, phase_map_np_v1 = phase_cal(fringe_arr_np[0:3], delta_deck_np, test_limit)
-        masked_img_np_v2, modulation_np_v2, average_int_np_v2, phase_map_np_v2 = phase_cal(fringe_arr_np[6:9], delta_deck_np, test_limit)
-        if (phase_map_np_v1.all() == vertical_fringes['phase_map_np_v1'].all()) & (phase_map_np_v2.all() == vertical_fringes['phase_map_np_v2'].all()):
-            print('\n All vertical phase maps match')
-            phase_arr_np = [phase_map_np_v1, phase_map_np_v2]
-            multifreq_unwrap_np_v, k_arr_np_v = multifreq_unwrap(pitch_list, phase_arr_np, 1, 'v')
-            if multifreq_unwrap_np_v.all() == vertical_fringes['multifreq_unwrap_np_v'].all():
-                print('\n Vertical unwrapped phase maps match')
-            else:
-                print('\n Vertical unwrapped phase map mismatch ')  
+    modulation_np_v1, average_int_np_v1, phase_map_np_v1 = phase_cal(fringe_arr_np[0:3], test_limit)
+    modulation_np_v2, average_int_np_v2, phase_map_np_v2 = phase_cal(fringe_arr_np[6:9], test_limit)
+    if (phase_map_np_v1.all() == vertical_fringes['phase_map_np_v1'].all()) & (phase_map_np_v2.all() == vertical_fringes['phase_map_np_v2'].all()):
+        print('\n All vertical phase maps match')
+        phase_arr_np = [phase_map_np_v1, phase_map_np_v2]
+        multifreq_unwrap_np_v, k_arr_np_v = multifreq_unwrap(pitch_list, phase_arr_np, 1, 'v')
+        if multifreq_unwrap_np_v.all() == vertical_fringes['multifreq_unwrap_np_v'].all():
+            print('\n Vertical unwrapped phase maps match')
         else:
-            print('\n Vertical phase map mismatch')
-        masked_img_np_h1, modulation_np_h1, average_int_np_h1, phase_map_np_h1 = phase_cal(fringe_arr_np[3:6], delta_deck_np, test_limit)
-        masked_img_np_h2, modulation_np_h2, average_int_np_h2, phase_map_np_h2 = phase_cal(fringe_arr_np[9:12], delta_deck_np, test_limit)
-        if (phase_map_np_h1.all() == horizontal_fringes['phase_map_np_h1'].all()) & (phase_map_np_h2.all() == horizontal_fringes['phase_map_np_h2'].all()):
-            print('\n All horizontal phase maps match')
-            phase_arr_np = [phase_map_np_h1, phase_map_np_h2]
-            multifreq_unwrap_np_h, k_arr_np_h = multifreq_unwrap(pitch_list, phase_arr_np, 1, 'h')
-            if multifreq_unwrap_np_h.all() == horizontal_fringes['multifreq_unwrap_np_h'].all():
-                print('\n Horizontal unwrapped phase maps match')
-            else:
-                print('\n Horizontal unwrapped phase map mismatch ')  
-        else:
-            print('\n Horizontal phase map mismatch')
+            print('\n Vertical unwrapped phase map mismatch ')  
     else:
-        print('Delta deck test failed')
+        print('\n Vertical phase map mismatch')
+    modulation_np_h1, average_int_np_h1, phase_map_np_h1 = phase_cal(fringe_arr_np[3:6], test_limit)
+    modulation_np_h2, average_int_np_h2, phase_map_np_h2 = phase_cal(fringe_arr_np[9:12], test_limit)
+    if (phase_map_np_h1.all() == horizontal_fringes['phase_map_np_h1'].all()) & (phase_map_np_h2.all() == horizontal_fringes['phase_map_np_h2'].all()):
+        print('\n All horizontal phase maps match')
+        phase_arr_np = [phase_map_np_h1, phase_map_np_h2]
+        multifreq_unwrap_np_h, k_arr_np_h = multifreq_unwrap(pitch_list, phase_arr_np, 1, 'h')
+        if multifreq_unwrap_np_h.all() == horizontal_fringes['multifreq_unwrap_np_h'].all():
+            print('\n Horizontal unwrapped phase maps match')
+        else:
+            print('\n Horizontal unwrapped phase map mismatch ')  
+    else:
+        print('\n Horizontal phase map mismatch')
+
     return 
 
 
