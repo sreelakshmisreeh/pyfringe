@@ -83,7 +83,8 @@ def random_reconst(width, height, pitch_list, N_list, limit, dist, delta_dist, p
     unwrap, k = nstep.multifreq_unwrap(pitch_list, phase_arr, kernel, direc)
     
     
-    obj_x, obj_y, obj_z = rc.reconstruction_obj(unwrap, c_mtx, c_dist, p_mtx, cp_rot_mtx, cp_trans_mtx, phase_st, pitch_list[-1])
+    obj_x, obj_y, obj_z = rc.reconstruction_obj(unwrap, c_mtx, c_dist, p_mtx, cp_rot_mtx, cp_trans_mtx, phase_st,
+                                                pitch_list[-1], )
     roi_mask = np.full(unwrap.shape, False)
     roi_mask[mod_freq4 > limit] = True
     u_copy = deepcopy(unwrap)
