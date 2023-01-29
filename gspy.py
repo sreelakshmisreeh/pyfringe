@@ -1,5 +1,5 @@
 # coding=utf-8
-
+#TODO: Impliment adjusting camera resolution
 import os
 import PySpin
 import sys
