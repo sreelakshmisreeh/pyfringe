@@ -1218,13 +1218,13 @@ class Calibration:
         center_cordi_lst = []
         for i in tqdm(range(0, len(center_pts)), desc='building camera centers 3d coordinates'):
             # undistort points
-            x, y, z = rc.reconstruction_pts(center_pts[i], 
+            cordi = rc.reconstruction_pts(center_pts[i], 
                                             unwrap_phase[i], 
                                             c_mtx, c_dist, 
                                             p_mtx, 
                                             cp_rot_mtx, cp_trans_mtx, 
                                             self.phase_st, self.pitch[-1])
-            cordi = np.hstack((x, y, z))
+            
             center_cordi_lst.append(cordi)
         return np.array(center_cordi_lst)
 
@@ -1351,8 +1351,6 @@ class Calibration:
     def recon_xyz(self,
                   unwrap_phase,  
                   white_imgs, 
-                  mask_cond, 
-                  modulation=None,
                   int_limit=None,
                   resid_outlier_limit=None):
         """
@@ -1363,14 +1361,6 @@ class Calibration:
                       Unwrapped phase maps of each calibration pose.
         white_imgs: list.
                     True intensity image for texture mapping.
-        mask_cond: str.
-                   Mask condition for reconstruction based on 'intensity' or 'modulation'.
-                   Intensity based mask is applied for reconstructing selected regions based on surface texture.
-                   For example: if appropriate int_limit is set and mask_condition =  'intensity' the white
-                   region of the calibration board can be reconstructed.
-        modulation: list.
-                    Modulation image for each calibration pose for applying mask to build the calibration board.
-                    Default value is None and used if 'intensity' is used as 'mask_cond'.
         int_limit: float.
                    Minimum intensity value to extract white region.
         resid_outlier_limit: float.
@@ -1397,54 +1387,35 @@ class Calibration:
             u_copy = deepcopy(u)
             w_copy = deepcopy(w)
             roi_mask = np.full(u_copy.shape, False)
-            if mask_cond == 'modulation': 
-                if len(modulation) > 0:
-                    roi_mask[modulation[i][-1] > self.limit] = True
-                    point_cloud_dir = os.path.join(self.path, 'modulation_mask')
-                    if not os.path.exists(point_cloud_dir):
-                        os.makedirs(point_cloud_dir)  
-                else:
-                    print('Please provide modulation images for mask.')
-                    point_cloud_dir = None
-            elif mask_cond == 'intensity':
-                if w.size != 0:
-                    roi_mask[w > int_limit] = True
-                    point_cloud_dir = os.path.join(self.path, 'intensity_mask')
-                    if not os.path.exists(point_cloud_dir):
-                        os.makedirs(point_cloud_dir)
-                else:
-                    print('Please provide intensity (texture) image.')
-                    point_cloud_dir = None
+            if int_limit:
+                roi_mask[w > int_limit] = True
+                u_copy[~roi_mask] = np.nan
+                point_cloud_dir = os.path.join(self.path, 'intensity_mask')
             else:
-                roi_mask = True  # all pixels are selected.
-                point_cloud_dir = os.path.join(self.path, 'no_mask')
-                if not os.path.exists(point_cloud_dir):
-                    os.makedirs(point_cloud_dir)
-                print("The input mask_cond is not supported, no mask is applied.")
-            u_copy[~roi_mask] = np.nan
-            w_copy[~roi_mask] = False
-            x, y, z = rc.reconstruction_obj(u_copy, c_mtx, c_dist, p_mtx, cp_rot_mtx, cp_trans_mtx, self.phase_st, self.pitch[-1])
-            cordi = np.vstack((x.ravel(), y.ravel(), z.ravel())).T
-            nan_mask = np.isnan(cordi)
-            up_cordi = cordi[~nan_mask.all(axis=1)]
-            xyz = list(map(tuple, up_cordi)) 
-            inte_img = w_copy / np.nanmax(w_copy)
+                point_cloud_dir = os.path.join(self.path, 'modulation_mask') 
+            if self.processing == 'cpu':        
+                cordi, nan_mask= rc.reconstruction_obj(u_copy, c_mtx, c_dist, p_mtx, cp_rot_mtx, cp_trans_mtx, self.phase_st, self.pitch[-1])
+            elif self.processing == 'gpu':
+                cordi, nan_mask= rc.reconstruction_obj_cupy(u_copy, c_mtx, c_dist, p_mtx, cp_rot_mtx, cp_trans_mtx, self.phase_st, self.pitch[-1])
+            cordi = cordi.reshape((cordi.shape[0],cordi.shape[1]))
+            xyz = list(map(tuple, cordi)) 
+            inte_img = (w_copy / np.nanmax(w_copy)).ravel()
+            inte_img = inte_img[~nan_mask]
             inte_rgb = np.stack((inte_img, inte_img, inte_img), axis=-1)
-            rgb_intensity_vect = np.vstack((inte_rgb[:, :, 0].ravel(), inte_rgb[:, :, 1].ravel(), inte_rgb[:, :, 2].ravel())).T
-            up_rgb_intensity_vect = rgb_intensity_vect[~nan_mask.all(axis=1)]
-            color = list(map(tuple, up_rgb_intensity_vect))
-            cordi_lst.append(up_cordi)
-            color_lst.append(up_rgb_intensity_vect)
-            if point_cloud_dir is not None:
-                PlyData(
-                    [
-                        PlyElement.describe(np.array(xyz, dtype=[('x', 'f4'), ('y', 'f4'), ('z', 'f4')]), 'points'),
-                        PlyElement.describe(np.array(color, dtype=[('r', 'f4'), ('g', 'f4'), ('b', 'f4')]), 'color'),
-                    ]).write(os.path.join(point_cloud_dir, 'obj_%d.ply' % i))
-            else:
-                print('ERROR: point_cloud_dir is not provided. No .ply file is saved.')
+            color = list(map(tuple, inte_rgb))
+            cordi_lst.append(cordi)
+            color_lst.append(inte_rgb)
+            if not os.path.exists(point_cloud_dir):
+                os.makedirs(point_cloud_dir)
+                
+            PlyData(
+                [
+                    PlyElement.describe(np.array(xyz, dtype=[('x', 'f4'), ('y', 'f4'), ('z', 'f4')]), 'points'),
+                    PlyElement.describe(np.array(color, dtype=[('r', 'f4'), ('g', 'f4'), ('b', 'f4')]), 'color'),
+                ]).write(os.path.join(point_cloud_dir, 'obj_%d.ply' % i))
+        
             
-        if mask_cond == 'intensity':
+        if resid_outlier_limit:
             residual_lst, outlier_lst = self.white_center_planefit(cordi_lst, resid_outlier_limit)
             return cordi_lst, color_lst, residual_lst, outlier_lst
         else:
