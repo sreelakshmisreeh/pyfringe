@@ -19,7 +19,7 @@ from scipy.optimize import leastsq
 from scipy.spatial import distance
 from copy import deepcopy
 import shutil
-
+from time import perf_counter_ns
 EPSILON = -0.5
 TAU = 5.5
 class Calibration:
@@ -1222,8 +1222,11 @@ class Calibration:
                                             unwrap_phase[i], 
                                             c_mtx, c_dist, 
                                             p_mtx, 
-                                            cp_rot_mtx, cp_trans_mtx, 
-                                            self.phase_st, self.pitch[-1])
+                                            cp_rot_mtx, 
+                                            cp_trans_mtx, 
+                                            self.phase_st, 
+                                            self.pitch[-1],
+                                            self.processing)
             
             center_cordi_lst.append(cordi)
         return np.array(center_cordi_lst)
@@ -1378,11 +1381,12 @@ class Calibration:
         c_mtx = calibration["arr_0"]
         c_dist = calibration["arr_1"]
         p_mtx = calibration["arr_2"]
-        cp_rot_mtx = calibration["arr_3"]
-        cp_trans_mtx = calibration["arr_4"]
+        camproj_rot_mtx = calibration["arr_3"]
+        camproj_trans_mtx = calibration["arr_4"]
         
         cordi_lst = []
         color_lst = []
+        start = perf_counter_ns()
         for i, (u, w) in tqdm(enumerate(zip(unwrap_phase, white_imgs)), desc='building board 3d coordinates'):
             u_copy = deepcopy(u)
             w_copy = deepcopy(w)
@@ -1393,11 +1397,14 @@ class Calibration:
                 point_cloud_dir = os.path.join(self.path, 'intensity_mask')
             else:
                 point_cloud_dir = os.path.join(self.path, 'modulation_mask') 
-            if self.processing == 'cpu':        
-                cordi, nan_mask= rc.reconstruction_obj(u_copy, c_mtx, c_dist, p_mtx, cp_rot_mtx, cp_trans_mtx, self.phase_st, self.pitch[-1])
-            elif self.processing == 'gpu':
-                cordi, nan_mask= rc.reconstruction_obj_cupy(u_copy, c_mtx, c_dist, p_mtx, cp_rot_mtx, cp_trans_mtx, self.phase_st, self.pitch[-1])
-            cordi = cordi.reshape((cordi.shape[0],cordi.shape[1]))
+            end = perf_counter_ns()
+            print('processing: %2.6f'%((end-start)/1e9))
+            start = perf_counter_ns()        
+            cordi, nan_mask= rc.reconstruction_obj(u_copy, c_mtx, c_dist, p_mtx, camproj_rot_mtx, camproj_trans_mtx,
+                                                   self.phase_st, self.pitch[-1], self.processing)
+            end = perf_counter_ns()
+            print('reconstruction: %2.6f'%((end-start)/1e9))
+            start = perf_counter_ns()
             xyz = list(map(tuple, cordi)) 
             inte_img = (w_copy / np.nanmax(w_copy)).ravel()
             inte_img = inte_img[~nan_mask]
@@ -1414,6 +1421,8 @@ class Calibration:
                     PlyElement.describe(np.array(color, dtype=[('r', 'f4'), ('g', 'f4'), ('b', 'f4')]), 'color'),
                 ]).write(os.path.join(point_cloud_dir, 'obj_%d.ply' % i))
         
+            end = perf_counter_ns()
+            print('saving: %2.6f'%((end-start)/1e9))
             
         if resid_outlier_limit:
             residual_lst, outlier_lst = self.white_center_planefit(cordi_lst, resid_outlier_limit)
