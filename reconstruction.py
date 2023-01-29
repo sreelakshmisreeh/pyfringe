@@ -23,39 +23,8 @@ from plyfile import PlyData, PlyElement
 EPSILON = -0.5
 TAU = 5.5
 
-#TODO: Update documentation
+#TODO: Convert to pyqtgraph. Check sigma functions and convert to cupy. opencv cupy for undistort
 
-
-def inv_mtx(a11,a12,a13,a21,a22,a23,a31,a32,a33):
-    '''
-    Function to calculate inversion matrix required for object reconstruction.
-    Ref: S.Zhong, High-Speed 3D Imaging with Digital Fringe Projection Techniques, CRC Press, 2016.
-    :params a11,a12,a13,a21,a22,a23,a31,a32,a33: A matrix elements
-    :type: float
-    :return: Inverse matrix elements
-    :rtype: float
-    '''
-   
-    
-    det = (a11 * a22 * a33) + (a12 * a23 * a31) + (a13 * a21 * a32) - (a13 * a22 * a31) - (a12 * a21 * a33) - (a11* a23* a32)    
-    
-    b11 = (a22 * a33 - a23 * a32) / det 
-    b12 = -(a12 * a33 - a13 * a32) / det 
-    b13 = (a12 * a23 - a13 * a22) / det
-    
-    b21 = -(a21 * a33 - a23 * a31) / det
-    b22 = (a11 * a33 - a13 * a31) / det
-    b23 = -(a11 * a23 - a13 * a21) / det
-    
-    b31 = (a21 * a32 - a22 * a31) / det
-    b32 = -(a11 * a32 - a12 * a31) / det
-    b33 = (a11 * a22 - a12 * a21) / det
-    
-    return b11, b12, b13, b21, b22, b23, b31, b32, b33
-    
-    
-    
-    
 def reconstruction_pts(uv_true, unwrapv, c_mtx, c_dist, p_mtx, cp_rot_mtx, cp_trans_mtx, phase_st, pitch):
     """
     Function to reconstruct 3D point coordinates of 2D points.
@@ -88,40 +57,39 @@ def reconstruction_pts(uv_true, unwrapv, c_mtx, c_dist, p_mtx, cp_rot_mtx, cp_tr
     uv = uv.reshape(uv.shape[0],2)
     uv_true = uv_true.reshape(no_pts,2)
     #  Extract x and y coordinate of each point as uc, vc
-    uc = uv[:,0].reshape(no_pts,1)
-    vc = uv[:,1].reshape(no_pts,1)
+    uc = uv[:,0]
+    vc = uv[:,1]
     
     # Determinate 'up' from circle center
     up = (nstep.bilinear_interpolate(unwrapv, uv_true) - phase_st) * pitch / (2*np.pi)
-    up = up.reshape(no_pts, 1)
+    up = up
     
     # Calculate H matrix for proj from intrinsics and extrinsics
     proj_h_mtx = np.dot(p_mtx, np.hstack((cp_rot_mtx, cp_trans_mtx)))
     #Calculate H matrix for camer
     cam_h_mtx = np.dot(c_mtx,np.hstack((np.identity(3), np.zeros((3,1)))))
     
-    a11 = cam_h_mtx[0,0] - uc * cam_h_mtx[2,0]
-    a12 = cam_h_mtx[0,1] - uc * cam_h_mtx[2,1]
-    a13 = cam_h_mtx[0,2] - uc * cam_h_mtx[2,2]
-    
-    a21 = cam_h_mtx[1,0] - vc * cam_h_mtx[2,0]
-    a22 = cam_h_mtx[1,1] - vc * cam_h_mtx[2,1]
-    a23 = cam_h_mtx[1,2] - vc * cam_h_mtx[2,2]
-    
-    a31 = proj_h_mtx[0,0] - up * proj_h_mtx[2,0]
-    a32 = proj_h_mtx[0,1] - up * proj_h_mtx[2,1]
-    a33 = proj_h_mtx[0,2] - up * proj_h_mtx[2,2]
-    
-    b11, b12, b13, b21, b22, b23, b31, b32, b33 = inv_mtx(a11, a12, a13, a21, a22, a23, a31, a32,a33)
-    
-    c1 = uc * cam_h_mtx[2,3] - cam_h_mtx[0,3]
-    c2 = vc * cam_h_mtx[2,3] - cam_h_mtx[1,3]
-    c3 = up * proj_h_mtx[2,3] - proj_h_mtx[0,3]
-   
-    x = b11 * c1 + b12 * c2 + b13 * c3
-    y = b21 * c1 + b22 * c2 + b23 * c3
-    z = b31 * c1 + b32 * c2 + b33 * c3
-    return x, y, z
+    A = np.empty((len(up),3,3))
+    A[:,0,0] = cam_h_mtx[0,0] - uc * cam_h_mtx[2,0] 
+    A[:,0,1] = cam_h_mtx[0,1] - uc * cam_h_mtx[2,1]
+    A[:,0,2] = cam_h_mtx[0,2] - uc * cam_h_mtx[2,2]
+
+    A[:,1,0] = cam_h_mtx[1,0] - vc * cam_h_mtx[2,0]
+    A[:,1,1] = cam_h_mtx[1,1] - vc * cam_h_mtx[2,1]
+    A[:,1,2] = cam_h_mtx[1,2] - vc * cam_h_mtx[2,2]
+
+    A[:,2,0] = proj_h_mtx[0,0] - up * proj_h_mtx[2,0]
+    A[:,2,1] = proj_h_mtx[0,1] - up * proj_h_mtx[2,1]
+    A[:,2,2] = proj_h_mtx[0,2] - up * proj_h_mtx[2,2]
+    A_inv = np.linalg.inv(A)
+
+    c = np.empty((len(up),3,1))
+    c[:,0,0] = uc * cam_h_mtx[2,3] - cam_h_mtx[0,3]
+    c[:,1,0] = vc * cam_h_mtx[2,3] - cam_h_mtx[1,3]
+    c[:,2,0] = up * proj_h_mtx[2,3] - proj_h_mtx[0,3]
+    coordintes = np.einsum('ijk,ikl->ijl', A_inv, c)
+    coordintes= coordintes.reshape((len(up),3))
+    return coordintes
 
 def point_error(cord1,cord2):
     '''
@@ -176,35 +144,105 @@ def reconstruction_obj(unwrapv, c_mtx, c_dist, p_mtx, cp_rot_mtx, cp_trans_mtx, 
     v = np.arange(0,unwrap_dist.shape[0])
     uc, vc = np.meshgrid(u,v)
     up = (unwrap_dist - phase_st) * pitch / (2*np.pi) 
+    uc = uc.ravel()
+    vc = vc.ravel()
+    up = up.ravel()
+    nan_mask = np.isnan(up)
+    uc_updated = uc[~nan_mask]
+    vc_updated = vc[~nan_mask]
+    up_updated = up[~nan_mask]
     # Calculate H matrix for proj from intrinsics and extrinsics
     proj_h_mtx = np.dot(p_mtx, np.hstack((cp_rot_mtx, cp_trans_mtx)))
 
     #Calculate H matrix for camera
     cam_h_mtx = np.dot(c_mtx,np.hstack((np.identity(3), np.zeros((3,1)))))
 
-    a11 = cam_h_mtx[0,0] - uc * cam_h_mtx[2,0] 
-    a12 = cam_h_mtx[0,1] - uc * cam_h_mtx[2,1]
-    a13 = cam_h_mtx[0,2] - uc * cam_h_mtx[2,2]
+    A = np.empty((len(up_updated),3,3))
+    A[:,0,0] = cam_h_mtx[0,0] - uc_updated * cam_h_mtx[2,0] 
+    A[:,0,1] = cam_h_mtx[0,1] - uc_updated * cam_h_mtx[2,1]
+    A[:,0,2] = cam_h_mtx[0,2] - uc_updated * cam_h_mtx[2,2]
 
-    a21 = cam_h_mtx[1,0] - vc * cam_h_mtx[2,0]
-    a22 = cam_h_mtx[1,1] - vc * cam_h_mtx[2,1]
-    a23 = cam_h_mtx[1,2] - vc * cam_h_mtx[2,2]
+    A[:,1,0] = cam_h_mtx[1,0] - vc_updated * cam_h_mtx[2,0]
+    A[:,1,1] = cam_h_mtx[1,1] - vc_updated * cam_h_mtx[2,1]
+    A[:,1,2] = cam_h_mtx[1,2] - vc_updated * cam_h_mtx[2,2]
 
-    a31 = proj_h_mtx[0,0] - up * proj_h_mtx[2,0]
-    a32 = proj_h_mtx[0,1] - up * proj_h_mtx[2,1]
-    a33 = proj_h_mtx[0,2] - up * proj_h_mtx[2,2]
+    A[:,2,0] = proj_h_mtx[0,0] - up_updated * proj_h_mtx[2,0]
+    A[:,2,1] = proj_h_mtx[0,1] - up_updated * proj_h_mtx[2,1]
+    A[:,2,2] = proj_h_mtx[0,2] - up_updated * proj_h_mtx[2,2]
+    A_inv = np.linalg.inv(A)
 
-    b11, b12, b13, b21, b22, b23, b31, b32, b33 = inv_mtx(a11, a12, a13, a21, a22, a23, a31, a32, a33)
+    c = np.empty((len(up_updated),3,1))
+    c[:,0,0] = uc_updated * cam_h_mtx[2,3] - cam_h_mtx[0,3]
+    c[:,1,0] = vc_updated * cam_h_mtx[2,3] - cam_h_mtx[1,3]
+    c[:,2,0] = up_updated * proj_h_mtx[2,3] - proj_h_mtx[0,3]
     
-    c1 = uc * cam_h_mtx[2,3] - cam_h_mtx[0,3]
-    c2 = vc * cam_h_mtx[2,3] - cam_h_mtx[1,3]
-    c3 = up * proj_h_mtx[2,3] - proj_h_mtx[0,3]
+    coords = np.einsum('ijk,ikl->ijl', A_inv, c)
     
-    x = b11 * c1 + b12 * c2 + b13 * c3
-    y = b21 * c1 + b22 * c2 + b23 * c3
-    z = b31 * c1 + b32 * c2 + b33 * c3
+    return coords, nan_mask 
+
+def reconstruction_obj_cupy(unwrapv, c_mtx, c_dist, p_mtx, cp_rot_mtx, cp_trans_mtx, phase_st, pitch):
+    '''
+    Sub function to reconstruct object from phase map
+    unwrapv = Unwrapped phase map of object.
+    c_mtx = Camera matrix from calibration.
+    c_dist = Camera distortion matrix from calibration.
+    p_mtx = Projector matrix from calibration.
+    cp_rot_mtx = Projector distortion matrix from calibration.
+    cp_trans_mtx = Camera-projector translational matrix from calibration.
+    phase_st = Initial phase to be subtracted for phase to coordinate conversion.
+    pitch  = Number of pixels per fringe period.
+    :type unwrapv:float array.
+    :type c_mtx: float array.
+    :type c_dist:float array.
+    :type p_mtx:float array.
+    :type cp_rot_mtx:float array.
+    :type cp_trans_mtx:float array.
+    :type phase_st:float.
+    :type pitch:float.
+    :return x,y,z : coorninate arrays
+    :rtpe x,y,z : float array
+    '''
     
-    return x, y, z 
+    unwrap_dist = cv2.undistort(unwrapv, c_mtx, c_dist)
+    u = cp.arange(0,unwrap_dist.shape[1])
+    v = cp.arange(0,unwrap_dist.shape[0])
+    uc, vc = cp.meshgrid(u,v)
+    up = (unwrap_dist - phase_st) * pitch / (2*np.pi) 
+    uc = uc.ravel()
+    vc = vc.ravel()
+    up = cp.asarray(up.ravel())
+    nan_mask = cp.isnan(up)
+    uc_updated = uc[~nan_mask]
+    vc_updated = vc[~nan_mask]
+    up_updated = up[~nan_mask]
+    # Calculate H matrix for proj from intrinsics and extrinsics
+    proj_h_mtx = np.dot(cp.asarray(p_mtx), np.hstack((cp.asarray(cp_rot_mtx), cp.asarray(cp_trans_mtx))))
+
+    #Calculate H matrix for camera
+    cam_h_mtx = cp.dot(cp.asarray(c_mtx),np.hstack((cp.identity(3), cp.zeros((3,1)))))
+
+    A = cp.empty((len(up_updated),3,3))
+    A[:,0,0] = cam_h_mtx[0,0] - uc_updated * cam_h_mtx[2,0] 
+    A[:,0,1] = cam_h_mtx[0,1] - uc_updated * cam_h_mtx[2,1]
+    A[:,0,2] = cam_h_mtx[0,2] - uc_updated * cam_h_mtx[2,2]
+
+    A[:,1,0] = cam_h_mtx[1,0] - vc_updated * cam_h_mtx[2,0]
+    A[:,1,1] = cam_h_mtx[1,1] - vc_updated * cam_h_mtx[2,1]
+    A[:,1,2] = cam_h_mtx[1,2] - vc_updated * cam_h_mtx[2,2]
+
+    A[:,2,0] = proj_h_mtx[0,0] - up_updated * proj_h_mtx[2,0]
+    A[:,2,1] = proj_h_mtx[0,1] - up_updated * proj_h_mtx[2,1]
+    A[:,2,2] = proj_h_mtx[0,2] - up_updated * proj_h_mtx[2,2]
+    A_inv = np.linalg.inv(A)
+
+    c = cp.empty((len(up_updated),3,1))
+    c[:,0,0] = uc_updated * cam_h_mtx[2,3] - cam_h_mtx[0,3]
+    c[:,1,0] = vc_updated * cam_h_mtx[2,3] - cam_h_mtx[1,3]
+    c[:,2,0] = up_updated * proj_h_mtx[2,3] - proj_h_mtx[0,3]
+    
+    coords = cp.einsum('ijk,ikl->ijl', A_inv, c)
+    
+    return cp.asnumpy(coords),cp.asnumpy(nan_mask) 
 
 def diff_funs_x(hc_11, hc_13, hc_22, hc_23, hc_33, hp_11,hp_12, hp_13, hp_14, hp_31, hp_32, hp_33, hp_34, det, x_num, uc, vc, up):
     '''
@@ -375,7 +413,7 @@ def sigma_random(modulation, limit,  pitch, N, phase_st, unwrap, sigma_path, sou
     
     return sigmasq_x, sigmasq_y, sigmasq_z, derv_x, derv_y, derv_z
 
-def complete_recon(unwrap, inte_rgb, modulation, limit, calib_path, sigma_path, phase_st, pitch, N, obj_path, temp, temperature = None):
+def complete_recon(unwrap, inte_rgb, modulation, limit, calib_path, sigma_path, phase_st, pitch, N, obj_path, temp, processing, temperature = None):
     '''
     Function to completely reconstruct object applying modulation mask to saving point cloud.
 
@@ -409,30 +447,26 @@ def complete_recon(unwrap, inte_rgb, modulation, limit, calib_path, sigma_path, 
     p_mtx = calibration["arr_4"]
     cp_rot_mtx = calibration["arr_8"]
     cp_trans_mtx = calibration["arr_10"]
-    
-    roi_mask = np.full(unwrap.shape, False)
-    roi_mask[modulation > limit] = True
-    mod = deepcopy(modulation)
-    mod[~roi_mask] = np.nan
-    mod_vect = np.array(mod.ravel(), dtype=[('modulation', 'f4')])
     u_copy = deepcopy(unwrap)
     w_copy = deepcopy(inte_rgb)
-    u_copy[~roi_mask] = np.nan
-    obj_x, obj_y,obj_z = reconstruction_obj(u_copy, c_mtx, c_dist, p_mtx, cp_rot_mtx, cp_trans_mtx, phase_st, pitch)
-   
-    w_copy[~roi_mask] = False
-    obj_x[~roi_mask] = np.nan
-    obj_y[~roi_mask] = np.nan
-    obj_z[~roi_mask] = np.nan
-    cordi = np.vstack((obj_x.ravel(), obj_y.ravel(), obj_z.ravel())).T
+    mod = deepcopy(modulation)
+    if processing == 'cpu':
+        cordi, nan_mask = reconstruction_obj(u_copy, c_mtx, c_dist, p_mtx, cp_rot_mtx, cp_trans_mtx, phase_st, pitch)
+    elif processing == 'gpu':
+        cordi, nan_mask = reconstruction_obj_cupy(u_copy, c_mtx, c_dist, p_mtx, cp_rot_mtx, cp_trans_mtx, phase_st, pitch)
+    else:
+        print("ERROR: Invalid processing type")
+        cordi = None
+        nan_mask = None
+    mod[~nan_mask] = np.nan
+    mod_vect = np.array(mod.ravel(), dtype=[('modulation', 'f4')])
+    cordi = cordi.reshape((cordi.shape[0],cordi.shape[1]))
     nan_mask = np.isnan(cordi)
-    up_cordi = cordi[~nan_mask.all(axis =1)]
-    xyz = list(map(tuple, up_cordi)) 
-    inte_rgb = inte_rgb / np.nanmax(inte_rgb)
+    xyz = list(map(tuple, cordi)) 
+    inte_rgb = w_copy / np.nanmax(w_copy)
+    inte_rgb = inte_rgb[~nan_mask]
     rgb_intensity_vect = np.vstack((inte_rgb[:,:,0].ravel(), inte_rgb[:,:,1].ravel(),inte_rgb[:,:,2].ravel())).T
-    up_rgb_intensity_vect = rgb_intensity_vect[~nan_mask.all(axis =1)]
-    color = list(map(tuple, up_rgb_intensity_vect))
-    
+    color = list(map(tuple, rgb_intensity_vect))
     sigmasq_x, sigmasq_y, sigmasq_z, derv_x, derv_y, derv_z =  sigma_random(modulation, limit,  pitch, N, phase_st, unwrap, sigma_path, calib_path)
     sigma_x = np.sqrt(sigmasq_x)
     sigma_y = np.sqrt(sigmasq_y)
@@ -442,9 +476,8 @@ def complete_recon(unwrap, inte_rgb, modulation, limit, calib_path, sigma_path, 
     up_mod_vect = mod_vect[~nan_mask.all(axis =1)]
     xyz_sigma = list(map(tuple, up_cordi_sigma))
     if temp:
-        #t_vect = np.array(temperature[flag], dtype=[('temperature', 'f4')])
         t_vect = np.array(temperature.ravel(), dtype=[('temperature', 'f4')])
-        up_t_vect = t_vect[~nan_mask.all(axis =1)]
+        up_t_vect = t_vect[~nan_mask]
         PlyData(
             [
                 PlyElement.describe(np.array(xyz, dtype=[('x', 'f4'), ('y', 'f4'), ('z', 'f4')]), 'points'),
@@ -454,7 +487,6 @@ def complete_recon(unwrap, inte_rgb, modulation, limit, calib_path, sigma_path, 
                 PlyElement.describe(np.array(up_mod_vect, dtype=[('modulation', 'f4')]), 'modulation')
                 
             ]).write(os.path.join(obj_path,'obj.ply'))
-    
     else:
         t_vect = None
         PlyData(
@@ -467,35 +499,6 @@ def complete_recon(unwrap, inte_rgb, modulation, limit, calib_path, sigma_path, 
             ]).write(os.path.join(obj_path,'obj.ply'))
       
     return cordi, rgb_intensity_vect, t_vect, cordi_sigma, mod_vect
-
-def delta_deck_calculation(cam_height,cam_width, N_list, processing):
-    """
-    Function computes phase shift δ  values used in N-step phase shifting algorithm for each unique N_list values
-    compatible to type of data processing chosen.
-    Returns
-    -------
-    delta_deck_lst: list.
-                    List of delta arrays for each unique N values.
-    delta_index: list.
-                 List indicating which delta_deck to use.
-    """
-    unique_N_list = list(dict.fromkeys(N_list))
-    delta_deck_lst = []
-    for n in unique_N_list:
-        if processing == 'cpu':
-            delta_deck = nstep.delta_deck_gen(n, cam_height, cam_width)
-        elif processing == 'gpu':
-            delta_deck = nstep_cp.delta_deck_gen_cp(n, cam_height, cam_width)
-        delta_deck_lst.append(delta_deck)
-    delta_index = [0]
-    count = 0
-    for i, n in enumerate(N_list[1:]):
-        if n == N_list[i]:
-            delta_index.append(count)
-        else:
-            count += 1
-            delta_index.append(count)
-    return delta_deck_lst, delta_index
 
 def obj_reconst_wrapper(width, 
                         height, 
@@ -544,8 +547,6 @@ def obj_reconst_wrapper(width,
 
     """
    
-   # calibration = np.load(os.path.join(calib_path,'{}_calibration_param.npz'.format(type_unwrap)))
-    delta_deck_lst, delta_index = delta_deck_calculation(cam_height,cam_width, N_list, processing)
     if data_type == 'jpeg':
         img_path = sorted(glob.glob(os.path.join(obj_path, 'capt_*.jpg')), key=os.path.getmtime)
         images_arr = [cv2.imread(file, 0) for file in img_path]
@@ -560,12 +561,10 @@ def obj_reconst_wrapper(width,
 
     if type_unwrap == 'phase':
       if processing == 'cpu':
-          object_cos, obj_cos_mod, obj_cos_avg, phase_cos = nstep.phase_cal(images_arr[0:N_list[0]], 
-                                                                            delta_deck_lst[0], 
-                                                                            limit)
-          object_step, obj_step_mod, obj_step_avg, phase_step = nstep.phase_cal(images_arr[N_list[0]:2*N_list[0]], 
-                                                                                delta_deck_lst[0], 
-                                                                                limit)
+          obj_cos_mod, obj_cos_avg, phase_cos = nstep.phase_cal(images_arr[0:N_list[0]],
+                                                                limit)
+          obj_step_mod, obj_step_avg, phase_step = nstep.phase_cal(images_arr[N_list[0]:2*N_list[0]], 
+                                                                   limit)
           phase_step = nstep.step_rectification(phase_step,direc)
           #unwrapped phase
           unwrap0, k0 = nstep.unwrap_cal(phase_step, phase_cos, pitch_list[0], width, height, direc)
@@ -574,35 +573,27 @@ def obj_reconst_wrapper(width,
        
     elif type_unwrap == 'multifreq':
         if processing == 'cpu':
-           object_freq1, mod_freq1, avg_freq1, phase_freq1  = nstep.phase_cal(images_arr[0: N_list[0]],
-                                                                              delta_deck_lst[delta_index[0]],
+            mod_freq1, avg_freq1, phase_freq1  = nstep.phase_cal(images_arr[0: N_list[0]],
                                                                               limit)
-           object_freq2, mod_freq2, avg_freq2, phase_freq2 = nstep.phase_cal(images_arr[N_list[0]: N_list[0] + N_list[1]],
-                                                                             delta_deck_lst[delta_index[1]],
-                                                                             limit)
-           object_freq3, mod_freq3, avg_freq3, phase_freq3 = nstep.phase_cal(images_arr[ N_list[0] + N_list[1]: N_list[0]+ N_list[1]+ N_list[2]],
-                                                                             delta_deck_lst[delta_index[2]],
-                                                                             limit)
-           object_freq4, mod_freq4, avg_freq4, phase_freq4 = nstep.phase_cal(images_arr[N_list[0]+ N_list[1]+ N_list[2]: N_list[0]+ N_list[1]+ N_list[2] + N_list[3]],
-                                                                             delta_deck_lst[delta_index[3]],
-                                                                             limit)
-           phase_freq1[phase_freq1 < EPSILON] = phase_freq1[phase_freq1 < EPSILON] + 2 * np.pi
+            mod_freq2, avg_freq2, phase_freq2 = nstep.phase_cal(images_arr[N_list[0]: N_list[0] + N_list[1]],
+                                                                limit)
+            mod_freq3, avg_freq3, phase_freq3 = nstep.phase_cal(images_arr[ N_list[0] + N_list[1]: N_list[0]+ N_list[1]+ N_list[2]],
+                                                                limit)
+            mod_freq4, avg_freq4, phase_freq4 = nstep.phase_cal(images_arr[N_list[0]+ N_list[1]+ N_list[2]: N_list[0]+ N_list[1]+ N_list[2] + N_list[3]],
+                                                                limit)
+            phase_freq1[phase_freq1 < EPSILON] = phase_freq1[phase_freq1 < EPSILON] + 2 * np.pi
            #unwrapped phase
-           phase_arr = np.stack([phase_freq1, phase_freq2, phase_freq3, phase_freq4])
-           unwrap, k = nstep.multifreq_unwrap(pitch_list, phase_arr, kernel, direc)
+            phase_arr = np.stack([phase_freq1, phase_freq2, phase_freq3, phase_freq4])
+            unwrap, k = nstep.multifreq_unwrap(pitch_list, phase_arr, kernel, direc)
            
         elif processing == 'gpu':
             object_freq1, mod_freq1, avg_freq1, phase_freq1 = nstep_cp.phase_cal_cp(images_arr[0: N_list[0]],
-                                                                                    delta_deck_lst[delta_index[0]],
                                                                                     limit)
             object_freq2, mod_freq2, avg_freq2, phase_freq2 = nstep_cp.phase_cal_cp(images_arr[N_list[0]: N_list[0] + N_list[1]],
-                                                                                    delta_deck_lst[delta_index[1]],
                                                                                     limit)
             object_freq3, mod_freq3, avg_freq3, phase_freq3 = nstep_cp.phase_cal_cp(images_arr[N_list[0] + N_list[1]: N_list[0] + N_list[1] + N_list[2]],
-                                                                                    delta_deck_lst[delta_index[2]],
                                                                                     limit)
             object_freq4, mod_freq4, avg_freq4, phase_freq4 = nstep_cp.phase_cal_cp(images_arr[N_list[0] + N_list[1] + N_list[2]: N_list[0] + N_list[1] + N_list[2] + N_list[3]],
-                                                                                    delta_deck_lst[delta_index[3]],
                                                                                     limit)
             phase_freq1[phase_freq1 < EPSILON] = phase_freq1[phase_freq1 < EPSILON] + 2 * np.pi
             # unwrapped phase
@@ -617,13 +608,10 @@ def obj_reconst_wrapper(width,
         pitch_list = np.insert(pitch_list, 0, eq_wav123)
         pitch_list = np.insert(pitch_list, 2, eq_wav12)
         object_wav3, mod_wav3, avg_wav3, phase_wav1 = nstep.phase_cal(images_arr[0, N_list[0]],
-                                                                      delta_deck_lst[delta_index[0]],
                                                                       limit)
         object_wav2, mod_wav2, avg_wav2, phase_wav2 = nstep.phase_cal(images_arr[N_list[0], N_list[0] + N_list[1]],
-                                                                      delta_deck_lst[delta_index[0]],
                                                                       limit)
         object_wav1, mod_wav1, avg_wav1, phase_wav3 = nstep.phase_cal(images_arr[N_list[0] + N_list[1], N_list[0]+ N_list[1]+ N_list[2]],
-                                                                      delta_deck_lst[delta_index[0]],
                                                                       limit)
         phase_wav12 = np.mod(phase_wav1 - phase_wav2, 2 * np.pi)
         phase_wav123 = np.mod(phase_wav12 - phase_wav3, 2 * np.pi)
@@ -699,9 +687,6 @@ def obj_reconst_wrapper_3level(width,
     obj_color = type: float array. Color (texture/ intensity) at each point.
 
     """
-   
-    # calibration = np.load(os.path.join(calib_path,'{}_calibration_param.npz'.format(type_unwrap)))
-    delta_deck_lst, delta_index = delta_deck_calculation(cam_height, cam_width, N_list, processing)
     if data_type == 'jpeg':
         img_path = sorted(glob.glob(os.path.join(obj_path, 'capt_*.jpg')), key=os.path.getmtime)
         images_arr = [cv2.imread(file, 0) for file in img_path]
@@ -716,12 +701,10 @@ def obj_reconst_wrapper_3level(width,
         
     if type_unwrap == 'phase':
        
-       object_cos, obj_cos_mod, obj_cos_avg, phase_cos  = nstep.phase_cal(images_arr[0, N_list[0]],
-                                                                          delta_deck_lst[0], 
-                                                                          limit)
-       object_step, obj_step_mod, obj_step_avg, phase_step = nstep.phase_cal(images_arr[N_list[0],2 * N_list[0]], 
-                                                                             delta_deck_lst[0],
-                                                                             limit)
+       obj_cos_mod, obj_cos_avg, phase_cos  = nstep.phase_cal(images_arr[0, N_list[0]],
+                                                              limit)
+       obj_step_mod, obj_step_avg, phase_step = nstep.phase_cal(images_arr[N_list[0],2 * N_list[0]],
+                                                                limit)
 
        #wrapped phase
        phase_step = nstep.step_rectification(phase_step,direc)
@@ -732,14 +715,11 @@ def obj_reconst_wrapper_3level(width,
        
     elif type_unwrap == 'multifreq':
         if processing == 'cpu':
-            object_freq1, mod_freq1, avg_freq1, phase_freq1 = nstep.phase_cal(images_arr[0: N_list[0]], 
-                                                                               delta_deck_lst[delta_index[0]], 
-                                                                               limit)
-            object_freq2, mod_freq2, avg_freq2, phase_freq2 = nstep.phase_cal(images_arr[N_list[0]: N_list[0] + N_list[1]], 
-                                                                              delta_deck_lst[delta_index[1]], 
+            object_freq1, mod_freq1, avg_freq1, phase_freq1 = nstep.phase_cal(images_arr[0: N_list[0]],
+                                                                              limit)
+            object_freq2, mod_freq2, avg_freq2, phase_freq2 = nstep.phase_cal(images_arr[N_list[0]: N_list[0] + N_list[1]],
                                                                               limit)
             object_freq3, mod_freq3, avg_freq3, phase_freq3 = nstep.phase_cal(images_arr[ N_list[0] + N_list[1]: N_list[0]+ N_list[1]+ N_list[2]],
-                                                                              delta_deck_lst[delta_index[2]], 
                                                                               limit)
             #wrapped phase
             phase_freq1[phase_freq1 < EPSILON] = phase_freq1[phase_freq1 < EPSILON] + 2 * np.pi
@@ -747,14 +727,11 @@ def obj_reconst_wrapper_3level(width,
             phase_arr = np.stack([phase_freq1, phase_freq2, phase_freq3])
             unwrap, k = nstep.multifreq_unwrap(pitch_list, phase_arr, kernel, direc)
         elif processing == 'gpu':
-            object_freq1, mod_freq1, avg_freq1, phase_freq1  = nstep_cp.phase_cal_cp(images_arr[0: N_list[0]], 
-                                                                                     delta_deck_lst[delta_index[0]], 
+            object_freq1, mod_freq1, avg_freq1, phase_freq1  = nstep_cp.phase_cal_cp(images_arr[0: N_list[0]],
                                                                                      limit)
-            object_freq2, mod_freq2, avg_freq2, phase_freq2 = nstep_cp.phase_cal_cp(images_arr[N_list[0]: N_list[0] + N_list[1]], 
-                                                                                    delta_deck_lst[delta_index[1]], 
+            object_freq2, mod_freq2, avg_freq2, phase_freq2 = nstep_cp.phase_cal_cp(images_arr[N_list[0]: N_list[0] + N_list[1]],
                                                                                     limit)
             object_freq3, mod_freq3, avg_freq3, phase_freq3 = nstep_cp.phase_cal_cp(images_arr[ N_list[0] + N_list[1]: N_list[0]+ N_list[1]+ N_list[2]],
-                                                                                    delta_deck_lst[delta_index[2]], 
                                                                                     limit)
             #wrapped phase
             phase_freq1[phase_freq1 < EPSILON] = phase_freq1[phase_freq1 < EPSILON] + 2 * np.pi
@@ -769,14 +746,11 @@ def obj_reconst_wrapper_3level(width,
         eq_wav123 = pitch_list[0] * eq_wav12 / (pitch_list[0] - eq_wav12)
         pitch_list = np.insert(pitch_list, 0, eq_wav123)
         pitch_list = np.insert(pitch_list, 2, eq_wav12)
-        object_wav3, mod_wav3, avg_wav3, phase_wav1 = nstep.phase_cal(images_arr[0: N_list[0]], 
-                                                                      delta_deck_lst[delta_index[0]], 
+        object_wav3, mod_wav3, avg_wav3, phase_wav1 = nstep.phase_cal(images_arr[0: N_list[0]],
                                                                       limit)
-        object_wav2, mod_wav2, avg_wav2, phase_wav2 = nstep.phase_cal(images_arr[N_list[0]: N_list[0] + N_list[1]], 
-                                                                      delta_deck_lst[delta_index[1]],
+        object_wav2, mod_wav2, avg_wav2, phase_wav2 = nstep.phase_cal(images_arr[N_list[0]: N_list[0] + N_list[1]],
                                                                       limit)
         object_wav1, mod_wav1, avg_wav1, phase_wav3 = nstep.phase_cal(images_arr[N_list[0] + N_list[1]: N_list[0]+ N_list[1]+ N_list[2]],
-                                                                      delta_deck_lst[delta_index[2]],
                                                                       limit)
         phase_wav12 = np.mod(phase_wav1 - phase_wav2, 2 * np.pi)
         phase_wav123 = np.mod(phase_wav12 - phase_wav3, 2 * np.pi)
