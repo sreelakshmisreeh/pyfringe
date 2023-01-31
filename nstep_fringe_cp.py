@@ -8,7 +8,7 @@ import pickle
 
 
 def phase_cal_cp(images_cp: cp.ndarray,
-                 limit: float) -> Tuple[cp.ndarray, cp.ndarray, cp.ndarray]:
+                 limit: float) -> Tuple[cp.ndarray, cp.ndarray, cp.ndarray, cp.ndarray]:
     """
     Function that computes and applies mask to captured image based on data modulation_cp (relative modulation_cp) of each pixel
     and computes phase map.
@@ -34,19 +34,38 @@ def phase_cal_cp(images_cp: cp.ndarray,
     delta_cp = 2 * cp.pi * cp.arange(1, N + 1) / N
     sin_delta = cp.sin(delta_cp)
     sin_delta[cp.abs(sin_delta) < 1e-15] = 0
-    sin_lst = cp.einsum('kij,k->ij', images_cp, sin_delta)
     cos_delta = cp.cos(delta_cp)
-    cos_delta[cp.abs(cos_delta) < 1e-15] = 0
+    cos_delta[cp.abs(cos_delta) < 1e-15] = 0    
+    sin_lst = cp.einsum('kij,k->ij', images_cp, sin_delta)    
     cos_lst = cp.einsum('kij,k->ij', images_cp, cos_delta)
     modulation_cp = 2 * cp.sqrt(sin_lst**2 + cos_lst**2) / N
     average_int_cp = cp.sum(images_cp, axis=0) / N
-    mask = cp.full(modulation_cp.shape, True)
-    mask[modulation_cp > limit] = False
+    mask = modulation_cp > limit    
+    white_img = modulation_cp + average_int_cp    
     # wrapped phase
-    sin_lst[mask] = cp.nan
-    cos_lst[mask] = cp.nan
-    phase_map_cp = -cp.arctan2(sin_lst, cos_lst)  # wrapped phase;
-    return modulation_cp, average_int_cp, phase_map_cp
+    # sin_lst[mask] = cp.nan
+    # cos_lst[mask] = cp.nan
+    # phase_map_cp = -cp.arctan2(sin_lst, cos_lst)  # wrapped phase;
+    return modulation_cp, white_img, sin_lst, cos_lst, mask
+
+def recover_image(vector_array: cp.ndarray, 
+                  flag: cp.ndarray, 
+                  cam_height:int,
+                  cam_width:int)->Tuple[cp.ndarray]:
+    """
+    Function to convert vector to image array using flag.
+    vector_array: np.ndarray
+                  Vector to be converted
+    flag: np.ndarray
+          Indexes of the array cordinates with data.
+    cam_width: int.
+               Width of image.
+    cam_height: int.
+                Height of image.
+    """
+    image = cp.full((cam_height,cam_width), cp.nan)
+    image[flag] = vector_array
+    return image
 
 def filt_cp(unwrap_cp: cp.ndarray,
             kernel_size: int,
@@ -70,14 +89,14 @@ def filt_cp(unwrap_cp: cp.ndarray,
     k0_array_cp: int.
              Spiking point fringe order.
     """
-    if direc == 'v':
-        k = (1, kernel_size)  # kernel size
-    elif direc == 'h':
-        k = (kernel_size, 1)
-    else:
-        k = None
-        print("ERROR: direction str must be one of {'v', 'h'}")
-    med_fil_cp = ndimage.median_filter(unwrap_cp, k)  # not need to do copy, unwrap will not be modified
+    # if direc == 'v':
+    #     k = (1, kernel_size)  # kernel size
+    # elif direc == 'h':
+    #     k = (kernel_size, 1)
+    # else:
+    #     k = None
+    #     print("ERROR: direction str must be one of {'v', 'h'}")
+    med_fil_cp = ndimage.median_filter(unwrap_cp, kernel_size)  # not need to do copy, unwrap will not be modified
     k0_array_cp = cp.round((unwrap_cp - med_fil_cp) / (2 * cp.pi))
     correct_unwrap_cp = unwrap_cp - (k0_array_cp * 2 * cp.pi)
     return correct_unwrap_cp, k0_array_cp
@@ -133,6 +152,44 @@ def multifreq_unwrap_cp(wavelength_arr_cp: list,
     absolute_ph_cp, k0 = filt_cp(absolute_ph_cp, kernel_size, direc)
     return absolute_ph_cp, k_array_cp
 
+def bilinear_interpolate_cp(unwrap: cp.ndarray, 
+                            center: cp.ndarray)->cp.ndarray:
+    """
+    Function to perform bi-linear interpolation to obtain subpixel circle center phase values.
+
+    Parameters
+    ----------
+    unwrap = type:float. Absolute phase map
+    center = type:float. Subpixel coordinate from OpenCV circle center detection.
+
+    Returns
+    -------
+    Subpixel mapped absolute phase value corresponding to given circle center. 
+
+    """
+    if len(center.shape) == 1:
+        x = cp.asarray(center[0])
+        y = cp.asarray(center[1])
+    else:
+        x = cp.asarray(center[:, 0])
+        y = cp.asarray(center[:, 1])
+    # neighbours
+    x0 = cp.floor(x).astype(int)
+    x1 = x0 + 1
+    y0 = cp.floor(y).astype(int)
+    y1 = y0 + 1
+    unwrap_a = unwrap[y0, x0]
+    unwrap_b = unwrap[y1, x0]
+    unwrap_c = unwrap[y0, x1]
+    unwrap_d = unwrap[y1, x1]
+    # weights
+    wa = (x1-x) * (y1-y)
+    wb = (x1-x) * (y-y0)
+    wc = (x-x0) * (y1-y)
+    wd = (x-x0) * (y-y0)
+
+    return wa*unwrap_a + wb*unwrap_b + wc*unwrap_c + wd*unwrap_d
+
 # spyder : computing time: 0.046533                         
 
 def main():
@@ -147,24 +204,32 @@ def main():
     end = perf_counter_ns()
     loading_time = (end-start)/1e9
     print('loading time: %2.6f' % loading_time)
-    modulation_cp_v1, average_int_cp_v1, phase_map_cp_v1 = phase_cal_cp(fringe_arr_cp[0:3], test_limit)
-    modulation_cp_v2, average_int_cp_v2, phase_map_cp_v2 = phase_cal_cp(fringe_arr_cp[6:9], test_limit)
-    if (phase_map_cp_v1.all() == vertical_fringes['phase_map_cp_v1'].all()) & (phase_map_cp_v2.all() == vertical_fringes['phase_map_cp_v2'].all()):
+    modulation_cp_v1, white_img_v1, sin_lst_v1, cos_lst_v1, mask_v1 = phase_cal_cp(fringe_arr_cp[0:3], test_limit)
+    modulation_cp_v2, white_img_v2, sin_lst_v2, cos_lst_v2, mask_v2 = phase_cal_cp(fringe_arr_cp[6:9], test_limit)
+    mask_v = mask_v1 & mask_v2
+    flag_v = cp.where(mask_v == True)
+    sin_lst_v = cp.array([sin_lst_v1[flag_v], sin_lst_v2[flag_v]])
+    cos_lst_v = cp.array([cos_lst_v1[flag_v], cos_lst_v2[flag_v]])
+    phase_v = -cp.arctan2(sin_lst_v, cos_lst_v)
+    if (phase_v.all() == vertical_fringes['phase_map_cp_v'].all()):
         print('\nAll vertical phase maps match')
-        phase_arr_cp = [phase_map_cp_v1, phase_map_cp_v2]
-        multifreq_unwrap_cp_v, k_arr_cp_v = multifreq_unwrap_cp(pitch_list, phase_arr_cp, 1, 'v')
+        multifreq_unwrap_cp_v, k_arr_cp_v = multifreq_unwrap_cp(pitch_list, phase_v, 1, 'v')
         if multifreq_unwrap_cp_v.all() == vertical_fringes['multifreq_unwrap_cp_v'].all():
             print('\nVertical unwrapped phase maps match')
         else:
             print('\nVertical unwrapped phase map mismatch ')
     else:
         print('\nVertical phase map mismatch')
-    modulation_cp_h1, average_int_cp_h1, phase_map_cp_h1 = phase_cal_cp(fringe_arr_cp[3:6], test_limit)
-    modulation_cp_h2, average_int_cp_h2, phase_map_cp_h2 = phase_cal_cp(fringe_arr_cp[9:12], test_limit)
-    if (phase_map_cp_h1.all() == horizontal_fringes['phase_map_cp_h1'].all()) & (phase_map_cp_h2.all() == horizontal_fringes['phase_map_cp_h2'].all()):
+    modulation_cp_h1, white_img_h1, sin_lst_h1, cos_lst_h1, mask_h1 = phase_cal_cp(fringe_arr_cp[3:6], test_limit)
+    modulation_cp_h2, white_img_h2, sin_lst_h2, cos_lst_h2, mask_h2 = phase_cal_cp(fringe_arr_cp[9:12], test_limit)
+    mask_h = mask_h1 & mask_h2
+    flag_h = cp.where(mask_h == True)
+    sin_lst_h = cp.array([sin_lst_h1[flag_h], sin_lst_h2[flag_h]])
+    cos_lst_h = cp.array([cos_lst_h1[flag_h], cos_lst_h2[flag_h]])
+    phase_h = -cp.arctan2(sin_lst_h, cos_lst_h)
+    if (phase_h.all() == horizontal_fringes['phase_map_cp_h'].all()):
         print('\nAll horizontal phase maps match')
-        phase_arr_cp = [phase_map_cp_h1, phase_map_cp_h2]
-        multifreq_unwrap_cp_h, k_arr_cp_h = multifreq_unwrap_cp(pitch_list, phase_arr_cp, 1, 'h')
+        multifreq_unwrap_cp_h, k_arr_cp_h = multifreq_unwrap_cp(pitch_list, phase_h, 1, 'h')
         if multifreq_unwrap_cp_h.all() == horizontal_fringes['multifreq_unwrap_cp_h'].all():
             print('\nHorizontal unwrapped phase maps match')
         else:
