@@ -48,10 +48,10 @@ def phase_cal_cp(images_cp: cp.ndarray,
     # phase_map_cp = -cp.arctan2(sin_lst, cos_lst)  # wrapped phase;
     return modulation_cp, white_img, sin_lst, cos_lst, mask
 
-def recover_image(vector_array: cp.ndarray, 
-                  flag: cp.ndarray, 
-                  cam_height:int,
-                  cam_width:int)->Tuple[cp.ndarray]:
+def recover_image_cp(vector_array: cp.ndarray, 
+                     flag: cp.ndarray, 
+                     cam_height:int,
+                     cam_width:int)->Tuple[cp.ndarray]:
     """
     Function to convert vector to image array using flag.
     vector_array: np.ndarray
