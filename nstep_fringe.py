@@ -282,7 +282,7 @@ def B_cutoff_limit(sigma_path: str,
     return np.sqrt(modulation_limit_sq)
 
 def phase_cal(images: np.ndarray,
-              limit: float) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+              limit: float) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     Function that computes and applies mask to captured image based on data modulation (relative modulation) of each pixel
     and computes phase map.
@@ -311,20 +311,39 @@ def phase_cal(images: np.ndarray,
     delta = 2 * np.pi * np.arange(1, N + 1) / N
     sin_delta = np.sin(delta)
     sin_delta[np.abs(sin_delta) < 1e-15] = 0 
-    sin_lst = np.einsum('kij,k->ij', images, sin_delta)
     cos_delta = np.cos(delta)
     cos_delta[np.abs(cos_delta) < 1e-15] = 0
+    sin_lst = np.einsum('kij,k->ij', images, sin_delta)
     cos_lst = np.einsum('kij,k->ij', images, cos_delta)
     modulation = 2 * np.sqrt(sin_lst**2 + cos_lst**2) / N
     average_int = np.sum(images, axis=0) / N
-    mask = np.full(modulation.shape, True)
-    mask[modulation > limit] = False
-    # wrapped phase
-    sin_lst[mask] = np.nan
-    cos_lst[mask] = np.nan
-    phase_map = -np.arctan2(sin_lst, cos_lst)  # wrapped phase;
-    return modulation, average_int, phase_map
+    mask = modulation > limit
+    white_img = modulation + average_int
+   
+    # # wrapped phase
+    # sin_lst[mask] = np.nan
+    # cos_lst[mask] = np.nan
+    # phase_map = -np.arctan2(sin_lst, cos_lst)  # wrapped phase;
+    return modulation, white_img, sin_lst, cos_lst, mask
 
+def recover_image(vector_array: np.ndarray, 
+                  flag: np.ndarray, 
+                  cam_height: int, 
+                  cam_width: int)-> Tuple[np.ndarray]:
+    """
+    Function to convert vector to image array using flag.
+    vector_array: np.ndarray
+                  Vector to be converted
+    flag: np.ndarray
+          Indexes of the array cordinates with data.
+    cam_width: int.
+               Width of image.
+    cam_height: int.
+                Height of image.
+    """
+    image = np.full((cam_height,cam_width), np.nan)
+    image[flag] = vector_array
+    return image
 
 def step_rectification(step_ph: np.ndarray,
                        direc: str) -> np.ndarray:
@@ -414,14 +433,14 @@ def filt(unwrap: np.ndarray,
 
     """
     dup_img = unwrap.copy()
-    if direc == 'v':
-        k = (1, kernel)  # kernel size
-    elif direc == 'h':
-        k = (kernel, 1)
-    else:
-        print("ERROR:Invalid directions.Directions should be \'v\'for vertical fringes and \'h\'for horizontal fringes")
-        k = None
-    med_fil = scipy.ndimage.median_filter(dup_img, k)
+    # if direc == 'v':
+    #     k = (1, kernel)  # kernel size
+    # elif direc == 'h':
+    #     k = (kernel, 1)
+    # else:
+    #     print("ERROR:Invalid directions.Directions should be \'v\'for vertical fringes and \'h\'for horizontal fringes")
+    #     k = None
+    med_fil = scipy.ndimage.median_filter(dup_img, kernel)
     k_array = np.round((dup_img - med_fil) / (2 * np.pi))
     correct_unwrap = dup_img - (k_array * 2 * np.pi)
     return correct_unwrap, k_array
@@ -649,24 +668,32 @@ def main():
     with open(r'test_data\horizontal_fringes_np.pickle', 'rb') as f:
         horizontal_fringes = pickle.load(f)
     # testing #1:
-    modulation_np_v1, average_int_np_v1, phase_map_np_v1 = phase_cal(fringe_arr_np[0:3], test_limit)
-    modulation_np_v2, average_int_np_v2, phase_map_np_v2 = phase_cal(fringe_arr_np[6:9], test_limit)
-    if (phase_map_np_v1.all() == vertical_fringes['phase_map_np_v1'].all()) & (phase_map_np_v2.all() == vertical_fringes['phase_map_np_v2'].all()):
+    modulation_np_v1, white_img_np_v1, sin_lst_np_v1, cos_lst_np_v1, mask_np_v1 = phase_cal(fringe_arr_np[0:3], test_limit)
+    modulation_np_v2, white_img_np_v2, sin_lst_np_v2, cos_lst_np_v2, mask_np_v2 = phase_cal(fringe_arr_np[6:9], test_limit)
+    mask_np_v = mask_np_v1 & mask_np_v2
+    flag_np_v = np.where(mask_np_v == True)
+    sin_lst_np_v = np.array([sin_lst_np_v1[flag_np_v], sin_lst_np_v2[flag_np_v]])
+    cos_lst_np_v = np.array([cos_lst_np_v1[flag_np_v], cos_lst_np_v2[flag_np_v]])
+    phase_np_v = -np.arctan2(sin_lst_np_v, cos_lst_np_v)
+    if (phase_np_v.all() == vertical_fringes['phase_map_np_v'].all()):
         print('\n All vertical phase maps match')
-        phase_arr_np = [phase_map_np_v1, phase_map_np_v2]
-        multifreq_unwrap_np_v, k_arr_np_v = multifreq_unwrap(pitch_list, phase_arr_np, 1, 'v')
+        multifreq_unwrap_np_v, k_arr_np_v = multifreq_unwrap(pitch_list, phase_np_v, 1, 'v')
         if multifreq_unwrap_np_v.all() == vertical_fringes['multifreq_unwrap_np_v'].all():
             print('\n Vertical unwrapped phase maps match')
         else:
             print('\n Vertical unwrapped phase map mismatch ')  
     else:
         print('\n Vertical phase map mismatch')
-    modulation_np_h1, average_int_np_h1, phase_map_np_h1 = phase_cal(fringe_arr_np[3:6], test_limit)
-    modulation_np_h2, average_int_np_h2, phase_map_np_h2 = phase_cal(fringe_arr_np[9:12], test_limit)
-    if (phase_map_np_h1.all() == horizontal_fringes['phase_map_np_h1'].all()) & (phase_map_np_h2.all() == horizontal_fringes['phase_map_np_h2'].all()):
+    modulation_np_h1, white_img_np_h1, sin_lst_np_h1, cos_lst_np_h1, mask_np_h1 = phase_cal(fringe_arr_np[3:6], test_limit)
+    modulation_np_h2, white_img_np_h2, sin_lst_np_h2, cos_lst_np_h2, mask_np_h2 = phase_cal(fringe_arr_np[9:12], test_limit)
+    mask_np_h = mask_np_h1 & mask_np_h2
+    flag_np_h = np.where(mask_np_h == True)
+    sin_lst_np_h = np.array([sin_lst_np_h1[flag_np_h], sin_lst_np_h2[flag_np_h]])
+    cos_lst_np_h = np.array([cos_lst_np_h1[flag_np_h], cos_lst_np_h2[flag_np_h]])
+    phase_np_h = -np.arctan2(sin_lst_np_h, cos_lst_np_h)
+    if (phase_np_h.all() == horizontal_fringes['phase_map_np_h'].all()):
         print('\n All horizontal phase maps match')
-        phase_arr_np = [phase_map_np_h1, phase_map_np_h2]
-        multifreq_unwrap_np_h, k_arr_np_h = multifreq_unwrap(pitch_list, phase_arr_np, 1, 'h')
+        multifreq_unwrap_np_h, k_arr_np_h = multifreq_unwrap(pitch_list, phase_np_h, 1, 'h')
         if multifreq_unwrap_np_h.all() == horizontal_fringes['multifreq_unwrap_np_h'].all():
             print('\n Horizontal unwrapped phase maps match')
         else:
