@@ -7,25 +7,53 @@ from cupyx.scipy import ndimage
 import pickle
 
 
-def level_process_cp(image_stack, n):
+def level_process_cp(image_stack_cp: cp.ndarray,
+                     n: int)->Tuple[cp.ndarray, cp.ndarray, cp.ndarray, cp.ndarray]:
+    """
+        Helper function for phase_cal to perform intermediate calculation in each level.
+        Parameters
+        ----------
+        image_stack_cp: cp.ndarray:np.float64.
+                        Image stack of levels with same number of patterns (N).
+        n: int.
+            Number of patterns.
+        """
     delta = 2 * cp.pi * cp.arange(1, n + 1) / n
     sin_delta = cp.sin(delta)
     sin_delta[cp.abs(sin_delta) < 1e-15] = 0
     cos_delta = cp.cos(delta)
     cos_delta[cp.abs(cos_delta) < 1e-15] = 0
-    sin_deck = cp.einsum('ijkl,j->ikl', image_stack, sin_delta)
-    cos_deck = cp.einsum('ijkl,j->ikl', image_stack, cos_delta)
+    sin_deck = cp.einsum('ijkl,j->ikl', image_stack_cp, sin_delta)
+    cos_deck = cp.einsum('ijkl,j->ikl', image_stack_cp, cos_delta)
     modulation_deck = 2 * cp.sqrt(sin_deck ** 2 + cos_deck ** 2) / n
-    average_deck = cp.sum(image_stack, axis=1) / n
+    average_deck = cp.sum(image_stack_cp, axis=1) / n
     return sin_deck, cos_deck, modulation_deck, average_deck
 
 
-def mask_application(mask_cp, mod_stack_cp, sin_stack_cp, cos_stack_cp):
+def mask_application(mask_cp: cp.ndarray,
+                     mod_stack_cp: cp.ndarray,
+                     sin_stack_cp: cp.ndarray,
+                     cos_stack_cp: cp.ndarray)->Tuple[cp.ndarray, cp.ndarray, cp.ndarray]:
+    """
+    Helper function to apply mask get relevant pixels for phase calculations.
+    """
     num_total_levels = mod_stack_cp.shape[0]
+<<<<<<< Updated upstream
     flag = cp.tile(mask_cp, (num_total_levels, 1, 1))
     sin_stack_cp = sin_stack_cp[flag].reshpae((num_total_levels, -1))
     cos_stack_cp = cos_stack_cp[flag].reshpae((num_total_levels, -1))
     mod_stack_cp = mod_stack_cp[flag].reshpae((num_total_levels, -1))
+=======
+
+    mask_cp = mask_cp.astype('float')
+    mask_cp[mask_cp == 0] = cp.nan
+    # apply mask to all levels
+    mod_stack_cp = cp.einsum("ijk, jk->ijk", mod_stack_cp, mask_cp)
+    flag = ~cp.isnan(mod_stack_cp)
+    sin_stack_cp = sin_stack_cp[flag].reshape((num_total_levels, -1))
+    cos_stack_cp = cos_stack_cp[flag].reshape((num_total_levels, -1))
+    mod_stack_cp = mod_stack_cp[flag].reshape((num_total_levels, -1))
+>>>>>>> Stashed changes
     return sin_stack_cp, cos_stack_cp, mod_stack_cp
 
 
@@ -34,27 +62,28 @@ def phase_cal_cp(images_cp: cp.ndarray,
                  N: list,
                  calibration: bool) -> Tuple[cp.ndarray, cp.ndarray, cp.ndarray, cp.ndarray]:
     """
-    Function that computes and applies mask to captured image based on data modulation_cp (relative modulation_cp) of each pixel
-    and computes phase map.
-    data modulation_cp = I''(x,y)/I'(x,y).
+    Function computes phase map for all levels given in list N.
     Parameters
     ----------
-    images_cp: cp.ndarray:cp.float64.
-            Captured fringe images. Numpy images must be converted to cupy images first using cupy.asarray()
+    images_cp: cp.ndarray:np.float64.
+            Captured fringe images.
     limit: float.
-           Data modulation_cp limit. Regions with data modulation_cp lower than limit will be masked out.
-    N : list.
-        List of number of levels in each level.
+           Data modulation limit. Regions with data modulation lower than limit will be masked out.
+    N: list.
+        List of number of patterns in each level.
+    calibration: bool.
+                 If calibration is set the double of N is taken assuming horizontal and vertical fringes.
+
     Returns
     -------
-    masked_img: cupy.ndarray:float.
-                Images after applying mask
-    modulation_cp :cupy.ndarray:float.
-                Intensity modulation_cp array(image) for each captured image
-    average_int_cp: cupy.ndarray:float.
-                 Average intensity array(image) for each captured image
-    phase_map_cp: cupy.ndarray:float.
-           Delta values at each pixel for each captured image
+    mod_stack_cp: cp.ndarray:float.
+                  Intensity modulation array(image) for each captured image
+    white_stack_cp: cp.ndarray:float.
+                    White image from fringe patterns.
+    phase_map: cp.ndarray:float.
+               Wrapped phase map of each level stacked together after applying mask.
+    mask: bool
+          Mask applied to image.
     """
     if calibration:
         repeat = 2
@@ -101,8 +130,8 @@ def phase_cal_cp(images_cp: cp.ndarray,
 
 def recover_image_cp(vector_array: cp.ndarray,
                      mask: cp.ndarray,
-                     cam_height:int,
-                     cam_width:int)-> cp.ndarray:
+                     cam_height: int,
+                     cam_width: int)-> cp.ndarray:
     """
     Function to convert vector to image array using flag.
     vector_array: np.ndarray
@@ -114,7 +143,7 @@ def recover_image_cp(vector_array: cp.ndarray,
     cam_height: int.
                 Height of image.
     """
-    image = cp.full((cam_height,cam_width), cp.nan)
+    image = cp.full((cam_height, cam_width), cp.nan)
     image[mask] = vector_array
     return image
 
@@ -203,51 +232,69 @@ def multifreq_unwrap_cp(wavelength_arr_cp: list,
     absolute_ph_cp, k0 = filt_cp(absolute_ph_cp, kernel_size, direc)
     return absolute_ph_cp, k_array_cp
 
-def bilinear_interpolate_cp(unwrap: cp.ndarray, 
+def bilinear_interpolate_cp(image: cp.ndarray,
                             x: cp.ndarray,
                             y: cp.ndarray)->cp.ndarray:
     """
-    Function to perform bi-linear interpolation to obtain subpixel circle center phase values.
+    Function to perform bi-linear interpolation to obtain subpixel values.
 
     Parameters
     ----------
-    unwrap = type:float. Absolute phase map
-    center = type:float. Subpixel coordinate from OpenCV circle center detection.
-
+    image = cupy.ndarray.
+    x = cupy.ndarray.
+        X coordinate
+    y = cupy.ndarray.
+        Y coordinate
     Returns
     -------
-    Subpixel mapped absolute phase value corresponding to given circle center. 
-
+    Subpixel mapped absolute value.
     """
     # neighbours
     x0 = cp.floor(x).astype(int)
     x1 = x0 + 1
     y0 = cp.floor(y).astype(int)
     y1 = y0 + 1
-    unwrap_a = unwrap[y0, x0]
-    unwrap_b = unwrap[y1, x0]
-    unwrap_c = unwrap[y0, x1]
-    unwrap_d = unwrap[y1, x1]
+    image_a = image[y0, x0]
+    image_b = image[y1, x0]
+    image_c = image[y0, x1]
+    image_d = image[y1, x1]
     # weights
     wa = (x1-x) * (y1-y)
     wb = (x1-x) * (y-y0)
     wc = (x-x0) * (y1-y)
     wd = (x-x0) * (y-y0)
 
-    return wa*unwrap_a + wb*unwrap_b + wc*unwrap_c + wd*unwrap_d
+    return wa*image_a + wb*image_b + wc*image_c + wd*image_d
 
-def undistort_cp(image, camera_mtx, camera_dist):
+def undistort_cp(image: cp.ndarray,
+                 camera_mtx: cp.ndarray,
+                 camera_dist: cp.ndarray)->cp.ndarray:
+    """
+    Function to un distort  an image.
+    Parameters
+    ----------
+    image: cp.ndarray
+           Image to apply un distortion
+    camera_mtx: cp.ndarray
+                Camera intrinsic matrix.
+    camera_dist: cp.ndarray
+                 Camera distortion matrix.
+    Returns
+    -------
+    undist_image: cp.ndarray
+                  Undistorted image
+    """
     u = cp.arange(0, image.shape[1])
     v = cp.arange(0, image.shape[0])
     uc, vc = cp.meshgrid(u, v)
-    x = (uc - camera_mtx[0,2])/camera_mtx[0,0]
-    y = (vc - camera_mtx[1,2])/camera_mtx[1,1]
+    x = (uc - camera_mtx[0, 2])/camera_mtx[0, 0]
+    y = (vc - camera_mtx[1, 2])/camera_mtx[1, 1]
     r_sq = x**2 + y**2
-    x_double_dash = x*(1 + camera_dist[0,0] * r_sq + camera_dist[0,1] * r_sq**2)
-    y_double_dash = y*(1 + camera_dist[0,0] * r_sq + camera_dist[0,1] * r_sq**2)
-    map_x = x_double_dash * camera_mtx[0,0] + camera_mtx[0,2]
-    map_y = y_double_dash * camera_mtx[1,1] + camera_mtx[1,2]
-    undist_image = bilinear_interpolate_cp(image, map_x,map_y)
+    x_double_dash = x*(1 + camera_dist[0, 0] * r_sq + camera_dist[0, 1] * r_sq**2)
+    y_double_dash = y*(1 + camera_dist[0, 0] * r_sq + camera_dist[0, 1] * r_sq**2)
+    map_x = x_double_dash * camera_mtx[0, 0] + camera_mtx[0, 2]
+    map_y = y_double_dash * camera_mtx[1, 1] + camera_mtx[1, 2]
+    undist_image = bilinear_interpolate_cp(image, map_x, map_y)
     return undist_image
     
     
@@ -269,7 +316,7 @@ def main():
     mod_stack_cp, white_stack_cp, phase_map_cp, mask_cp = phase_cal_cp(fringe_arr_cp, test_limit, N_list, True)
     phase_v = phase_map_cp[::2]
     phase_h = phase_map_cp[1::2]
-    if (phase_v.all() == vertical_fringes['phase_map_cp_v'].all()):
+    if phase_v.all() == vertical_fringes['phase_map_cp_v'].all():
         print('\nAll vertical phase maps match')
         multifreq_unwrap_cp_v, k_arr_cp_v = multifreq_unwrap_cp(pitch_list, phase_v, 1, 'v')
         if multifreq_unwrap_cp_v.all() == vertical_fringes['multifreq_unwrap_cp_v'].all():
@@ -279,7 +326,7 @@ def main():
     else:
         print('\nVertical phase map mismatch')
         
-    if (phase_h.all() == horizontal_fringes['phase_map_cp_h'].all()):
+    if phase_h.all() == horizontal_fringes['phase_map_cp_h'].all():
         print('\nAll horizontal phase maps match')
         multifreq_unwrap_cp_h, k_arr_cp_h = multifreq_unwrap_cp(pitch_list, phase_h, 1, 'h')
         if multifreq_unwrap_cp_h.all() == horizontal_fringes['multifreq_unwrap_cp_h'].all():
