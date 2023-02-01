@@ -30,18 +30,18 @@ def level_process_cp(image_stack_cp: cp.ndarray,
     return sin_deck, cos_deck, modulation_deck, average_deck
 
 
-def mask_application(mask_cp: cp.ndarray,
-                     mod_stack_cp: cp.ndarray,
-                     sin_stack_cp: cp.ndarray,
-                     cos_stack_cp: cp.ndarray)->Tuple[cp.ndarray, cp.ndarray, cp.ndarray]:
+def mask_application_cp(mask_cp: cp.ndarray,
+                        mod_stack_cp: cp.ndarray,
+                        sin_stack_cp: cp.ndarray,
+                        cos_stack_cp: cp.ndarray)->Tuple[cp.ndarray, cp.ndarray, cp.ndarray]:
     """
     Helper function to apply mask get relevant pixels for phase calculations.
     """
     num_total_levels = mod_stack_cp.shape[0]
     flag = cp.tile(mask_cp, (num_total_levels, 1, 1))
-    sin_stack_cp = sin_stack_cp[flag].reshpae((num_total_levels, -1))
-    cos_stack_cp = cos_stack_cp[flag].reshpae((num_total_levels, -1))
-    mod_stack_cp = mod_stack_cp[flag].reshpae((num_total_levels, -1))
+    sin_stack_cp = sin_stack_cp[flag].reshape((num_total_levels, -1))
+    cos_stack_cp = cos_stack_cp[flag].reshape((num_total_levels, -1))
+    mod_stack_cp = mod_stack_cp[flag].reshape((num_total_levels, -1))
     return sin_stack_cp, cos_stack_cp, mod_stack_cp
 
 
@@ -112,7 +112,7 @@ def phase_cal_cp(images_cp: cp.ndarray,
         mask_cp = mod_stack_cp > limit
         mask_cp = cp.prod(mask_cp, axis=0, dtype=bool)
 
-    sin_stack_cp, cos_stack_cp, mod_stack_cp = mask_application(mask_cp, mod_stack_cp, sin_stack_cp, cos_stack_cp)
+    sin_stack_cp, cos_stack_cp, mod_stack_cp = mask_application_cp(mask_cp, mod_stack_cp, sin_stack_cp, cos_stack_cp)
     phase_map_cp = -cp.arctan2(sin_stack_cp, cos_stack_cp)  # wrapped phase;
     return mod_stack_cp, white_stack_cp, phase_map_cp, mask_cp
 
@@ -125,7 +125,7 @@ def recover_image_cp(vector_array: cp.ndarray,
     vector_array: np.ndarray
                   Vector to be converted
     flag: np.ndarray
-          Indexes of the array cordinates with data.
+          Indexes of the array coordinates with data.
     cam_width: int.
                Width of image.
     cam_height: int.
@@ -134,7 +134,7 @@ def recover_image_cp(vector_array: cp.ndarray,
     image = cp.full((cam_height, cam_width), cp.nan)
     image[mask] = vector_array
     return image
-
+#TODO:Fix filter
 def filt_cp(unwrap_cp: cp.ndarray,
             kernel_size: int,
             direc: str) -> Tuple[cp.ndarray, cp.ndarray]:
@@ -157,14 +157,14 @@ def filt_cp(unwrap_cp: cp.ndarray,
     k0_array_cp: int.
              Spiking point fringe order.
     """
-    # if direc == 'v':
-    #     k = (1, kernel_size)  # kernel size
-    # elif direc == 'h':
-    #     k = (kernel_size, 1)
-    # else:
-    #     k = None
-    #     print("ERROR: direction str must be one of {'v', 'h'}")
-    med_fil_cp = ndimage.median_filter(unwrap_cp, kernel_size)  # not need to do copy, unwrap will not be modified
+    if direc == 'v':
+        k = (1, kernel_size)  # kernel size
+    elif direc == 'h':
+        k = (kernel_size, 1)
+    else:
+        k = None
+        print("ERROR: direction str must be one of {'v', 'h'}")
+    med_fil_cp = ndimage.median_filter(unwrap_cp, k)  # not need to do copy, unwrap will not be modified
     k0_array_cp = cp.round((unwrap_cp - med_fil_cp) / (2 * cp.pi))
     correct_unwrap_cp = unwrap_cp - (k0_array_cp * 2 * cp.pi)
     return correct_unwrap_cp, k0_array_cp
@@ -193,7 +193,10 @@ def multi_kunwrap_cp(wavelength_cp: list,
 def multifreq_unwrap_cp(wavelength_arr_cp: list,
                         phase_arr_cp: list,
                         kernel_size: int,
-                        direc: str) -> Tuple[cp.ndarray, cp.ndarray]:
+                        direc: str,
+                        mask: cp.ndarray,
+                        cam_width: int,
+                        cam_height: int) -> Tuple[cp.ndarray, cp.ndarray]:
     """
     Function performs sequential temporal multi-frequency phase unwrapping from high wavelength (low frequency)
     wrapped phase map to low wavelength (high frequency) wrapped phase map.
@@ -217,7 +220,9 @@ def multifreq_unwrap_cp(wavelength_arr_cp: list,
     absolute_ph_cp, k_array_cp = multi_kunwrap_cp(wavelength_arr_cp[0:2], phase_arr_cp[0:2])
     for i in range(1, len(wavelength_arr_cp) - 1):
         absolute_ph_cp, k_array_cp = multi_kunwrap_cp(wavelength_arr_cp[i:i + 2], [absolute_ph_cp, phase_arr_cp[i + 1]])
+    absolute_ph_cp = recover_image_cp(absolute_ph_cp, mask, cam_height, cam_width)
     absolute_ph_cp, k0 = filt_cp(absolute_ph_cp, kernel_size, direc)
+    absolute_ph_cp = absolute_ph_cp[mask]
     return absolute_ph_cp, k_array_cp
 
 def bilinear_interpolate_cp(image: cp.ndarray,
@@ -269,7 +274,7 @@ def undistort_cp(image: cp.ndarray,
                  Camera distortion matrix.
     Returns
     -------
-    undist_image: cp.ndarray
+    undistort_image: cp.ndarray
                   Undistorted image
     """
     u = cp.arange(0, image.shape[1])
@@ -282,8 +287,8 @@ def undistort_cp(image: cp.ndarray,
     y_double_dash = y*(1 + camera_dist[0, 0] * r_sq + camera_dist[0, 1] * r_sq**2)
     map_x = x_double_dash * camera_mtx[0, 0] + camera_mtx[0, 2]
     map_y = y_double_dash * camera_mtx[1, 1] + camera_mtx[1, 2]
-    undist_image = bilinear_interpolate_cp(image, map_x, map_y)
-    return undist_image
+    undistort_image = bilinear_interpolate_cp(image, map_x, map_y)
+    return undistort_image
     
     
 # spyder : computing time: 0.026262                         

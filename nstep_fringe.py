@@ -495,17 +495,16 @@ def filt(unwrap: np.ndarray,
              Spiking point fringe order.
 
     """
-    dup_img = unwrap.copy()
-    # if direc == 'v':
-    #     k = (1, kernel)  # kernel size
-    # elif direc == 'h':
-    #     k = (kernel, 1)
-    # else:
-    #     print("ERROR:Invalid directions.Directions should be \'v\'for vertical fringes and \'h\'for horizontal fringes")
-    #     k = None
-    med_fil = scipy.ndimage.median_filter(dup_img, kernel)
-    k_array = np.round((dup_img - med_fil) / (2 * np.pi))
-    correct_unwrap = dup_img - (k_array * 2 * np.pi)
+    if direc == 'v':
+        k = (1, kernel)  # kernel size
+    elif direc == 'h':
+        k = (kernel, 1)
+    else:
+        print("ERROR:Invalid directions.Directions should be \'v\'for vertical fringes and \'h\'for horizontal fringes")
+        k = None
+    med_fil = scipy.ndimage.median_filter(unwrap, k)
+    k_array = np.round((unwrap - med_fil) / (2 * np.pi))
+    correct_unwrap = unwrap - (k_array * 2 * np.pi)
     return correct_unwrap, k_array
 
 def ph_temp_unwrap(cos_wrap_v: np.ndarray,
@@ -582,7 +581,11 @@ def multi_kunwrap(wavelength: np.array,
 
 def multifreq_unwrap(wavelength_arr: np.array,
                      phase_arr: list,
-                     kernel: int, direc: str) -> Tuple[np.ndarray, np.ndarray]:
+                     kernel_size: int, 
+                     direc: str,
+                     mask: np.ndarray,
+                     cam_width: int,
+                     cam_height: int) -> Tuple[np.ndarray, np.ndarray]:
     """
     Function performs sequential temporal multi-frequency phase unwrapping from high wavelength (low frequency)
     wrapped phase map to low wavelength (high frequency) wrapped phase map.
@@ -592,7 +595,7 @@ def multifreq_unwrap(wavelength_arr: np.array,
                     Wavelengths from high wavelength to low wavelength.
     phase_arr: list.
                Wrapped phase maps from high wavelength to low wavelength.
-    kernel: int
+    kernel_size: int
             Filter kernel.
     direc: str
            'v' for vertical or 'h' for horizontal filter
@@ -606,8 +609,10 @@ def multifreq_unwrap(wavelength_arr: np.array,
     """
     absolute_ph, k = multi_kunwrap(wavelength_arr[0:2], phase_arr[0:2])
     for i in range(1, len(wavelength_arr)-1):
-        absolute_ph, k = multi_kunwrap(wavelength_arr[i:i+2], [absolute_ph, phase_arr[i+1]])
-    absolute_ph, k0 = filt(absolute_ph, kernel, direc)    
+        absolute_ph, k = multi_kunwrap(wavelength_arr[i:i+2], [absolute_ph, phase_arr[i+1]]) 
+    absolute_ph = recover_image(absolute_ph, mask, cam_height, cam_width)
+    absolute_ph, k0 = filt(absolute_ph, kernel_size, direc)
+    absolute_ph = absolute_ph[mask]
     return absolute_ph, k
 
 def multiwave_unwrap(wavelength_arr: np.ndarray,
