@@ -75,7 +75,10 @@ def phase_cal_cp(images_cp: cp.ndarray,
         mask_cp = mask_cp.astype('float')
         mask_cp[mask_cp == 0] = cp.nan
         mod_stack_cp = cp.einsum("ijk, jk->ijk", mod_stack_cp, mask_cp)
-        flag = ~cp.isnan(mod_stack_cp).flatten()
+        flag = ~cp.isnan(mod_stack_cp)
+        mask_cp = ~cp.isnan(mask_cp)
+        mod_stack_cp = mod_stack_cp[flag]
+        mod_stack_cp = mod_stack_cp.reshape(repeat * len(N), int(mod_stack_cp.shape[0] / (repeat * len(N))))
         sin_stack_cp = sin_stack_cp[flag]
         sin_stack_cp = sin_stack_cp.reshape(repeat*len(N), int(sin_stack_cp.shape[0]/(repeat*len(N))))
         cos_stack_cp = cos_stack_cp[flag]
@@ -99,6 +102,9 @@ def phase_cal_cp(images_cp: cp.ndarray,
         mask_cp[mask_cp == 0] = cp.nan
         mod_stack_cp = cp.einsum("ijk, jk->ijk", mod_stack_cp, mask_cp)
         flag = ~cp.isnan(mod_stack_cp)
+        mask_cp = ~cp.isnan(mask_cp)
+        mod_stack_cp = mod_stack_cp[flag]
+        mod_stack_cp = mod_stack_cp.reshape(repeat * len(N), int(mod_stack_cp.shape[0] / (repeat * len(N))))
         sin_stack_cp = sin_stack_cp[flag]
         sin_stack_cp = sin_stack_cp.reshape(repeat*len(N), int(sin_stack_cp.shape[0]/(repeat*len(N))))
         cos_stack_cp = cos_stack_cp[flag]
