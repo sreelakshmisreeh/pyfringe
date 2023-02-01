@@ -77,6 +77,7 @@ def triangulation(uc, vc, up, cam_h_mtx, proj_h_mtx, processing):
     c[:, 2, 0] = up * proj_h_mtx[2, 3] - proj_h_mtx[0, 3]
     if processing == 'gpu':
         coords = cp.einsum('ijk,ikl->lij', A_inv, c)[0]
+        coords = cp.asnumpy(coords)
     else:
         coords = np.einsum('ijk,ikl->lij', A_inv, c)[0]
     return coords
@@ -116,7 +117,6 @@ def reconstruction_pts(uv_true, unwrapv, c_mtx, c_dist, p_mtx, cp_rot_mtx, cp_tr
     vc = uv[:, 1]
     # Determinate 'up' from circle center
     up = (nstep.bilinear_interpolate(unwrapv, uv_true) - phase_st) * pitch / (2*np.pi)
-    up = up
     # Calculate H matrix for proj from intrinsics and extrinsic
     proj_h_mtx = np.dot(p_mtx, np.hstack((cp_rot_mtx, cp_trans_mtx)))
     #Calculate H matrix for camera
@@ -128,7 +128,7 @@ def reconstruction_pts(uv_true, unwrapv, c_mtx, c_dist, p_mtx, cp_rot_mtx, cp_tr
         cam_h_mtx = cp.asarray(cam_h_mtx)
         proj_h_mtx = cp.asarray(proj_h_mtx)
     coordintes = triangulation(uc, vc, up, cam_h_mtx, proj_h_mtx, processing)
-    return cp.asnumpy(coordintes)
+    return coordintes
 
 def point_error(cord1, cord2):
     '''
