@@ -37,7 +37,6 @@ def delta_deck_gen(N: int,
     delta_deck = np.einsum('ijk,i->ijk', one_block, delta)
     return delta_deck
 
-
 def cos_func(inte_rang: list,
              pitch: int,
              direc: str,
@@ -281,32 +280,75 @@ def B_cutoff_limit(sigma_path: str,
     modulation_limit_sq = ((pitch_list[-1]**2 / pitch_list[-2]**2) + 1) * (2 * sigma**2) / (N_list[-1] * sigma_sq_delta_phi)
     return np.sqrt(modulation_limit_sq)
 
+def level_process(image_stack: np.ndarray,
+                  n: int)->Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Helper function for phase_cal to perform intermediate calculation in each level.
+    Parameters
+    ----------
+    image_stack: np.ndarray:np.float64.
+                 Image stack of levels with same number of patterns (N).
+    n: int.
+        Number of patterns.
+    """
+    delta = 2 * np.pi * np.arange(1, n + 1) / n
+    sin_delta = np.sin(delta)
+    sin_delta[np.abs(sin_delta) < 1e-15] = 0
+    cos_delta = np.cos(delta)
+    cos_delta[np.abs(cos_delta) < 1e-15] = 0
+    sin_deck = np.einsum('ijkl,j->ikl', image_stack, sin_delta)
+    cos_deck = np.einsum('ijkl,j->ikl', image_stack, cos_delta)
+    modulation_deck = 2 * np.sqrt(sin_deck ** 2 + cos_deck ** 2) / n
+    average_deck = np.sum(image_stack, axis=1) / n
+    return sin_deck, cos_deck, modulation_deck, average_deck
+
+
+def mask_application(mask: np.ndarray,
+                     mod_stack: np.ndarray,
+                     sin_stack: np.ndarray,
+                     cos_stack: np.ndarray)->Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Helper function to apply mask get relevant pixels for phase calculations.
+    """
+    num_total_levels = mod_stack.shape[0]
+
+    mask = mask.astype('float')
+    mask[mask == 0] = np.nan
+    # apply mask to all levels
+    mod_stack = np.einsum("ijk, jk->ijk", mod_stack, mask)
+    flag = ~np.isnan(mod_stack)
+    sin_stack = sin_stack[flag].reshape((num_total_levels, -1))
+    cos_stack = cos_stack[flag].reshape((num_total_levels, -1))
+    mod_stack = mod_stack[flag].reshape((num_total_levels, -1))
+    return sin_stack, cos_stack, mod_stack
+
 def phase_cal(images: np.ndarray,
               limit: float, 
               N: list,
               calibration: bool) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
-    Function that computes and applies mask to captured image based on data modulation (relative modulation) of each pixel
-    and computes phase map.
-    data modulation = I''(x,y)/I'(x,y). 
-
+    Function computes phase map for all levels given in list N.
     Parameters
     ----------
     images: np.ndarray:np.float64.
             Captured fringe images.
     limit: float.
            Data modulation limit. Regions with data modulation lower than limit will be masked out.
+    N: list.
+        List of number of patterns in each level.
+    calibration: bool.
+                 If calibration is set the double of N is taken assuming horizontal and vertical fringes.
 
     Returns
     -------
-    masked_img: np.ndarray:float.
-                Images after applying mask
-    modulation :np.ndarray:float.
+    mod_stack :np.ndarray:float.
                 Intensity modulation array(image) for each captured image
-    average_int: np.ndarray:float.
-                 Average intensity array(image) for each captured image
+    white_stack: np.ndarray:float.
+                 White image from fringe patterns.
     phase_map: np.ndarray:float.
-           Delta values at each pixel for each captured image
+               Wrapped phase map of each level stacked together after applying mask.
+    mask: bool
+          Mask applied to image.
 
     """
     if calibration:
@@ -314,61 +356,36 @@ def phase_cal(images: np.ndarray,
     else:
         repeat = 1
     if len(set(N))==2:
-        image_set1 = images[0:(repeat*len(N)-repeat)*N[0]].reshape((repeat*len(N)-repeat),N[0],images.shape[-2],images.shape[-1])
-        image_set2 = images[repeat*N[-1]:].reshape(repeat,N[-1],images.shape[-2],images.shape[-1])
-        mask = np.full((images.shape[-2],images.shape[-1]), True)
+        image_set1 = images[0:(repeat*len(N)-repeat)*N[0]].reshape((repeat*len(N)-repeat), N[0], images.shape[-2], images.shape[-1])
+        image_set2 = images[repeat*N[-1]:].reshape(repeat, N[-1], images.shape[-2], images.shape[-1])
         image_set = [image_set1, image_set2]
-        mod_stack = np.empty((1,images.shape[-2],images.shape[-1]))
-        sin_stack = np.empty((1,images.shape[-2],images.shape[-1]))
-        cos_stack = np.empty((1,images.shape[-2],images.shape[-1]))
-        white_stack = np.empty((1,images.shape[-2],images.shape[-1]))
+
+        mask = np.full((images.shape[-2], images.shape[-1]), True)
+        sin_stack = None
+        cos_stack = None
+        mod_stack = None
+        white_stack = None
         for i, n in enumerate(sorted(set(N))):
-            delta = 2 * np.pi * np.arange(1, n + 1) / n
-            sin_delta = np.sin(delta)
-            sin_delta[np.abs(sin_delta) < 1e-15] = 0
-            cos_delta = np.cos(delta)
-            cos_delta[np.abs(cos_delta) < 1e-15] = 0 
-            sin_deck = np.einsum('ijkl,j->ikl', image_set[i], sin_delta)
-            sin_stack = np.vstack((sin_stack, sin_deck))
-            cos_deck = np.einsum('ijkl,j->ikl', image_set[i], cos_delta)
-            cos_stack = np.vstack((cos_stack,cos_deck))
-            modulation = 2 * np.sqrt(sin_deck**2 + cos_deck**2)/n
-            mod_stack = np.vstack((mod_stack, modulation))
-            average_int = np.sum(image_set[i], axis=1)/ n
-            white_stack = np.vstack((white_stack,(modulation + average_int)))
+            sin_deck, cos_deck, modulation, average_int = level_process(image_set[i], n)
+            if i == 0:
+                sin_stack = sin_deck
+                cos_stack = cos_deck
+                mod_stack = modulation
+                white_stack = modulation + average_int
+            else:
+                sin_stack = np.vstack((sin_stack, sin_deck))
+                cos_stack = np.vstack((cos_stack, cos_deck))
+                mod_stack = np.vstack((mod_stack, modulation))
+                white_stack = np.vstack((white_stack, (modulation + average_int)))
             mask_temp = modulation > limit
             mask &= np.prod(mask_temp, axis=0, dtype=bool)
-        mask_temp = mask.astype('float')
-        mask_temp[mask_temp==0] = np.nan
-        mod_stack = np.einsum("ijk, jk->ijk",mod_stack[1:], mask_temp)
-        flag = np.where(~np.isnan(mod_stack))
-        sin_stack = sin_stack[1:][flag]
-        sin_stack = sin_stack.reshape(repeat*len(N),int(sin_stack.shape[0]/(repeat*len(N))))
-        cos_stack = cos_stack[1:][flag]
-        cos_stack = cos_stack.reshape(repeat*len(N), int(cos_stack.shape[0]/(repeat*len(N))))
-        white_stack = white_stack[1:]
     elif len(set(N)) == 1:
-        image_set = images.reshape(int(images.shape[0]/N[0]), N[0], images.shape[-2], images.shape[-1])
-        delta = 2 * np.pi * np.arange(1, N[0] + 1) /N[0] 
-        sin_delta = np.sin(delta)
-        sin_delta[np.abs(sin_delta) < 1e-15] = 0
-        cos_delta = np.cos(delta)
-        cos_delta[np.abs(cos_delta) < 1e-15] = 0
-        sin_stack = np.einsum('ijkl,j->ikl', image_set, sin_delta)
-        cos_stack = np.einsum('ijkl,j->ikl', image_set, cos_delta)
-        mod_stack = 2 * np.sqrt(sin_stack**2 + cos_stack**2)/N[0]
-        average_int = np.sum(image_set, axis=1)/ N[0]
-        white_stack = mod_stack + average_int
+        image_set = images.reshape(int(images.shape[0] / N[0]), N[0], images.shape[-2], images.shape[-1])
+        sin_stack, cos_stack, mod_stack, average_stack = level_process(image_set, N[0])
+        white_stack = mod_stack + average_stack
         mask = mod_stack > limit
         mask = np.prod(mask, axis=0, dtype=bool)
-        mask_temp = mask.astype('float')
-        mask_temp[mask_temp==0] = np.nan
-        mod_stack = np.einsum("ijk, jk->ijk",mod_stack, mask_temp)
-        flag = np.where(~np.isnan(mod_stack))
-        sin_stack = sin_stack[flag]
-        sin_stack = sin_stack.reshape(repeat*len(N),int(sin_stack.shape[0]/(repeat*len(N))))
-        cos_stack = cos_stack[flag]
-        cos_stack = cos_stack.reshape(repeat*len(N), int(cos_stack.shape[0]/(repeat*len(N))))
+    sin_stack, cos_stack, mod_stack = mask_application(mask, mod_stack, sin_stack, cos_stack)
     phase_map = -np.arctan2(sin_stack, cos_stack)  # wrapped phase;
     return mod_stack, white_stack, phase_map, mask
 
