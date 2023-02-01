@@ -17,11 +17,12 @@ import reconstruction as rc
 from plyfile import PlyData, PlyElement
 from scipy.optimize import leastsq
 from scipy.spatial import distance
-from copy import deepcopy
 import shutil
 from time import perf_counter_ns
 EPSILON = -0.5
 TAU = 5.5
+
+#TODO: Fix calibration reconstruction
 class Calibration:
     """
     Calibration class is used to calibrate camera and projector setting. User can choose between phase coded , multi frequency and multi wavelength temporal unwrapping.
@@ -61,7 +62,6 @@ class Calibration:
                     Modulation limit for applying mask to captured images.
         type_unwrap: string.
                      Type of temporal unwrapping to be applied.
-                     'phase' = phase coded unwrapping method,
                      'multifreq' = multi frequency unwrapping method
                      'multiwave' = multi wavelength unwrapping method.
         N_list: list.
@@ -161,14 +161,16 @@ class Calibration:
                   Dataframe of projector absolute error in x and y directions of all poses.
         """
         objp = self.world_points()
-        if self.type_unwrap == 'phase':
-            unwrapv_lst, unwraph_lst, white_lst, avg_lst, mod_lst, wrapped_phase_lst = self.projcam_calib_img_phase()
-        elif self.type_unwrap == 'multiwave':
-            unwrapv_lst, unwraph_lst, white_lst, avg_lst, mod_lst, wrapped_phase_lst = self.projcam_calib_img_multiwave()
+        if self.type_unwrap == 'multiwave':
+            unwrapv_lst, unwraph_lst, white_lst, mod_lst, wrapped_phase_lst, mask_lst = self.projcam_calib_img_multiwave()
         else:
             if self.type_unwrap != 'multifreq':
                 print("phase unwrapping type is not recognized, use 'multifreq'")
-            unwrapv_lst, unwraph_lst, white_lst, avg_lst, mod_lst, wrapped_phase_lst = self.projcam_calib_img_multifreq()
+            unwrapv_lst, unwraph_lst, white_lst, mod_lst, wrapped_phase_lst, mask_lst = self.projcam_calib_img_multifreq()
+        
+            
+        unwrapv_lst = [nstep.recover_image(u, mask_lst[i], self.cam_height, self.cam_width) for i,u in enumerate(unwrapv_lst)]
+        unwraph_lst = [nstep.recover_image(u, mask_lst[i], self.cam_height, self.cam_width) for i,u in enumerate(unwraph_lst)]
             
         # Projector images
         proj_img_lst = self.projector_img(unwrapv_lst, unwraph_lst, white_lst, fx, fy)
@@ -211,10 +213,10 @@ class Calibration:
                                                                                                                                     criteria=criteria)
         project_mat = np.hstack((st_cam_proj_rmat, st_cam_proj_tvec))
         _, _, _, _, _, _, euler_angles = cv2.decomposeProjectionMatrix(project_mat)
-        
+        mapx,mapy = cv2.initUndistortRectifyMap(st_cam_mtx, st_cam_dist,None,None,(self.cam_width, self.cam_height), cv2.CV_32FC1)
         np.savez(os.path.join(self.path, '{}_calibration_param.npz'.format(self.type_unwrap)), st_cam_mtx, st_cam_dist, st_proj_mtx, st_cam_proj_rmat, st_cam_proj_tvec)
         np.savez(os.path.join(self.path, '{}_cam_rot_tvecs.npz'.format(self.type_unwrap)), cam_rvecs, cam_tvecs)
-        
+        np.save(os.path.join(self.path, '{}_mapx_mapy.npy'.format(self.type_unwrap)),mapx,mapy)
         return unwrapv_lst, unwraph_lst, white_lst, mod_lst, proj_img_lst, cam_objpts, cam_imgpts, proj_imgpts, euler_angles, cam_mean_error, cam_delta, cam_df1, proj_mean_error, proj_delta, proj_df1
     
     def update_list_calib(self, proj_df1, unwrapv_lst, unwraph_lst, white_lst, mod_lst, proj_img_lst, reproj_criteria):
@@ -395,78 +397,6 @@ class Calibration:
         zer = np.zeros((self.board_gridrows * self.board_gridcolumns))
         coord = np.column_stack((row_mat.ravel(), col_mat.ravel(), zer)) * self.dist_betw_circle
         return coord.astype('float32')
-
-    def projcam_calib_img_phase(self):
-        """
-        Function is used to generate absolute phase maps and true (single channel gray) images 
-        (object image without fringe patterns) from fringe image for camera and projector calibration 
-        from raw captured images using phase coded temporal unwrapping method.
-        The function generates 'no_pose' number of absolute phase maps and true images.
-        Returns
-        -------
-        unwrapv_lst: list.
-                     List of unwrapped phase maps obtained from horizontally varying intensity patterns.
-        unwraph_lst: list.
-                     List of unwrapped phase maps obtained from vertically varying intensity patterns.
-        white_lst: list.
-                   List of true images for each calibration pose.
-        avg_lst: list.
-                  List of average intensity images for each calibration pose.
-        mod_lst: list.
-                  List of modulation intensity images for each calibration pose.
-        wrapped_phase_lst: dictionary.
-                            List of vertical and horizontal phase maps
-        """
-        unwrap_v_lst = []
-        unwrap_h_lst = []
-        white_lst = []
-        avg_lst = []
-        mod_lst = []
-        kv_lst = []
-        kh_lst = []
-        coswrapv_lst = []
-        coswraph_lst = []
-        stepwrapv_lst = []
-        stepwraph_lst = []
-        all_img_paths = sorted(glob.glob(os.path.join(self.path, 'capt_*')), key=os.path.getmtime)
-        acquisition_index_list = [int(i[-14:-11]) for i in all_img_paths]
-        for x in tqdm(acquisition_index_list, desc='generating unwrapped phases map for {} images'.format(len(acquisition_index_list))):
-            if os.path.exists(os.path.join(self.path, 'capt_%03d_000000.jpg' % x)):
-                # Read and apply mask to each captured images for cosine and stair patterns
-                img_path = sorted(glob.glob(os.path.join(self.path, 'capt_%3d*.jpg' % x)), key=os.path.getmtime)
-                images_arr = np.array([cv2.imread(file, 0) for file in img_path]).astype(np.float64)
-                mod1, avg1, phase_cosv = nstep.phase_cal(images_arr[0:self.N[0]], self.limit)
-                mod2, avg2, phase_cosh = nstep.phase_cal(images_arr[self.N[0]:2*self.N[0]], self.limit)
-                mod3, avg3, phase_stepv = nstep.phase_cal(images_arr[2*self.N[0]:3*self.N[0]], self.limit)
-                mod4, avg4, phase_steph = nstep.phase_cal(images_arr[3*self.N[0]:4*self.N[0]], self.limit)
-                unwrap_v, unwrap_h, k0_v, k0_h, cos_wrap_v, cos_wrap_h, step_wrap_v, step_wrap_h = nstep.ph_temp_unwrap(phase_cosv, 
-                                                                                                                        phase_cosh,
-                                                                                                                        phase_stepv, 
-                                                                                                                        phase_steph,
-                                                                                                                        self.pitch[-1], 
-                                                                                                                        self.proj_height, 
-                                                                                                                        self.proj_width,
-                                                                                                                        self.kernel_v, 
-                                                                                                                        self.kernel_h)
-                # True image for a given pose  
-                orig_img = avg2 + mod2
-                unwrap_v_lst.append(unwrap_v)
-                unwrap_h_lst.append(unwrap_h)
-                white_lst.append(orig_img)
-                avg_lst.append(np.array([avg1, avg2, avg3, avg4]))
-                mod_lst.append(np.array([mod1, mod2, mod3, mod4]))
-                kv_lst.append(k0_v)
-                kh_lst.append(k0_h)
-                coswrapv_lst.append(cos_wrap_v)
-                coswraph_lst.append(cos_wrap_h)
-                stepwrapv_lst.append(step_wrap_v)
-                stepwraph_lst.append(step_wrap_h)
-
-        wrapped_phase_lst = {"wrapv": coswrapv_lst,
-                             "wraph": coswraph_lst,
-                             "stepwrapv": stepwrapv_lst,
-                             "stepwraph": stepwraph_lst}
-        return unwrap_v_lst, unwrap_h_lst, white_lst, avg_lst, mod_lst, wrapped_phase_lst
     
     def multifreq_analysis(self, data_array):
         """
@@ -477,53 +407,30 @@ class Calibration:
                     Array of images used in 4 level phase unwrapping.
         Returns
         -------
-        multifreq_unwrap_v: np.ndarray.
-                            Unwrapped phase map for vertical fringes.
-        multifreq_unwrap_h: np.ndarray.
-                            Unwrapped phase map for horizontal fringes.
-        phase_arr_v: list.
-                     Wrapped phase maps for each pitch in vertical direction.
-        phase_arr_h: list.
-                     Wrapped phase maps for each pitch in horizontal direction.
+        unwrap_v: np.ndarray.
+                  Unwrapped phase map for vertical fringes.
+        unwrap_h: np.ndarray.
+                  Unwrapped phase map for horizontal fringes.
+        phase_v: np.ndarray.
+                 Wrapped phase maps for each pitch in vertical direction.
+        phase_h: np.ndarray.
+                 Wrapped phase maps for each pitch in horizontal direction.
         orig_img: np.ndarray.
                   True image without fringes.
-        avg_arr: np.ndarray.
-                 Average intensity image of each pitch.
-        mod_arr: np.ndarray.
-                 Modulation intensity image of each pitch.
+        modulation: np.ndarray.
+                    Modulation intensity image of each pitch.
+        flag: np.ndarray.
+              Flag to recover image from vector 
         """
-        multi_mod_v1, multi_avg_v1, multi_phase_v1 = nstep.phase_cal(data_array[0:self.N[0]],
-                                                                     self.limit)
-        multi_mod_h1, multi_avg_h1, multi_phase_h1 = nstep.phase_cal(data_array[self.N[0]:2 * self.N[0]],
-                                                                     self.limit)
-        multi_mod_v2, multi_avg_v2, multi_phase_v2 = nstep.phase_cal(data_array[2 * self.N[0]:2 * self.N[0] + self.N[1]],
-                                                                     self.limit)
-        multi_mod_h2, multi_avg_h2, multi_phase_h2 = nstep.phase_cal(data_array[2 * self.N[0] + self.N[1]:2 * self.N[0] + 2 * self.N[1]],
-                                                                     self.limit)
-        multi_mod_v3, multi_avg_v3, multi_phase_v3 = nstep.phase_cal(data_array[2 * self.N[0] + 2 * self.N[1]:2 * self.N[0] + 2 * self.N[1] + self.N[2]],
-                                                                     self.limit)
-        multi_mod_h3, multi_avg_h3, multi_phase_h3 = nstep.phase_cal(data_array[2 * self.N[0] + 2 * self.N[1] + self.N[2]:2 * self.N[0] + 2 * self.N[1] + 2 * self.N[2]],
-                                                                     self.limit)
-        multi_mod_v4, multi_avg_v4, multi_phase_v4 = nstep.phase_cal(data_array[2 * self.N[0] + 2 * self.N[1] + 2 * self.N[2]:2 * self.N[0] + 2 * self.N[1] + 2*self.N[2]+self.N[3]],
-                                                                     self.limit)
-        multi_mod_h4, multi_avg_h4, multi_phase_h4 = nstep.phase_cal(data_array[2 * self.N[0] + 2 * self.N[1] + 2*self.N[2] + self.N[3]: 2 * self.N[0] + 2 * self.N[1] + 2*self.N[2] + 2 * self.N[3]],
-                                                                     self.limit)
+        modulation, orig_img, phase_map, mask = nstep.phase_cal(data_array, self.limit, self.N, True )
+        phase_v = phase_map[::2]
+        phase_h = phase_map[1::2]
+        phase_v[0][phase_v[0] < EPSILON] = phase_v[0][phase_v[0] < EPSILON] + 2 * np.pi
+        phase_h[0][phase_h[0] < EPSILON] = phase_h[0][phase_h[0] < EPSILON] + 2 * np.pi
+        unwrap_v, k_arr_v = nstep.multifreq_unwrap(self.pitch, phase_v, self.kernel_v, 'v')
+        unwrap_h, k_arr_h = nstep.multifreq_unwrap(self.pitch, phase_h, self.kernel_h, 'h')
         
-        orig_img = multi_avg_h4 + multi_mod_h4
-
-        multi_phase_v1[multi_phase_v1 < EPSILON] = multi_phase_v1[multi_phase_v1 < EPSILON] + 2 * np.pi
-        multi_phase_h1[multi_phase_h1 < EPSILON] = multi_phase_h1[multi_phase_h1 < EPSILON] + 2 * np.pi
-        
-        phase_arr_v = [multi_phase_v1, multi_phase_v2, multi_phase_v3, multi_phase_v4]
-        phase_arr_h = [multi_phase_h1, multi_phase_h2, multi_phase_h3, multi_phase_h4]
-        
-        multifreq_unwrap_v, k_arr_v = nstep.multifreq_unwrap(self.pitch, phase_arr_v, self.kernel_v, 'v')
-        multifreq_unwrap_h, k_arr_h = nstep.multifreq_unwrap(self.pitch, phase_arr_h, self.kernel_h, 'h')                
-       
-        avg_arr = np.array([multi_avg_v1, multi_avg_v2, multi_avg_v3, multi_avg_v4, multi_avg_h1, multi_avg_h2, multi_avg_h3, multi_avg_h4])
-        mod_arr = np.array([multi_mod_v1, multi_mod_v2, multi_mod_v3, multi_mod_v4, multi_mod_h1, multi_mod_h2, multi_mod_h3, multi_mod_h4])
-        
-        return multifreq_unwrap_v, multifreq_unwrap_h, phase_arr_v, phase_arr_h, orig_img, avg_arr, mod_arr
+        return unwrap_v, unwrap_h, phase_v, phase_h, orig_img[-1], modulation, mask
     
     def multifreq_analysis_cupy(self, data_array):
         """
@@ -535,64 +442,30 @@ class Calibration:
                     Cupy array of images used in 4 level phase unwrapping.
         Returns
         -------
-        multifreq_unwrap_v: np.ndarray.
-                            Unwrapped phase map for vertical fringes.
-        multifreq_unwrap_h: np.ndarray.
-                            Unwrapped phase map for horizontal fringes.
-        phase_arr_v: list.
-                     Wrapped phase maps for each pitch in vertical direction.
-        phase_arr_h: list.
-                     Wrapped phase maps for each pitch in horizontal direction.
-        orig_img: np.ndarray.
+        unwrap_v: cp.ndarray.
+                  Unwrapped phase map for vertical fringes.
+        unwrap_h: cp.ndarray.
+                  Unwrapped phase map for horizontal fringes.
+        phase_v: cp.ndarray.
+                 Wrapped phase maps for each pitch in vertical direction.
+        phase_h: cp.ndarray.
+                 Wrapped phase maps for each pitch in horizontal direction.
+        orig_img: cp.ndarray.
                   True image without fringes.
-        avg_arr: np.ndarray.
-                 Average intensity image of each pitch.
-        mod_arr: np.ndarray.
-                 Modulation intensity image of each pitch.
+        modulation: cp.ndarray.
+                    Modulation intensity image of each pitch.
+        flag: cp.ndarray.
+              Flag to recover image from vector 
         """
-        multi_mod_v1, multi_avg_v1, multi_phase_v1 = nstep_cp.phase_cal_cp(data_array[0:self.N[0]],
-                                                                           self.limit)
-        multi_mod_h1, multi_avg_h1, multi_phase_h1 = nstep_cp.phase_cal_cp(data_array[self.N[0]:2 * self.N[0]],
-                                                                           self.limit)
-        multi_mod_v2, multi_avg_v2, multi_phase_v2 = nstep_cp.phase_cal_cp(data_array[2 * self.N[0]:2 * self.N[0] + self.N[1]],
-                                                                           self.limit)
-        multi_mod_h2, multi_avg_h2, multi_phase_h2 = nstep_cp.phase_cal_cp(data_array[2 * self.N[0] + self.N[1]:2 * self.N[0] + 2 * self.N[1]],
-                                                                           self.limit)
-        multi_mod_v3, multi_avg_v3, multi_phase_v3 = nstep_cp.phase_cal_cp(data_array[2 * self.N[0] + 2 * self.N[1]:2 * self.N[0] + 2 * self.N[1] + self.N[2]],
-                                                                           self.limit)
-        multi_mod_h3, multi_avg_h3, multi_phase_h3 = nstep_cp.phase_cal_cp(data_array[2 * self.N[0] + 2 * self.N[1] + self.N[2]:2 * self.N[0] + 2 * self.N[1] + 2 * self.N[2]],
-                                                                           self.limit)
-        multi_mod_v4, multi_avg_v4, multi_phase_v4 = nstep_cp.phase_cal_cp(data_array[2 * self.N[0] + 2 * self.N[1] + 2 * self.N[2]:2 * self.N[0] + 2 * self.N[1] + 2 * self.N[2] + self.N[3]],
-                                                                           self.limit)
-        multi_mod_h4, multi_avg_h4, multi_phase_h4 = nstep_cp.phase_cal_cp(data_array[2 * self.N[0] + 2 * self.N[1] + 2*self.N[2] + self.N[3]: 2 * self.N[0] + 2 * self.N[1] + 2 * self.N[2] + 2 * self.N[3]],
-                                                                           self.limit)
-        
-        orig_img = multi_avg_h4 + multi_mod_h4
-
-        multi_phase_v1[multi_phase_v1 < EPSILON] = multi_phase_v1[multi_phase_v1 < EPSILON] + 2 * np.pi
-        multi_phase_h1[multi_phase_h1 < EPSILON] = multi_phase_h1[multi_phase_h1 < EPSILON] + 2 * np.pi
-        
-        phase_arr_v = [multi_phase_v1, multi_phase_v2, multi_phase_v3, multi_phase_v4]
-        phase_arr_h = [multi_phase_h1, multi_phase_h2, multi_phase_h3, multi_phase_h4]
-        
-        multifreq_unwrap_v, k_arr_v = nstep_cp.multifreq_unwrap_cp(self.pitch, 
-                                                                   phase_arr_v, 
-                                                                   self.kernel_v, 
-                                                                   'v')
-        multifreq_unwrap_h, k_arr_h = nstep_cp.multifreq_unwrap_cp(self.pitch, 
-                                                                   phase_arr_h, 
-                                                                   self.kernel_h, 'h')
-       
-        avg_arr = np.array([cp.asnumpy(multi_avg_v1), cp.asnumpy(multi_avg_v2),
-                            cp.asnumpy(multi_avg_v3), cp.asnumpy(multi_avg_v4), 
-                            cp.asnumpy(multi_avg_h1), cp.asnumpy(multi_avg_h2),
-                            cp.asnumpy(multi_avg_h3), cp.asnumpy(multi_avg_h4)])
-        mod_arr = np.array([cp.asnumpy(multi_mod_v1), cp.asnumpy(multi_mod_v2),
-                            cp.asnumpy(multi_mod_v3), cp.asnumpy(multi_mod_v4), 
-                            cp.asnumpy(multi_mod_h1), cp.asnumpy(multi_mod_h2), 
-                            cp.asnumpy(multi_mod_h3), cp.asnumpy(multi_mod_h4)])
-        
-        return cp.asnumpy(multifreq_unwrap_v), cp.asnumpy(multifreq_unwrap_h), cp.asnumpy(cp.asarray(phase_arr_v)), cp.asnumpy(cp.asarray(phase_arr_h)), cp.asnumpy(orig_img), avg_arr, mod_arr
+        modulation, orig_img, phase_map, mask = nstep_cp.phase_cal_cp(data_array, self.limit, self.N, True )
+        phase_v = phase_map[::2]
+        phase_h = phase_map[1::2]
+        phase_v[0][phase_v[0] < EPSILON] = phase_v[0][phase_v[0] < EPSILON] + 2 * np.pi
+        phase_h[0][phase_h[0] < EPSILON] = phase_h[0][phase_h[0] < EPSILON] + 2 * np.pi
+        unwrap_v, k_arr_v = nstep_cp.multifreq_unwrap_cp(self.pitch, phase_v, self.kernel_v, 'v')
+        unwrap_h, k_arr_h = nstep_cp.multifreq_unwrap_cp(self.pitch, phase_h, self.kernel_h, 'h')
+        cp._default_memory_pool.free_all_blocks()
+        return cp.asnumpy(unwrap_v), cp.asnumpy(unwrap_h), cp.asnumpy(phase_v), cp.asnumpy(phase_h), cp.asnumpy(orig_img[-1]), cp.asnumpy(modulation), cp.asnumpy(mask)
 
     def projcam_calib_img_multifreq(self):
         """
@@ -607,16 +480,13 @@ class Calibration:
                      List of unwrapped phase maps obtained from vertically varying intensity patterns.
         white_lst: list.
                    List of true images for each calibration pose.
-        avg_lst: list.
-                  List of average intensity images for each calibration pose.
         mod_lst: list.
                   List of modulation intensity images for each calibration pose.
         wrapped_phase_lst: dictionary.
                            List of vertical and horizontal phase maps
 
         """
-        
-        avg_lst = []
+        mask_lst = []
         mod_lst = []
         white_lst = []
         wrapv_lst = []
@@ -647,33 +517,33 @@ class Calibration:
 
             if images_arr is not None:
                 if self.processing == 'cpu':
-                    unwrap_v, unwrap_h, phase_arr_v, phase_arr_h, orig_img, avg_arr, mod_arr = self.multifreq_analysis(images_arr)
+                   unwrap_v, unwrap_h, phase_v, phase_h, orig_img, modulation, mask = self.multifreq_analysis(images_arr)
                 else:
                     if self.processing != 'gpu':
                         print("WARNING: processing type is not recognized, use 'gpu'")
                     images_arr = cp.asarray(images_arr)
-                    unwrap_v, unwrap_h, phase_arr_v, phase_arr_h, orig_img, avg_arr, mod_arr = self.multifreq_analysis_cupy(images_arr)
+                    unwrap_v, unwrap_h, phase_v, phase_h, orig_img, modulation, mask = self.multifreq_analysis_cupy(images_arr)
+                    cp._default_memory_pool.free_all_blocks()
+                    
             else:
                 unwrap_v = None
                 unwrap_h = None
-                phase_arr_v = None
-                phase_arr_h = None
+                phase_v = None
+                phase_h = None
                 orig_img = None
-                avg_arr = None
-                mod_arr = None
-
-            avg_lst.append(avg_arr)
-            mod_lst.append(mod_arr)
+                modulation = None
+                mask = None
+            mask_lst.append(mask)
+            mod_lst.append(modulation)
             white_lst.append(orig_img)
-            wrapv_lst.append(phase_arr_v)
-            wraph_lst.append(phase_arr_h)
+            wrapv_lst.append(phase_v)
+            wraph_lst.append(phase_h)
             unwrapv_lst.append(unwrap_v)
             unwraph_lst.append(unwrap_h)
 
         wrapped_phase_lst = {"wrapv": wrapv_lst,
                              "wraph": wraph_lst}
-
-        return unwrapv_lst, unwraph_lst, white_lst, avg_lst, mod_lst, wrapped_phase_lst
+        return unwrapv_lst, unwraph_lst, white_lst, mod_lst, wrapped_phase_lst, mask_lst
 
     def projcam_calib_img_multiwave(self):
         """
@@ -695,8 +565,7 @@ class Calibration:
         wrapped_phase_lst: dictionary.
                             List of vertical and horizontal phase maps
         """
-        
-        avg_lst = []
+        flag_lst = []
         mod_lst = []
         white_lst = []
         kv_lst = []
@@ -718,20 +587,25 @@ class Calibration:
             if os.path.exists(os.path.join(self.path, 'capt_%03d_000000.jpg' % x)):
                 img_path = sorted(glob.glob(os.path.join(self.path, 'capt_%3d*.jpg' % x)), key=os.path.getmtime)
                 images_arr = np.array([cv2.imread(file, 0) for file in img_path]).astype(np.float64)
-                multi_mod_v3, multi_avg_v3, multi_phase_v3 = nstep.phase_cal(images_arr[0: N_arr[0]],
+                multi_mod_v3, multi_white_v3, multi_phase_v3, flagv3 = nstep.phase_cal(images_arr[0: N_arr[0]],
                                                                              self.limit)
-                multi_mod_h3, multi_avg_h3, multi_phase_h3 = nstep.phase_cal(images_arr[N_arr[0]:2 * N_arr[0]],
+                multi_mod_h3, multi_white_h3, multi_phase_h3, flagh3 = nstep.phase_cal(images_arr[N_arr[0]:2 * N_arr[0]],
                                                                              self.limit)
-                multi_mod_v2, multi_avg_v2, multi_phase_v2 = nstep.phase_cal(images_arr[2 * N_arr[0]:2 * N_arr[0] + N_arr[1]],
+                multi_mod_v2, multi_white_v2, multi_phase_v2, flagv2 = nstep.phase_cal(images_arr[2 * N_arr[0]:2 * N_arr[0] + N_arr[1]],
                                                                              self.limit)
-                multi_mod_h2, multi_avg_h2, multi_phase_h2 = nstep.phase_cal(images_arr[2 * N_arr[0] + N_arr[1]:2 * N_arr[0] + 2 * N_arr[1]],
+                multi_mod_h2, multi_white_h2, multi_phase_h2, flagh2 = nstep.phase_cal(images_arr[2 * N_arr[0] + N_arr[1]:2 * N_arr[0] + 2 * N_arr[1]],
                                                                              self.limit)
-                multi_mod_v1, multi_avg_v1, multi_phase_v1 = nstep.phase_cal(images_arr[2 * N_arr[0] + 2 * N_arr[1]:2 * N_arr[0] + 2 * N_arr[1] + N_arr[2]],
+                multi_mod_v1, multi_white_v1, multi_phase_v1, flagv1 = nstep.phase_cal(images_arr[2 * N_arr[0] + 2 * N_arr[1]:2 * N_arr[0] + 2 * N_arr[1] + N_arr[2]],
                                                                              self.limit)
-                multi_mod_h1, multi_avg_h1, multi_phase_h1 = nstep.phase_cal(images_arr[2 * N_arr[0] + 2 * N_arr[1] + N_arr[2]:2 * N_arr[0] + 2 * N_arr[1] + 2 * N_arr[2]],
+                multi_mod_h1, multi_white_h1, multi_phase_h1, flagh1 = nstep.phase_cal(images_arr[2 * N_arr[0] + 2 * N_arr[1] + N_arr[2]:2 * N_arr[0] + 2 * N_arr[1] + 2 * N_arr[2]],
                                                                              self.limit)
-               
-                orig_img = multi_avg_h1 + multi_mod_h1
+                flagv = flagv1 and flagv2 and flagv3 
+                multi_phase_v3 = multi_phase_v3[flagv]
+                multi_phase_h3 = multi_phase_h3[flagv]
+                multi_phase_v2 = multi_phase_v2[flagv]
+                multi_phase_h2 = multi_phase_h2[flagv]
+                multi_phase_v1 = multi_phase_v1[flagv]
+                multi_phase_h1 = multi_phase_h1[flagv]
                 
                 multi_phase_v12 = np.mod(multi_phase_v1 - multi_phase_v2, 2 * np.pi)
                 multi_phase_h12 = np.mod(multi_phase_h1 - multi_phase_h2, 2 * np.pi)
@@ -747,9 +621,9 @@ class Calibration:
                 multiwav_unwrap_v, k_arr_v = nstep.multiwave_unwrap(pitch_arr, phase_arr_v, self.kernel_v, 'v')
                 multiwav_unwrap_h, k_arr_h = nstep.multiwave_unwrap(pitch_arr, phase_arr_h, self.kernel_h, 'h')
                 
-                avg_lst.append(np.array([multi_avg_v3, multi_avg_v2, multi_avg_v1, multi_avg_h3, multi_avg_h2, multi_avg_h1]))
                 mod_lst.append(np.array([multi_mod_v3, multi_mod_v2, multi_mod_v1, multi_mod_h3, multi_mod_h2, multi_mod_h1]))
-                white_lst.append(orig_img)
+                flag_lst.append(flagv)
+                white_lst.append(multi_white_h1)
                 wrapv_lst.append(phase_arr_v)
                 wraph_lst.append(phase_arr_h)
                 kv_lst.append(k_arr_v)
@@ -758,7 +632,7 @@ class Calibration:
                 unwraph_lst.append(multiwav_unwrap_h)
         wrapped_phase_lst = {"wrapv": wrapv_lst,
                              "wraph": wraph_lst}
-        return unwrapv_lst, unwraph_lst, white_lst, avg_lst, mod_lst, wrapped_phase_lst
+        return unwrapv_lst, unwraph_lst, white_lst, mod_lst, wrapped_phase_lst, flag_lst
     
     @staticmethod
     def _image_resize(image_lst, fx, fy):
@@ -984,8 +858,8 @@ class Calibration:
         proj_imgpts = []
         for x, c in enumerate(centers):
             # Phase to coordinate conversion for each pose
-            u = (nstep.bilinear_interpolate(unwrap_v_lst[x], c) - self.phase_st) * self.pitch[-1] / (2*np.pi)
-            v = (nstep.bilinear_interpolate(unwrap_h_lst[x], c) - self.phase_st) * self.pitch[-1] / (2*np.pi)
+            u = (nstep.bilinear_interpolate(unwrap_v_lst[x], c[:,0], c[:,1]) - self.phase_st) * self.pitch[-1] / (2*np.pi)
+            v = (nstep.bilinear_interpolate(unwrap_h_lst[x], c[:,0], c[:,1]) - self.phase_st) * self.pitch[-1] / (2*np.pi)
             coordi = np.column_stack((u, v)).reshape(cam_objpts[0].shape[0], 1, 2).astype(np.float32)
             proj_imgpts.append(coordi)
             if proj_img_lst is not None:
@@ -1353,7 +1227,8 @@ class Calibration:
     
     def recon_xyz(self,
                   unwrap_phase,  
-                  white_imgs, 
+                  white_imgs,
+                  mask_lst, 
                   int_limit=None,
                   resid_outlier_limit=None):
         """
@@ -1387,27 +1262,28 @@ class Calibration:
         cordi_lst = []
         color_lst = []
         start = perf_counter_ns()
-        for i, (u, w) in tqdm(enumerate(zip(unwrap_phase, white_imgs)), desc='building board 3d coordinates'):
-            u_copy = deepcopy(u)
-            w_copy = deepcopy(w)
-            roi_mask = np.full(u_copy.shape, False)
+        for i, (u, w, m) in tqdm(enumerate(zip(unwrap_phase, white_imgs, mask_lst)), desc='building board 3d coordinates'):
+            
+            cordi = rc.reconstruction_obj(u[m], 
+                                          c_mtx, 
+                                          c_dist, 
+                                          p_mtx, 
+                                          camproj_rot_mtx, 
+                                          camproj_trans_mtx,
+                                          self.phase_st, 
+                                          self.pitch[-1], 
+                                          self.processing)
+            
             if int_limit:
+                roi_mask = np.full(u.shape, False)
                 roi_mask[w > int_limit] = True
-                u_copy[~roi_mask] = np.nan
+                w[~roi_mask] = np.nan
                 point_cloud_dir = os.path.join(self.path, 'intensity_mask')
             else:
+                w = w[m]
                 point_cloud_dir = os.path.join(self.path, 'modulation_mask') 
-            end = perf_counter_ns()
-            print('processing: %2.6f'%((end-start)/1e9))
-            start = perf_counter_ns()        
-            cordi, nan_mask= rc.reconstruction_obj(u_copy, c_mtx, c_dist, p_mtx, camproj_rot_mtx, camproj_trans_mtx,
-                                                   self.phase_st, self.pitch[-1], self.processing)
-            end = perf_counter_ns()
-            print('reconstruction: %2.6f'%((end-start)/1e9))
-            start = perf_counter_ns()
             xyz = list(map(tuple, cordi)) 
-            inte_img = (w_copy / np.nanmax(w_copy)).ravel()
-            inte_img = inte_img[~nan_mask]
+            inte_img = (w/ np.nanmax(w)).ravel()
             inte_rgb = np.stack((inte_img, inte_img, inte_img), axis=-1)
             color = list(map(tuple, inte_rgb))
             cordi_lst.append(cordi)
@@ -1761,6 +1637,8 @@ def main():
     proj_height = 1140  # 800 1280 912 1140
     cam_width = 1920
     cam_hieght = 1200
+    fx=1 
+    fy=2
     # type of unwrapping
     type_unwrap = 'multifreq'
 
@@ -1786,13 +1664,6 @@ def main():
         N_list = [5, 5, 9]
         kernel_v = 9
         kernel_h = 9
-
-    # phase coding unwrapping parameters
-    elif type_unwrap == 'phase':
-        pitch_list = [20]
-        N_list = [9]
-        kernel_v = 25
-        kernel_h = 25
 
     # multifrequency unwrapping parameters
     else:
@@ -1826,10 +1697,10 @@ def main():
                              path=path,
                              data_type=data_type,
                              processing=processing)
-    unwrapv_lst, unwraph_lst, white_lst, mod_lst, proj_img_lst, cam_objpts, cam_imgpts, proj_imgpts, euler_angles, cam_mean_error, cam_delta, cam_df1, proj_mean_error, proj_delta, proj_df1 = calib_inst.calib(fx=1, fy=2)
+    unwrapv_lst, unwraph_lst, white_lst, mod_lst, proj_img_lst, cam_objpts, cam_imgpts, proj_imgpts, euler_angles, cam_mean_error, cam_delta, cam_df1, proj_mean_error, proj_delta, proj_df1 = calib_inst.calib(fx, fy)
     # Plot for re projection error analysis
-    calib_inst.intrinsic_errors_plts(cam_mean_error, cam_delta, cam_df1, 'Camera', pixel_size=[5.86e-3, 5.86e-3])
-    calib_inst.intrinsic_errors_plts(proj_mean_error, proj_delta, proj_df1, 'Projector', pixel_size=[10.8e-3, 5.4e-3])
+    calib_inst.intrinsic_errors_plts(cam_mean_error, cam_delta, cam_df1, 'Camera', pixel_size=[1,1])
+    calib_inst.intrinsic_errors_plts(proj_mean_error, proj_delta, proj_df1, 'Projector', pixel_size=[1,0.5])
     return
 
 
