@@ -282,7 +282,9 @@ def B_cutoff_limit(sigma_path: str,
     return np.sqrt(modulation_limit_sq)
 
 def phase_cal(images: np.ndarray,
-              limit: float) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+              limit: float, 
+              N: list,
+              calibration: bool) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     Function that computes and applies mask to captured image based on data modulation (relative modulation) of each pixel
     and computes phase map.
@@ -307,24 +309,68 @@ def phase_cal(images: np.ndarray,
            Delta values at each pixel for each captured image
 
     """
-    N = images.shape[0]
-    delta = 2 * np.pi * np.arange(1, N + 1) / N
-    sin_delta = np.sin(delta)
-    sin_delta[np.abs(sin_delta) < 1e-15] = 0 
-    cos_delta = np.cos(delta)
-    cos_delta[np.abs(cos_delta) < 1e-15] = 0
-    sin_lst = np.einsum('kij,k->ij', images, sin_delta)
-    cos_lst = np.einsum('kij,k->ij', images, cos_delta)
-    modulation = 2 * np.sqrt(sin_lst**2 + cos_lst**2) / N
-    average_int = np.sum(images, axis=0) / N
-    mask = modulation > limit
-    white_img = modulation + average_int
-   
-    # # wrapped phase
-    # sin_lst[mask] = np.nan
-    # cos_lst[mask] = np.nan
-    # phase_map = -np.arctan2(sin_lst, cos_lst)  # wrapped phase;
-    return modulation, white_img, sin_lst, cos_lst, mask
+    if calibration:
+        repeat = 2
+    else:
+        repeat = 1
+    if len(set(N))==2:
+        image_set1 = images[0:(repeat*len(N)-repeat)*N[0]].reshape((repeat*len(N)-repeat),N[0],images.shape[-2],images.shape[-1])
+        image_set2 = images[repeat*N[-1]:].reshape(repeat,N[-1],images.shape[-2],images.shape[-1])
+        mask = np.full((images.shape[-2],images.shape[-1]), True)
+        image_set = [image_set1, image_set2]
+        mod_stack = np.empty((1,images.shape[-2],images.shape[-1]))
+        sin_stack = np.empty((1,images.shape[-2],images.shape[-1]))
+        cos_stack = np.empty((1,images.shape[-2],images.shape[-1]))
+        white_stack = np.empty((1,images.shape[-2],images.shape[-1]))
+        for i, n in enumerate(sorted(set(N))):
+            delta = 2 * np.pi * np.arange(1, n + 1) / n
+            sin_delta = np.sin(delta)
+            sin_delta[np.abs(sin_delta) < 1e-15] = 0
+            cos_delta = np.cos(delta)
+            cos_delta[np.abs(cos_delta) < 1e-15] = 0 
+            sin_deck = np.einsum('ijkl,j->ikl', image_set[i], sin_delta)
+            sin_stack = np.vstack((sin_stack, sin_deck))
+            cos_deck = np.einsum('ijkl,j->ikl', image_set[i], cos_delta)
+            cos_stack = np.vstack((cos_stack,cos_deck))
+            modulation = 2 * np.sqrt(sin_deck**2 + cos_deck**2)/n
+            mod_stack = np.vstack((mod_stack, modulation))
+            average_int = np.sum(image_set[i], axis=1)/ n
+            white_stack = np.vstack((white_stack,(modulation + average_int)))
+            mask_temp = modulation > limit
+            mask &= np.prod(mask_temp, axis=0, dtype=bool)
+        mask_temp = mask.astype('float')
+        mask_temp[mask_temp==0] = np.nan
+        mod_stack = np.einsum("ijk, jk->ijk",mod_stack[1:], mask_temp)
+        flag = np.where(~np.isnan(mod_stack))
+        sin_stack = sin_stack[1:][flag]
+        sin_stack = sin_stack.reshape(repeat*len(N),int(sin_stack.shape[0]/(repeat*len(N))))
+        cos_stack = cos_stack[1:][flag]
+        cos_stack = cos_stack.reshape(repeat*len(N), int(cos_stack.shape[0]/(repeat*len(N))))
+        white_stack = white_stack[1:]
+    elif len(set(N)) == 1:
+        image_set = images.reshape(int(images.shape[0]/N[0]), N[0], images.shape[-2], images.shape[-1])
+        delta = 2 * np.pi * np.arange(1, N[0] + 1) /N[0] 
+        sin_delta = np.sin(delta)
+        sin_delta[np.abs(sin_delta) < 1e-15] = 0
+        cos_delta = np.cos(delta)
+        cos_delta[np.abs(cos_delta) < 1e-15] = 0
+        sin_stack = np.einsum('ijkl,j->ikl', image_set, sin_delta)
+        cos_stack = np.einsum('ijkl,j->ikl', image_set, cos_delta)
+        mod_stack = 2 * np.sqrt(sin_stack**2 + cos_stack**2)/N[0]
+        average_int = np.sum(image_set, axis=1)/ N[0]
+        white_stack = mod_stack + average_int
+        mask = mod_stack > limit
+        mask = np.prod(mask, axis=0, dtype=bool)
+        mask_temp = mask.astype('float')
+        mask_temp[mask_temp==0] = np.nan
+        mod_stack = np.einsum("ijk, jk->ijk",mod_stack, mask_temp)
+        flag = np.where(~np.isnan(mod_stack))
+        sin_stack = sin_stack[flag]
+        sin_stack = sin_stack.reshape(repeat*len(N),int(sin_stack.shape[0]/(repeat*len(N))))
+        cos_stack = cos_stack[flag]
+        cos_stack = cos_stack.reshape(repeat*len(N), int(cos_stack.shape[0]/(repeat*len(N))))
+    phase_map = -np.arctan2(sin_stack, cos_stack)  # wrapped phase;
+    return mod_stack, white_stack, phase_map, mask
 
 def recover_image(vector_array: np.ndarray, 
                   flag: np.ndarray, 
@@ -600,7 +646,7 @@ def edge_rectification(multi_phase_123: np.ndarray,
         multi_phase_123[int(img_height/2):][multi_phase_123[int(img_height/2):] < -1.5 * np.pi] = multi_phase_123[int(img_height/2):][multi_phase_123[int(img_height/2):] < -1.5 * np.pi] + 2 * np.pi
     return multi_phase_123
 
-def bilinear_interpolate(unwrap, center):
+def bilinear_interpolate(unwrap, x, y):
     """
     Function to perform bi-linear interpolation to obtain subpixel circle center phase values.
 
@@ -614,12 +660,6 @@ def bilinear_interpolate(unwrap, center):
    Subpixel mapped absolute phase value corresponding to given circle center. 
 
     """
-    if len(center.shape) == 1:
-        x = np.asarray(center[0])
-        y = np.asarray(center[1])
-    else:
-        x = np.asarray(center[:, 0])
-        y = np.asarray(center[:, 1])
     # neighbours
     x0 = np.floor(x).astype(int)
     x1 = x0 + 1
@@ -637,6 +677,19 @@ def bilinear_interpolate(unwrap, center):
 
     return wa*unwrap_a + wb*unwrap_b + wc*unwrap_c + wd*unwrap_d
 
+def undistort(image, camera_mtx, camera_dist):
+    u = np.arange(0, image.shape[1])
+    v = np.arange(0, image.shape[0])
+    uc, vc = np.meshgrid(u, v)
+    x = (uc - camera_mtx[0,2])/camera_mtx[0,0]
+    y = (vc - camera_mtx[1,2])/camera_mtx[1,1]
+    r_sq = x**2 + y**2
+    x_double_dash = x*(1 + camera_dist[0,0] * r_sq + camera_dist[0,1] * r_sq**2)
+    y_double_dash = y*(1 + camera_dist[0,0] * r_sq + camera_dist[0,1] * r_sq**2)
+    map_x = x_double_dash * camera_mtx[0,0] + camera_mtx[0,2]
+    map_y = y_double_dash * camera_mtx[1,1] + camera_mtx[1,2]
+    undist_image = bilinear_interpolate(image, map_x,map_y)
+    return undist_image
 # =====================================================
 # For diagnosis
 # Removing trend
@@ -661,20 +714,16 @@ def trend(x_grid, y_grid, coeff):
 def main():
     test_limit = 0.9
     pitch_list = [50, 20]
-
+    N_list = [3, 3]
     fringe_arr_np = np.load("test_data/toy_data.npy")
     with open(r'test_data\vertical_fringes_np.pickle', 'rb') as f:
         vertical_fringes = pickle.load(f)
     with open(r'test_data\horizontal_fringes_np.pickle', 'rb') as f:
         horizontal_fringes = pickle.load(f)
     # testing #1:
-    modulation_np_v1, white_img_np_v1, sin_lst_np_v1, cos_lst_np_v1, mask_np_v1 = phase_cal(fringe_arr_np[0:3], test_limit)
-    modulation_np_v2, white_img_np_v2, sin_lst_np_v2, cos_lst_np_v2, mask_np_v2 = phase_cal(fringe_arr_np[6:9], test_limit)
-    mask_np_v = mask_np_v1 & mask_np_v2
-    flag_np_v = np.where(mask_np_v == True)
-    sin_lst_np_v = np.array([sin_lst_np_v1[flag_np_v], sin_lst_np_v2[flag_np_v]])
-    cos_lst_np_v = np.array([cos_lst_np_v1[flag_np_v], cos_lst_np_v2[flag_np_v]])
-    phase_np_v = -np.arctan2(sin_lst_np_v, cos_lst_np_v)
+    mod_stack, white_stack, phase_map, mask = phase_cal(fringe_arr_np, test_limit, N_list, True)
+    phase_np_v = phase_map[::2]
+    phase_np_h = phase_map[1::2]
     if (phase_np_v.all() == vertical_fringes['phase_map_np_v'].all()):
         print('\n All vertical phase maps match')
         multifreq_unwrap_np_v, k_arr_np_v = multifreq_unwrap(pitch_list, phase_np_v, 1, 'v')
@@ -684,13 +733,6 @@ def main():
             print('\n Vertical unwrapped phase map mismatch ')  
     else:
         print('\n Vertical phase map mismatch')
-    modulation_np_h1, white_img_np_h1, sin_lst_np_h1, cos_lst_np_h1, mask_np_h1 = phase_cal(fringe_arr_np[3:6], test_limit)
-    modulation_np_h2, white_img_np_h2, sin_lst_np_h2, cos_lst_np_h2, mask_np_h2 = phase_cal(fringe_arr_np[9:12], test_limit)
-    mask_np_h = mask_np_h1 & mask_np_h2
-    flag_np_h = np.where(mask_np_h == True)
-    sin_lst_np_h = np.array([sin_lst_np_h1[flag_np_h], sin_lst_np_h2[flag_np_h]])
-    cos_lst_np_h = np.array([cos_lst_np_h1[flag_np_h], cos_lst_np_h2[flag_np_h]])
-    phase_np_h = -np.arctan2(sin_lst_np_h, cos_lst_np_h)
     if (phase_np_h.all() == horizontal_fringes['phase_map_np_h'].all()):
         print('\n All horizontal phase maps match')
         multifreq_unwrap_np_h, k_arr_np_h = multifreq_unwrap(pitch_list, phase_np_h, 1, 'h')
