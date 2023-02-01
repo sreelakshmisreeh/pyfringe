@@ -38,15 +38,16 @@ def phase_cal_cp(images_cp: cp.ndarray,
         repeat = 2
     else:
         repeat = 1
-    if len(set(N))==2:
+    if len(set(N)) == 2:
         image_set1 = images_cp[0:(repeat*len(N)-repeat)*N[0]].reshape((repeat*len(N)-repeat), N[0], images_cp.shape[-2], images_cp.shape[-1])
         image_set2 = images_cp[repeat*N[-1]:].reshape(repeat, N[-1], images_cp.shape[-2], images_cp.shape[-1])
         mask_cp = cp.full((images_cp.shape[-2], images_cp.shape[-1]), True)
         image_set = [image_set1, image_set2]
-        mod_stack_cp = cp.empty((1, images_cp.shape[-2], images_cp.shape[-1]))
-        sin_stack_cp = cp.empty((1, images_cp.shape[-2], images_cp.shape[-1]))
-        cos_stack_cp = cp.empty((1, images_cp.shape[-2], images_cp.shape[-1]))
-        white_stack_cp = cp.empty((1, images_cp.shape[-2], images_cp.shape[-1]))
+        sin_stack_cp = None
+        cos_stack_cp = None
+        mod_stack_cp = None
+        white_stack_cp = None
+
         for i, n in enumerate(sorted(set(N))):
             delta = 2 * cp.pi * cp.arange(1, n + 1) / n
             sin_delta = cp.sin(delta)
@@ -54,44 +55,52 @@ def phase_cal_cp(images_cp: cp.ndarray,
             cos_delta = cp.cos(delta)
             cos_delta[cp.abs(cos_delta) < 1e-15] = 0
             sin_deck = cp.einsum('ijkl,j->ikl', image_set[i], sin_delta)
-            sin_stack_cp = cp.vstack((sin_stack_cp, sin_deck))
             cos_deck = cp.einsum('ijkl,j->ikl', image_set[i], cos_delta)
-            cos_stack_cp = cp.vstack((cos_stack_cp,cos_deck))
-            modulation = 2 * cp.sqrt(sin_deck**2 + cos_deck**2)/n
-            mod_stack_cp = cp.vstack((mod_stack_cp, modulation))
-            average_int = cp.sum(image_set[i], axis=1)/ n
-            white_stack_cp = cp.vstack((white_stack_cp,(modulation + average_int)))
+            modulation = 2 * cp.sqrt(sin_deck ** 2 + cos_deck ** 2) / n
+            average_int = cp.sum(image_set[i], axis=1) / n
+
+            if i == 0:
+                sin_stack_cp = sin_deck
+                cos_stack_cp = cos_deck
+                mod_stack_cp = modulation
+                white_stack_cp = modulation + average_int
+            else:
+                sin_stack_cp = cp.vstack((sin_stack_cp, sin_deck))
+                cos_stack_cp = cp.vstack((cos_stack_cp, cos_deck))
+                mod_stack_cp = cp.vstack((mod_stack_cp, modulation))
+                white_stack_cp = cp.vstack((white_stack_cp,(modulation + average_int)))
+
             mask_temp = modulation > limit
             mask_cp &= cp.prod(mask_temp, axis=0, dtype=bool)
-        mask_temp = mask_cp.astype('float')
-        mask_temp[mask_temp==0] = cp.nan
-        mod_stack_cp = cp.einsum("ijk, jk->ijk",mod_stack_cp[1:], mask_temp)
-        flag = cp.where(~cp.isnan(mod_stack_cp))
-        sin_stack_cp = sin_stack_cp[1:][flag]
-        sin_stack_cp = sin_stack_cp.reshape(repeat*len(N),int(sin_stack_cp.shape[0]/(repeat*len(N))))
-        cos_stack_cp = cos_stack_cp[1:][flag]
+        mask_cp = mask_cp.astype('float')
+        mask_cp[mask_cp == 0] = cp.nan
+        mod_stack_cp = cp.einsum("ijk, jk->ijk", mod_stack_cp, mask_cp)
+        flag = ~cp.isnan(mod_stack_cp)
+        sin_stack_cp = sin_stack_cp[flag]
+        sin_stack_cp = sin_stack_cp.reshape(repeat*len(N), int(sin_stack_cp.shape[0]/(repeat*len(N))))
+        cos_stack_cp = cos_stack_cp[flag]
         cos_stack_cp = cos_stack_cp.reshape(repeat*len(N), int(cos_stack_cp.shape[0]/(repeat*len(N))))
-        white_stack_cp = white_stack_cp[1:]
-    elif len(set(N)) == 1:
+
+    else:
         image_set = images_cp.reshape(int(images_cp.shape[0]/N[0]), N[0], images_cp.shape[-2], images_cp.shape[-1])
-        delta = 2 * cp.pi * cp.arange(1, N[0] + 1) /N[0] 
+        delta = 2 * cp.pi * cp.arange(1, N[0] + 1) / N[0]
         sin_delta = cp.sin(delta)
         sin_delta[cp.abs(sin_delta) < 1e-15] = 0
         cos_delta = cp.cos(delta)
         cos_delta[cp.abs(cos_delta) < 1e-15] = 0
         sin_stack_cp = cp.einsum('ijkl,j->ikl', image_set, sin_delta)
         cos_stack_cp = cp.einsum('ijkl,j->ikl', image_set, cos_delta)
-        mod_stack_cp = 2 * cp.sqrt(sin_stack_cp**2 + cos_stack_cp**2)/N[0]
-        average_int = cp.sum(image_set, axis=1)/ N[0]
+        mod_stack_cp = 2 * cp.sqrt(sin_stack_cp**2 + cos_stack_cp**2) / N[0]
+        average_int = cp.sum(image_set, axis=1) / N[0]
         white_stack_cp = mod_stack_cp + average_int
         mask_cp = mod_stack_cp > limit
         mask_cp = cp.prod(mask_cp, axis=0, dtype=bool)
-        mask_temp = mask_cp.astype('float')
-        mask_temp[mask_temp==0] = cp.nan
-        mod_stack_cp = cp.einsum("ijk, jk->ijk",mod_stack_cp, mask_temp)
-        flag = cp.where(~cp.isnan(mod_stack_cp))
+        mask_cp = mask_cp.astype('float')
+        mask_cp[mask_cp == 0] = cp.nan
+        mod_stack_cp = cp.einsum("ijk, jk->ijk", mod_stack_cp, mask_cp)
+        flag = ~cp.isnan(mod_stack_cp)
         sin_stack_cp = sin_stack_cp[flag]
-        sin_stack_cp = sin_stack_cp.reshape(repeat*len(N),int(sin_stack_cp.shape[0]/(repeat*len(N))))
+        sin_stack_cp = sin_stack_cp.reshape(repeat*len(N), int(sin_stack_cp.shape[0]/(repeat*len(N))))
         cos_stack_cp = cos_stack_cp[flag]
         cos_stack_cp = cos_stack_cp.reshape(repeat*len(N), int(cos_stack_cp.shape[0]/(repeat*len(N))))
     phase_map_cp = -cp.arctan2(sin_stack_cp, cos_stack_cp)  # wrapped phase;
