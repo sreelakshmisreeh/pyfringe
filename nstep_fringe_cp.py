@@ -38,22 +38,10 @@ def mask_application(mask_cp: cp.ndarray,
     Helper function to apply mask get relevant pixels for phase calculations.
     """
     num_total_levels = mod_stack_cp.shape[0]
-<<<<<<< Updated upstream
     flag = cp.tile(mask_cp, (num_total_levels, 1, 1))
     sin_stack_cp = sin_stack_cp[flag].reshpae((num_total_levels, -1))
     cos_stack_cp = cos_stack_cp[flag].reshpae((num_total_levels, -1))
     mod_stack_cp = mod_stack_cp[flag].reshpae((num_total_levels, -1))
-=======
-
-    mask_cp = mask_cp.astype('float')
-    mask_cp[mask_cp == 0] = cp.nan
-    # apply mask to all levels
-    mod_stack_cp = cp.einsum("ijk, jk->ijk", mod_stack_cp, mask_cp)
-    flag = ~cp.isnan(mod_stack_cp)
-    sin_stack_cp = sin_stack_cp[flag].reshape((num_total_levels, -1))
-    cos_stack_cp = cos_stack_cp[flag].reshape((num_total_levels, -1))
-    mod_stack_cp = mod_stack_cp[flag].reshape((num_total_levels, -1))
->>>>>>> Stashed changes
     return sin_stack_cp, cos_stack_cp, mod_stack_cp
 
 
