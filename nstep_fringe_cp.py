@@ -7,6 +7,33 @@ from cupyx.scipy import ndimage
 import pickle
 
 
+def level_process_cp(image_stack, n):
+    delta = 2 * cp.pi * cp.arange(1, n + 1) / n
+    sin_delta = cp.sin(delta)
+    sin_delta[cp.abs(sin_delta) < 1e-15] = 0
+    cos_delta = cp.cos(delta)
+    cos_delta[cp.abs(cos_delta) < 1e-15] = 0
+    sin_deck = cp.einsum('ijkl,j->ikl', image_stack, sin_delta)
+    cos_deck = cp.einsum('ijkl,j->ikl', image_stack, cos_delta)
+    modulation_deck = 2 * cp.sqrt(sin_deck ** 2 + cos_deck ** 2) / n
+    average_deck = cp.sum(image_stack, axis=1) / n
+    return sin_deck, cos_deck, modulation_deck, average_deck
+
+
+def mask_application(mask_cp, mod_stack_cp, sin_stack_cp, cos_stack_cp):
+    num_total_levels = mod_stack_cp.shape[0]
+
+    mask_cp = mask_cp.astype('float')
+    mask_cp[mask_cp == 0] = cp.nan
+    # apply mask to all levels
+    mod_stack_cp = cp.einsum("ijk, jk->ijk", mod_stack_cp, mask_cp)
+    flag = ~cp.isnan(mod_stack_cp)
+    sin_stack_cp = sin_stack_cp[flag].reshpae((num_total_levels, -1))
+    cos_stack_cp = cos_stack_cp[flag].reshpae((num_total_levels, -1))
+    mod_stack_cp = mod_stack_cp[flag].reshpae((num_total_levels, -1))
+    return sin_stack_cp, cos_stack_cp, mod_stack_cp
+
+
 def phase_cal_cp(images_cp: cp.ndarray,
                  limit: float,
                  N: list,
@@ -41,23 +68,16 @@ def phase_cal_cp(images_cp: cp.ndarray,
     if len(set(N)) == 2:
         image_set1 = images_cp[0:(repeat*len(N)-repeat)*N[0]].reshape((repeat*len(N)-repeat), N[0], images_cp.shape[-2], images_cp.shape[-1])
         image_set2 = images_cp[repeat*N[-1]:].reshape(repeat, N[-1], images_cp.shape[-2], images_cp.shape[-1])
-        mask_cp = cp.full((images_cp.shape[-2], images_cp.shape[-1]), True)
         image_set = [image_set1, image_set2]
+
+        mask_cp = cp.full((images_cp.shape[-2], images_cp.shape[-1]), True)
         sin_stack_cp = None
         cos_stack_cp = None
         mod_stack_cp = None
         white_stack_cp = None
 
         for i, n in enumerate(sorted(set(N))):
-            delta = 2 * cp.pi * cp.arange(1, n + 1) / n
-            sin_delta = cp.sin(delta)
-            sin_delta[cp.abs(sin_delta) < 1e-15] = 0
-            cos_delta = cp.cos(delta)
-            cos_delta[cp.abs(cos_delta) < 1e-15] = 0
-            sin_deck = cp.einsum('ijkl,j->ikl', image_set[i], sin_delta)
-            cos_deck = cp.einsum('ijkl,j->ikl', image_set[i], cos_delta)
-            modulation = 2 * cp.sqrt(sin_deck ** 2 + cos_deck ** 2) / n
-            average_int = cp.sum(image_set[i], axis=1) / n
+            sin_deck, cos_deck, modulation, average_int = level_process_cp(image_set[i], n)
 
             if i == 0:
                 sin_stack_cp = sin_deck
@@ -68,52 +88,24 @@ def phase_cal_cp(images_cp: cp.ndarray,
                 sin_stack_cp = cp.vstack((sin_stack_cp, sin_deck))
                 cos_stack_cp = cp.vstack((cos_stack_cp, cos_deck))
                 mod_stack_cp = cp.vstack((mod_stack_cp, modulation))
-                white_stack_cp = cp.vstack((white_stack_cp,(modulation + average_int)))
+                white_stack_cp = cp.vstack((white_stack_cp, (modulation + average_int)))
 
             mask_temp = modulation > limit
             mask_cp &= cp.prod(mask_temp, axis=0, dtype=bool)
-        mask_cp = mask_cp.astype('float')
-        mask_cp[mask_cp == 0] = cp.nan
-        mod_stack_cp = cp.einsum("ijk, jk->ijk", mod_stack_cp, mask_cp)
-        flag = ~cp.isnan(mod_stack_cp)
-        mask_cp = ~cp.isnan(mask_cp)
-        mod_stack_cp = mod_stack_cp[flag]
-        mod_stack_cp = mod_stack_cp.reshape(repeat * len(N), int(mod_stack_cp.shape[0] / (repeat * len(N))))
-        sin_stack_cp = sin_stack_cp[flag]
-        sin_stack_cp = sin_stack_cp.reshape(repeat*len(N), int(sin_stack_cp.shape[0]/(repeat*len(N))))
-        cos_stack_cp = cos_stack_cp[flag]
-        cos_stack_cp = cos_stack_cp.reshape(repeat*len(N), int(cos_stack_cp.shape[0]/(repeat*len(N))))
 
     else:
         image_set = images_cp.reshape(int(images_cp.shape[0]/N[0]), N[0], images_cp.shape[-2], images_cp.shape[-1])
-        delta = 2 * cp.pi * cp.arange(1, N[0] + 1) / N[0]
-        sin_delta = cp.sin(delta)
-        sin_delta[cp.abs(sin_delta) < 1e-15] = 0
-        cos_delta = cp.cos(delta)
-        cos_delta[cp.abs(cos_delta) < 1e-15] = 0
-        sin_stack_cp = cp.einsum('ijkl,j->ikl', image_set, sin_delta)
-        cos_stack_cp = cp.einsum('ijkl,j->ikl', image_set, cos_delta)
-        mod_stack_cp = 2 * cp.sqrt(sin_stack_cp**2 + cos_stack_cp**2) / N[0]
-        average_int = cp.sum(image_set, axis=1) / N[0]
-        white_stack_cp = mod_stack_cp + average_int
+        sin_stack_cp, cos_stack_cp, mod_stack_cp, average_stack_cp = level_process_cp(image_set, N[0])
+        white_stack_cp = mod_stack_cp + average_stack_cp
         mask_cp = mod_stack_cp > limit
         mask_cp = cp.prod(mask_cp, axis=0, dtype=bool)
-        mask_cp = mask_cp.astype('float')
-        mask_cp[mask_cp == 0] = cp.nan
-        mod_stack_cp = cp.einsum("ijk, jk->ijk", mod_stack_cp, mask_cp)
-        flag = ~cp.isnan(mod_stack_cp)
-        mask_cp = ~cp.isnan(mask_cp)
-        mod_stack_cp = mod_stack_cp[flag]
-        mod_stack_cp = mod_stack_cp.reshape(repeat * len(N), int(mod_stack_cp.shape[0] / (repeat * len(N))))
-        sin_stack_cp = sin_stack_cp[flag]
-        sin_stack_cp = sin_stack_cp.reshape(repeat*len(N), int(sin_stack_cp.shape[0]/(repeat*len(N))))
-        cos_stack_cp = cos_stack_cp[flag]
-        cos_stack_cp = cos_stack_cp.reshape(repeat*len(N), int(cos_stack_cp.shape[0]/(repeat*len(N))))
+
+    sin_stack_cp, cos_stack_cp, mod_stack_cp = mask_application(mask_cp, mod_stack_cp, sin_stack_cp, cos_stack_cp)
     phase_map_cp = -cp.arctan2(sin_stack_cp, cos_stack_cp)  # wrapped phase;
     return mod_stack_cp, white_stack_cp, phase_map_cp, mask_cp
 
-def recover_image_cp(vector_array: cp.ndarray, 
-                     flag: cp.ndarray, 
+def recover_image_cp(vector_array: cp.ndarray,
+                     mask: cp.ndarray,
                      cam_height:int,
                      cam_width:int)-> cp.ndarray:
     """
@@ -128,7 +120,7 @@ def recover_image_cp(vector_array: cp.ndarray,
                 Height of image.
     """
     image = cp.full((cam_height,cam_width), cp.nan)
-    image[flag] = vector_array
+    image[mask] = vector_array
     return image
 
 def filt_cp(unwrap_cp: cp.ndarray,
