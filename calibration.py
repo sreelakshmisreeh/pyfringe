@@ -104,9 +104,7 @@ class Calibration:
         self.bobdetect_convexity = bobdetect_convexity
         self.kernel_v = kernel_v
         self.kernel_h = kernel_h
-        if self.type_unwrap == 'phase':
-            self.phase_st = -np.pi
-        elif (self.type_unwrap == 'multifreq') or (self.type_unwrap == 'multiwave'):
+        if (self.type_unwrap == 'multifreq') or (self.type_unwrap == 'multiwave'):
             self.phase_st = 0
         else:
             print('ERROR: Invalid type_unwrap')
@@ -213,10 +211,8 @@ class Calibration:
                                                                                                                                     criteria=criteria)
         project_mat = np.hstack((st_cam_proj_rmat, st_cam_proj_tvec))
         _, _, _, _, _, _, euler_angles = cv2.decomposeProjectionMatrix(project_mat)
-        mapx,mapy = cv2.initUndistortRectifyMap(st_cam_mtx, st_cam_dist,None,None,(self.cam_width, self.cam_height), cv2.CV_32FC1)
         np.savez(os.path.join(self.path, '{}_calibration_param.npz'.format(self.type_unwrap)), st_cam_mtx, st_cam_dist, st_proj_mtx, st_cam_proj_rmat, st_cam_proj_tvec)
         np.savez(os.path.join(self.path, '{}_cam_rot_tvecs.npz'.format(self.type_unwrap)), cam_rvecs, cam_tvecs)
-        np.save(os.path.join(self.path, '{}_mapx_mapy.npy'.format(self.type_unwrap)),mapx,mapy)
         return unwrapv_lst, unwraph_lst, white_lst, mod_lst, proj_img_lst, cam_objpts, cam_imgpts, proj_imgpts, euler_angles, cam_mean_error, cam_delta, cam_df1, proj_mean_error, proj_delta, proj_df1
     
     def update_list_calib(self, proj_df1, unwrapv_lst, unwraph_lst, white_lst, mod_lst, proj_img_lst, reproj_criteria):
@@ -427,8 +423,20 @@ class Calibration:
         phase_h = phase_map[1::2]
         phase_v[0][phase_v[0] < EPSILON] = phase_v[0][phase_v[0] < EPSILON] + 2 * np.pi
         phase_h[0][phase_h[0] < EPSILON] = phase_h[0][phase_h[0] < EPSILON] + 2 * np.pi
-        unwrap_v, k_arr_v = nstep.multifreq_unwrap(self.pitch, phase_v, self.kernel_v, 'v')
-        unwrap_h, k_arr_h = nstep.multifreq_unwrap(self.pitch, phase_h, self.kernel_h, 'h')
+        unwrap_v, k_arr_v = nstep.multifreq_unwrap(self.pitch, 
+                                                   phase_v, 
+                                                   self.kernel_v, 
+                                                   'v', 
+                                                   mask, 
+                                                   self.cam_width, 
+                                                   self.cam_height)
+        unwrap_h, k_arr_h = nstep.multifreq_unwrap(self.pitch, 
+                                                   phase_h, 
+                                                   self.kernel_h, 
+                                                   'h', 
+                                                   mask,
+                                                   self.cam_width, 
+                                                   self.cam_height)
         
         return unwrap_v, unwrap_h, phase_v, phase_h, orig_img[-1], modulation, mask
     
@@ -462,9 +470,20 @@ class Calibration:
         phase_h = phase_map[1::2]
         phase_v[0][phase_v[0] < EPSILON] = phase_v[0][phase_v[0] < EPSILON] + 2 * np.pi
         phase_h[0][phase_h[0] < EPSILON] = phase_h[0][phase_h[0] < EPSILON] + 2 * np.pi
-        unwrap_v, k_arr_v = nstep_cp.multifreq_unwrap_cp(self.pitch, phase_v, self.kernel_v, 'v')
-        unwrap_h, k_arr_h = nstep_cp.multifreq_unwrap_cp(self.pitch, phase_h, self.kernel_h, 'h')
-        cp._default_memory_pool.free_all_blocks()
+        unwrap_v, k_arr_v = nstep_cp.multifreq_unwrap_cp(self.pitch, 
+                                                         phase_v, 
+                                                         self.kernel_v, 
+                                                         'v',
+                                                         mask, 
+                                                         self.cam_width, 
+                                                         self.cam_height)
+        unwrap_h, k_arr_h = nstep_cp.multifreq_unwrap_cp(self.pitch, 
+                                                         phase_h, 
+                                                         self.kernel_h, 
+                                                         'h',
+                                                         mask, 
+                                                         self.cam_width, 
+                                                         self.cam_height)
         return cp.asnumpy(unwrap_v), cp.asnumpy(unwrap_h), cp.asnumpy(phase_v), cp.asnumpy(phase_h), cp.asnumpy(orig_img[-1]), cp.asnumpy(modulation), cp.asnumpy(mask)
 
     def projcam_calib_img_multifreq(self):
