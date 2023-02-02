@@ -213,7 +213,7 @@ class Calibration:
         _, _, _, _, _, _, euler_angles = cv2.decomposeProjectionMatrix(project_mat)
         np.savez(os.path.join(self.path, '{}_calibration_param.npz'.format(self.type_unwrap)), st_cam_mtx, st_cam_dist, st_proj_mtx, st_cam_proj_rmat, st_cam_proj_tvec)
         np.savez(os.path.join(self.path, '{}_cam_rot_tvecs.npz'.format(self.type_unwrap)), cam_rvecs, cam_tvecs)
-        return unwrapv_lst, unwraph_lst, white_lst, mod_lst, proj_img_lst, cam_objpts, cam_imgpts, proj_imgpts, euler_angles, cam_mean_error, cam_delta, cam_df1, proj_mean_error, proj_delta, proj_df1
+        return unwrapv_lst, unwraph_lst, white_lst, mask_lst, mod_lst, proj_img_lst, cam_objpts, cam_imgpts, proj_imgpts, euler_angles, cam_mean_error, cam_delta, cam_df1, proj_mean_error, proj_delta, proj_df1
     
     def update_list_calib(self, proj_df1, unwrapv_lst, unwraph_lst, white_lst, mod_lst, proj_img_lst, reproj_criteria):
         """
@@ -1248,6 +1248,7 @@ class Calibration:
                   unwrap_phase,  
                   white_imgs,
                   mask_lst, 
+                  sigma_path,
                   int_limit=None,
                   resid_outlier_limit=None):
         """
@@ -1271,28 +1272,29 @@ class Calibration:
                     List of color for each 3d point.
 
         """
-        calibration = np.load(os.path.join(self.path, '{}_calibration_param.npz'.format(self.type_unwrap)))
-        c_mtx = calibration["arr_0"]
-        c_dist = calibration["arr_1"]
-        p_mtx = calibration["arr_2"]
-        camproj_rot_mtx = calibration["arr_3"]
-        camproj_trans_mtx = calibration["arr_4"]
-        
+        print(sigma_path)
         cordi_lst = []
         color_lst = []
-        start = perf_counter_ns()
+        reconstruct = rc.Reconstruction(self.proj_width,
+                                        self.proj_height,
+                                        self.cam_width,
+                                        self.cam_height,
+                                        self.type_unwrap,
+                                        self.limit,
+                                        self.N,
+                                        self.pitch,
+                                        'v',
+                                        self.kernel_v,
+                                        self.data_type,
+                                        self.processing,
+                                        self.path,
+                                        sigma_path,
+                                        self.path,
+                                        False,
+                                        False)
         for i, (u, w, m) in tqdm(enumerate(zip(unwrap_phase, white_imgs, mask_lst)), desc='building board 3d coordinates'):
             
-            cordi = rc.reconstruction_obj(u[m], 
-                                          c_mtx, 
-                                          c_dist, 
-                                          p_mtx, 
-                                          camproj_rot_mtx, 
-                                          camproj_trans_mtx,
-                                          self.phase_st, 
-                                          self.pitch[-1], 
-                                          self.processing)
-            
+            cordi = reconstruct.reconstruction_obj(u[m])
             if int_limit:
                 roi_mask = np.full(u.shape, False)
                 roi_mask[w > int_limit] = True
@@ -1316,8 +1318,6 @@ class Calibration:
                     PlyElement.describe(np.array(color, dtype=[('r', 'f4'), ('g', 'f4'), ('b', 'f4')]), 'color'),
                 ]).write(os.path.join(point_cloud_dir, 'obj_%d.ply' % i))
         
-            end = perf_counter_ns()
-            print('saving: %2.6f'%((end-start)/1e9))
             
         if resid_outlier_limit:
             residual_lst, outlier_lst = self.white_center_planefit(cordi_lst, resid_outlier_limit)
