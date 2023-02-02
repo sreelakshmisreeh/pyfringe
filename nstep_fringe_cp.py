@@ -191,7 +191,7 @@ def multi_kunwrap_cp(wavelength_cp: list,
     return unwrap_cp, k_array_cp
 
 def multifreq_unwrap_cp(wavelength_arr_cp: list,
-                        phase_arr_cp: list,
+                        phase_arr_cp: cp.ndarray,
                         kernel_size: int,
                         direc: str,
                         mask: cp.ndarray,
@@ -204,12 +204,18 @@ def multifreq_unwrap_cp(wavelength_arr_cp: list,
     ----------
     wavelength_arr_cp: list.
                     Wavelengths from high wavelength to low wavelength.
-    phase_arr_cp: list.
+    phase_arr_cp: cp.ndarray.
                Wrapped phase maps from high wavelength to low wavelength.
     kernel_size: int.
             Kernel size for median filter.
     direc: str.
            Vertical (v) or horizontal(h) pattern.
+    mask: cp.ndarray
+            Mask for image recovery.
+    cam_width: int
+                Camera width
+    cam_height: int
+                Camera height
     Returns
     -------
     absolute_ph4: cupy.ndarray:float.
@@ -298,6 +304,8 @@ def main():
     pitch_list = [50, 20]
     N_list = [3, 3]
     start = perf_counter_ns()
+    cam_width = 128
+    cam_height = 128
     fringe_arr_cp = cp.load("test_data/toy_data.npy")
     with open(r'test_data\vertical_fringes_cp.pickle', 'rb') as f:
         vertical_fringes = pickle.load(f)
@@ -311,7 +319,7 @@ def main():
     phase_h = phase_map_cp[1::2]
     if phase_v.all() == vertical_fringes['phase_map_cp_v'].all():
         print('\nAll vertical phase maps match')
-        multifreq_unwrap_cp_v, k_arr_cp_v = multifreq_unwrap_cp(pitch_list, phase_v, 1, 'v')
+        multifreq_unwrap_cp_v, k_arr_cp_v = multifreq_unwrap_cp(pitch_list, phase_v, 1, 'v', mask_cp, cam_width, cam_height)
         if multifreq_unwrap_cp_v.all() == vertical_fringes['multifreq_unwrap_cp_v'].all():
             print('\nVertical unwrapped phase maps match')
         else:
@@ -321,7 +329,7 @@ def main():
         
     if phase_h.all() == horizontal_fringes['phase_map_cp_h'].all():
         print('\nAll horizontal phase maps match')
-        multifreq_unwrap_cp_h, k_arr_cp_h = multifreq_unwrap_cp(pitch_list, phase_h, 1, 'h')
+        multifreq_unwrap_cp_h, k_arr_cp_h = multifreq_unwrap_cp(pitch_list, phase_h, 1, 'h', mask_cp, cam_width, cam_height)
         if multifreq_unwrap_cp_h.all() == horizontal_fringes['multifreq_unwrap_cp_h'].all():
             print('\nHorizontal unwrapped phase maps match')
         else:
