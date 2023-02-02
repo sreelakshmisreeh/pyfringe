@@ -13,7 +13,6 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import cv2
 import os
-from copy import deepcopy
 from plyfile import PlyData, PlyElement
 import nstep_fringe as nstep
 import nstep_fringe_cp as nstep_cp
@@ -44,8 +43,7 @@ class Reconstruction:
                  calib_path,
                  sigma_path,
                  object_path,
-                 temp,
-                 bootstrap):
+                 temp):
         self.proj_width = proj_width
         self.proj_height = proj_height
         self.cam_width = cam_width
@@ -59,7 +57,7 @@ class Reconstruction:
         self.calib_path = calib_path
         self.object_path = object_path
         self.temp = temp
-        
+        self. data_type = data_type
         if (self.type_unwrap == 'multifreq') or (self.type_unwrap == 'multiwave'):
             self.phase_st = 0
         else:
@@ -78,7 +76,8 @@ class Reconstruction:
         else:
             self.object_path = object_path
     
-        if self.processing == 'cpu':
+        if processing == 'cpu':
+            self.processing = processing
             calibration = np.load(os.path.join(self.calib_path, 'mean_calibration_param.npz'))
             self.cam_mtx = calibration["arr_0"]
             self.cam_dist = calibration["arr_2"]
@@ -91,7 +90,8 @@ class Reconstruction:
             self.proj_h_mtx_std = h_matrix_param["arr_3"]
             self.cam_h_mtx_std = h_matrix_param["arr_1"]
             self.sigma = np.load(self.sigma_path)
-        elif self.processing == 'gpu': 
+        elif processing == 'gpu':
+            self.processing = processing
             calibration = cp.load(os.path.join(self.calib_path, 'mean_calibration_param.npz'))
             self.cam_mtx = cp.asarray(calibration["arr_0"])
             self.cam_dist = cp.asarray(calibration["arr_2"])
@@ -104,8 +104,10 @@ class Reconstruction:
             self.proj_h_mtx_std = cp.asarray(h_matrix_param["arr_3"])
             self.cam_h_mtx_std = cp.asarray(h_matrix_param["arr_1"])
             self.sigma = cp.load(self.sigma_path)
-        else: 
+        else:
+            self.processing = None
             print("ERROR: Invalid processing type.")
+            return
             
     def triangulation(self, uc, vc, up):
         """
@@ -119,11 +121,6 @@ class Reconstruction:
             v_c camera coordinate.
         up : n x 1 cupy.array
             u_p projector coordinate
-        cam_h_mtx : 3 x 3 cupy.array 
-            camera h matrix.
-        proj_h_mtx : 3 x 3 cupy.array
-            projector h matrix.
-    
         Returns
         -------
         coords:
@@ -179,40 +176,13 @@ class Reconstruction:
         uc = uv[:, 0]
         vc = uv[:, 1]
         # Determinate 'up' from circle center
-        up = (nstep.bilinear_interpolate(unwrap_image, uv_true[:,0], uv_true[:,1]) - self.phase_st) * self.pitch_list[-1] / (2*np.pi)
+        up = (nstep.bilinear_interpolate(unwrap_image, uv_true[:, 0], uv_true[:, 1]) - self.phase_st) * self.pitch_list[-1] / (2*np.pi)
         if self.processing == 'gpu':
-            uc = cp.asarray(uv[:,0])
-            vc = cp.asarray(uv[:,1])
+            uc = cp.asarray(uv[:, 0])
+            vc = cp.asarray(uv[:, 1])
             up = cp.asarray(up)
         coordintes = self.triangulation(uc, vc, up) #return is numpy
         return coordintes
-
-    def point_error(self, cord1, cord2):
-        '''
-        Function to plot error between two coordinate.
-        :param cord1: coordinate 1
-        :param cord2: coordinate 2
-        :type cord1: float array
-        :type cord2: float array
-        :return err_df: error dataframe
-        :rtype err_df: pandas dataframe
-        '''
-        
-        delta = cord1 - cord2
-        abs_delta = abs(delta)
-        err_df = pd.DataFrame(np.hstack((delta, abs_delta)),
-                              columns=['$\Delta x$', '$\Delta y$', '$\Delta z$', 
-                                       '$abs(\Delta x)$', '$abs(\Delta y)$', '$abs(\Delta z)$'])
-        plt.figure()
-        gfg = sns.histplot(data=err_df[['$abs(\Delta x)$', '$abs(\Delta y)$', '$abs(\Delta z)$']])
-        plt.xlabel('Absolute error mm', fontsize=30)
-        plt.ylabel('Count', fontsize=30)
-        plt.title('Reconstruction error', fontsize=30)
-        plt.xticks(fontsize=30)
-        plt.yticks(fontsize=30)
-        plt.xlim(0, 3)
-        plt.setp(gfg.get_legend().get_texts(), fontsize='20') 
-        return err_df
    
     def reconstruction_obj(self,
                            unwrap_vector,
@@ -228,9 +198,9 @@ class Reconstruction:
             uc, vc = np.meshgrid(u, v)
             uc = uc[mask]
             vc = vc[mask]
-            up = (unwrap_dist - self.phase_st) * self.pitch[-1] / (2 * np.pi)
+            up = (unwrap_dist - self.phase_st) * self.pitch_list[-1] / (2 * np.pi)
             up = up[mask]
-        elif self.processing == 'gpu':
+        else:
             unwrap_image = nstep_cp.recover_image_cp(unwrap_vector, mask, self.cam_height, self.cam_width)
             unwrap_dist = nstep_cp.undistort_cp(unwrap_image, self.cam_mtx, self.cam_dist)
             u = cp.arange(0, unwrap_dist.shape[1])
@@ -238,12 +208,13 @@ class Reconstruction:
             uc, vc = cp.meshgrid(u, v)
             uc = uc[mask]
             vc = vc[mask]
-            up = (unwrap_dist - self.phase_st) * self.pitch[-1] / (2 * cp.pi)
+            up = (unwrap_dist - self.phase_st) * self.pitch_list[-1] / (2 * cp.pi)
             up = up[mask]
         coords = self.triangulation(uc, vc, up) #return is numpy
         return coords
 
-    def diff_funs_x(self,hc_11, hc_13, hc_22, hc_23, hc_33, hp_11, hp_12, hp_13,
+    @staticmethod
+    def diff_funs_x(hc_11, hc_13, hc_22, hc_23, hc_33, hp_11, hp_12, hp_13,
                     hp_14, hp_31, hp_32, hp_33, hp_34, det, x_num, uc, vc, up):
         """
         Sub function used to calculate x coordinate variance.
@@ -257,7 +228,7 @@ class Reconstruction:
         df_dhc_22 = (det * (-up * hc_13 * hp_34 + hc_13 * hp_14 + uc * up * hc_33 * hp_34 - uc * hc_33 * hp_14) - x_num * (hc_11 * hp_13 - up * hc_11 * hp_33 - hc_13 * hp_11 + up * hc_13 * hp_31 + uc * hc_33 * hp_11 - uc * up * hc_33 * hp_31))/det**2
         df_dhc_23 = (- x_num * (-hc_11 * hp_12 + up * hc_11 * hp_32))/det**2
         df_dhc_33 = (det * (uc* up * hc_22 * hp_34 - uc * hc_22 * hp_14) - x_num * (uc * hc_22 * hp_11 - uc* up * hc_22 * hp_31 + vc * hc_11 * hp_12 - vc * up * hc_11 * hp_32)) / det**2
-        df_dhp_11 = (- x_num *( -hc_13 * hc_22 + uc * hc_22 * hc_33))/det**2
+        df_dhp_11 = (- x_num *(-hc_13 * hc_22 + uc * hc_22 * hc_33))/det**2
         df_dhp_12 = (- x_num * (-hc_11*hc_23 + vc * hc_11 * hc_33))/det**2
         df_dhp_13 = (- x_num * (hc_11 * hc_22))/det**2
         df_dhp_14 = (det * (hc_13 * hc_22 - uc * hc_22 * hc_33))/det**2
@@ -268,7 +239,8 @@ class Reconstruction:
         
         return df_dup, df_dhc_11, df_dhc_13, df_dhc_22, df_dhc_23, df_dhc_33, df_dhp_11, df_dhp_12, df_dhp_13, df_dhp_14, df_dhp_31, df_dhp_32, df_dhp_33, df_dhp_34
 
-    def diff_funs_y(self, hc_11, hc_13, hc_22, hc_23, hc_33, hp_11, hp_12, hp_13, 
+    @staticmethod
+    def diff_funs_y(hc_11, hc_13, hc_22, hc_23, hc_33, hp_11, hp_12, hp_13,
                     hp_14, hp_31, hp_32, hp_33, hp_34, det, y_num, uc, vc, up):
         """
         Subfunction used to calculate y cordinate variance
@@ -291,7 +263,8 @@ class Reconstruction:
         
         return df_dup, df_dhc_11, df_dhc_13, df_dhc_22, df_dhc_23, df_dhc_33, df_dhp_11, df_dhp_12, df_dhp_13, df_dhp_14, df_dhp_31, df_dhp_32, df_dhp_33, df_dhp_34
 
-    def diff_funs_z(self, hc_11, hc_13, hc_22, hc_23, hc_33, hp_11, hp_12, hp_13, 
+    @staticmethod
+    def diff_funs_z(hc_11, hc_13, hc_22, hc_23, hc_33, hp_11, hp_12, hp_13,
                     hp_14, hp_31, hp_32, hp_33, hp_34, det, z_num, uc, vc, up):
         """
         Subfunction used to calculate z cordinate variance
@@ -315,10 +288,9 @@ class Reconstruction:
         return df_dup, df_dhc_11, df_dhc_13, df_dhc_22, df_dhc_23, df_dhc_33, df_dhp_11, df_dhp_12, df_dhp_13, df_dhp_14, df_dhp_31, df_dhp_32, df_dhp_33, df_dhp_34
 
     def sigma_random(self, modulation_vector, unwrap_vector, mask):
-        '''
+        """
         Function to calculate variance of x,y,z coordinates
-    
-        '''
+        """
         if self.processing == 'cpu':
             unwrap_image = nstep.recover_image(unwrap_vector, mask, self.cam_height, self.cam_width)
             unwrap_dist = nstep.undistort(unwrap_image, self.cam_mtx, self.cam_dist)
@@ -327,9 +299,9 @@ class Reconstruction:
             uc, vc = np.meshgrid(u, v)
             uc = uc[mask]
             vc = vc[mask]
-            up = (unwrap_dist - self.phase_st) * self.pitch[-1] / (2 * np.pi)
+            up = (unwrap_dist - self.phase_st) * self.pitch_list[-1] / (2 * np.pi)
             up = up[mask] 
-        elif self.processing == 'gpu':
+        else:
             unwrap_image = nstep_cp.recover_image_cp(unwrap_vector, mask, self.cam_height, self.cam_width)
             unwrap_dist = nstep_cp.undistort_cp(unwrap_image, self.cam_mtx, self.cam_dist)
             u = cp.arange(0, unwrap_dist.shape[1])
@@ -337,7 +309,7 @@ class Reconstruction:
             uc, vc = cp.meshgrid(u, v)
             uc = uc[mask]
             vc = vc[mask]
-            up = (unwrap_dist - self.phase_st) * self.pitch[-1] / (2 * cp.pi)
+            up = (unwrap_dist - self.phase_st) * self.pitch_list[-1] / (2 * cp.pi)
             up = up[mask]
         
         sigma_sq_phi = (2 * self.sigma**2) / (self.N_list[-1] * modulation_vector**2)
@@ -379,20 +351,20 @@ class Reconstruction:
                
         
         x_num = -up * hc_13 * hc_22 * hp_34 + hc_13 * hc_22 * hp_14 + uc * up * hc_22 * hc_33 * hp_34 - uc * hc_22 * hc_33 * hp_14
-        df_dup_x, df_dhc_11_x, df_dhc_13_x, df_dhc_22_x, df_dhc_23_x, df_dhc_33_x, df_dhp_11_x, df_dhp_12_x, df_dhp_13_x, df_dhp_14_x, df_dhp_31_x, df_dhp_32_x, df_dhp_33_x, df_dhp_34_x = self.diff_funs_x(hc_11, hc_13, hc_22, hc_23, hc_33, hp_11, hp_12, hp_13, hp_14, hp_31, hp_32, hp_33, hp_34, det, x_num, uc, vc, up)
+        df_dup_x, df_dhc_11_x, df_dhc_13_x, df_dhc_22_x, df_dhc_23_x, df_dhc_33_x, df_dhp_11_x, df_dhp_12_x, df_dhp_13_x, df_dhp_14_x, df_dhp_31_x, df_dhp_32_x, df_dhp_33_x, df_dhp_34_x = Reconstruction.diff_funs_x(hc_11, hc_13, hc_22, hc_23, hc_33, hp_11, hp_12, hp_13, hp_14, hp_31, hp_32, hp_33, hp_34, det, x_num, uc, vc, up)
         sigmasq_x = ((df_dup_x**2 * sigma_sq_up) + (df_dhc_11_x**2 * sigmasq_hc_11) + (df_dhc_13_x**2 * sigmasq_hc_13) + (df_dhc_22_x**2 * sigmasq_hc_22) + (df_dhc_23_x**2 * sigmasq_hc_23) + (df_dhc_33_x**2 * sigmasq_hc_33)
                     + (df_dhp_11_x**2 * sigmasq_hp_11) + (df_dhp_12_x**2 * sigmasq_hp_12) + (df_dhp_13_x**2 * sigmasq_hp_13) + (df_dhp_14_x**2 * sigmasq_hp_14) + (df_dhp_31_x**2 * sigmasq_hp_31) + (df_dhp_32_x**2 * sigmasq_hp_32) + (df_dhp_33_x**2 * sigmasq_hp_33) + (df_dhp_34_x**2 * sigmasq_hp_34))
         derv_x = np.stack((df_dup_x, df_dhc_11_x, df_dhc_13_x, df_dhc_22_x, df_dhc_23_x, df_dhc_33_x, df_dhp_11_x, df_dhp_12_x, df_dhp_13_x, df_dhp_14_x, df_dhp_31_x, df_dhp_32_x, df_dhp_33_x, df_dhp_34_x))
         
         y_num = -up * hc_11 * hc_23 * hp_34 + hc_11 * hc_23 * hp_14 + vc * up * hc_11 * hc_33 * hp_34 - vc * hc_11 * hc_33 * hp_14
         #y_num = (-hc_11 * (hc_23 - hc_33)*(up * hp_34 - hp_14))
-        df_dup_y, df_dhc_11_y, df_dhc_13_y, df_dhc_22_y, df_dhc_23_y, df_dhc_33_y, df_dhp_11_y, df_dhp_12_y, df_dhp_13_y, df_dhp_14_y, df_dhp_31_y, df_dhp_32_y, df_dhp_33_y, df_dhp_34_y = self.diff_funs_y(hc_11, hc_13, hc_22, hc_23, hc_33, hp_11, hp_12, hp_13, hp_14, hp_31, hp_32, hp_33, hp_34, det, y_num, uc, vc, up)
+        df_dup_y, df_dhc_11_y, df_dhc_13_y, df_dhc_22_y, df_dhc_23_y, df_dhc_33_y, df_dhp_11_y, df_dhp_12_y, df_dhp_13_y, df_dhp_14_y, df_dhp_31_y, df_dhp_32_y, df_dhp_33_y, df_dhp_34_y = Reconstruction.diff_funs_y(hc_11, hc_13, hc_22, hc_23, hc_33, hp_11, hp_12, hp_13, hp_14, hp_31, hp_32, hp_33, hp_34, det, y_num, uc, vc, up)
         sigmasq_y = ((df_dup_y**2 * sigma_sq_up) + (df_dhc_11_y**2 * sigmasq_hc_11) + (df_dhc_13_y**2 * sigmasq_hc_13) + (df_dhc_22_y**2 * sigmasq_hc_22) + (df_dhc_23_y**2 * sigmasq_hc_23) + (df_dhc_33_y**2 * sigmasq_hc_33)
                     + (df_dhp_11_y**2 * sigmasq_hp_11) + (df_dhp_12_y**2 * sigmasq_hp_12) + (df_dhp_13_y**2 * sigmasq_hp_13) + (df_dhp_14_y**2 * sigmasq_hp_14) + (df_dhp_31_y**2 * sigmasq_hp_31) + (df_dhp_32_y**2 * sigmasq_hp_32) + (df_dhp_33_y**2 * sigmasq_hp_33) + (df_dhp_34_y**2 * sigmasq_hp_34))
         derv_y = np.stack((df_dup_y, df_dhc_11_y, df_dhc_13_y, df_dhc_22_y, df_dhc_23_y, df_dhc_33_y, df_dhp_11_y, df_dhp_12_y, df_dhp_13_y, df_dhp_14_y, df_dhp_31_y, df_dhp_32_y, df_dhp_33_y, df_dhp_34_y))
         
         z_num = up * hc_11 * hc_22 * hp_34 - hc_11 * hc_22 * hp_14 
-        df_dup_z, df_dhc_11_z, df_dhc_13_z, df_dhc_22_z, df_dhc_23_z, df_dhc_33_z, df_dhp_11_z, df_dhp_12_z, df_dhp_13_z, df_dhp_14_z, df_dhp_31_z, df_dhp_32_z, df_dhp_33_z, df_dhp_34_z = self.diff_funs_z(hc_11, hc_13, hc_22, hc_23, hc_33, hp_11, hp_12, hp_13, hp_14, hp_31, hp_32, hp_33, hp_34, det, z_num, uc, vc, up)
+        df_dup_z, df_dhc_11_z, df_dhc_13_z, df_dhc_22_z, df_dhc_23_z, df_dhc_33_z, df_dhp_11_z, df_dhp_12_z, df_dhp_13_z, df_dhp_14_z, df_dhp_31_z, df_dhp_32_z, df_dhp_33_z, df_dhp_34_z = Reconstruction.diff_funs_z(hc_11, hc_13, hc_22, hc_23, hc_33, hp_11, hp_12, hp_13, hp_14, hp_31, hp_32, hp_33, hp_34, det, z_num, uc, vc, up)
         sigmasq_z = ((df_dup_z**2 * sigma_sq_up) + (df_dhc_11_z**2 * sigmasq_hc_11) + (df_dhc_13_z**2 * sigmasq_hc_13) + (df_dhc_22_z**2 * sigmasq_hc_22) + (df_dhc_23_z**2 * sigmasq_hc_23) + (df_dhc_33_z**2 * sigmasq_hc_33)
                     + (df_dhp_11_z**2 * sigmasq_hp_11) + (df_dhp_12_z**2 * sigmasq_hp_12) + (df_dhp_13_z**2 * sigmasq_hp_13) + (df_dhp_14_z**2 * sigmasq_hp_14) + (df_dhp_31_z**2 * sigmasq_hp_31) + (df_dhp_32_z**2 * sigmasq_hp_32) + (df_dhp_33_z**2 * sigmasq_hp_33) + (df_dhp_34_z**2 * sigmasq_hp_34))
         derv_z = np.stack((df_dup_z, df_dhc_11_z, df_dhc_13_z, df_dhc_22_z, df_dhc_23_z, df_dhc_33_z, df_dhp_11_z, df_dhp_12_z, df_dhp_13_z, df_dhp_14_z, df_dhp_31_z, df_dhp_32_z, df_dhp_33_z, df_dhp_34_z))
@@ -416,7 +388,8 @@ class Reconstruction:
                         Masked used to convert between image and vector format of data.
         modulation_vector: np.ndarray/cp.ndarray.
                            Intensity modulation image.
-        
+        inte_rgb_vector: np.ndarray/cp.ndarray.
+                         Object texture vector.
         temperature_vector: np.ndarray/cp.ndarray.
                             Temperature data of object.
         Returns
@@ -429,7 +402,7 @@ class Reconstruction:
                     Standard deviation of each pixel.
         """
         coords = self.reconstruction_obj(unwrap_vector, mask)
-        sigmasq_x, sigmasq_y, sigmasq_z, derv_x, derv_y, derv_z = self.sigma_random( modulation_vector, unwrap_vector, mask)
+        sigmasq_x, sigmasq_y, sigmasq_z, derv_x, derv_y, derv_z = self.sigma_random(modulation_vector, unwrap_vector, mask)
         sigma_x = np.sqrt(sigmasq_x)
         sigma_y = np.sqrt(sigmasq_y)
         sigma_z = np.sqrt(sigmasq_z)
@@ -450,7 +423,7 @@ class Reconstruction:
                     PlyElement.describe(np.array(temperature_vector, dtype=[('temperature', 'f4')]), 'temperature'),
                     PlyElement.describe(np.array(modulation_vector, dtype=[('modulation', 'f4')]), 'modulation')
                     
-                ]).write(os.path.join(self.obj_path, 'obj.ply'))
+                ]).write(os.path.join(self.object_path, 'obj.ply'))
         else:
             PlyData(
                 [
@@ -459,7 +432,7 @@ class Reconstruction:
                     PlyElement.describe(np.array(xyz_sigma, dtype=[('dx', 'f4'), ('dy', 'f4'), ('dz', 'f4')]), 'std'),
                     PlyElement.describe(np.array(mod_vect, dtype=[('modulation', 'f4')]), 'modulation')
                     
-                ]).write(os.path.join(self.obj_path, 'obj.ply'))
+                ]).write(os.path.join(self.object_path, 'obj.ply'))
           
         return coords, inte_rgb, cordi_sigma
 
@@ -476,15 +449,15 @@ class Reconstruction:
         """
        
         if self.data_type == 'jpeg':
-            if os.path.exists(os.path.join(self.path, 'capt_*.jpg')):
-                img_path = sorted(glob.glob(os.path.join(self.obj_path, 'capt_*.jpg')), key=os.path.getmtime)
+            if os.path.exists(os.path.join(self.object_path, 'capt_*.jpg')):
+                img_path = sorted(glob.glob(os.path.join(self.object_path, 'capt_*.jpg')), key=os.path.getmtime)
                 images_arr = [cv2.imread(file, 0) for file in img_path]
             else:
                 print("ERROR:Data path does not exist!")
                 return
         elif self.data_type == 'npy':
-            if os.path.exists(os.path.join(self.path, 'capt_*.npy')):
-                images_arr = np.array(images_arr).astype(np.float64)
+            if os.path.exists(os.path.join(self.object_path, 'capt_*.npy')):
+                images_arr = np.load(os.path.join(self.object_path, 'capt_*.npy')).astype(np.float64)
             else:
                 print("ERROR:Data path does not exist!")
                 images_arr = None
@@ -494,16 +467,30 @@ class Reconstruction:
         
         if self.type_unwrap == 'multifreq':
             if self.processing == 'cpu':
-                modulation_vector, orig_img, phase_map, mask = nstep.phase_cal(images_arr, self.limit, self.N_list, False )
+                modulation_vector, orig_img, phase_map, mask = nstep.phase_cal(images_arr, self.limit, self.N_list, False)
                 phase_map[0][phase_map[0] < EPSILON] = phase_map[0][phase_map[0] < EPSILON] + 2 * np.pi
-                unwrap_vector, k_arr = nstep.multifreq_unwrap(self.pitch_list, phase_map, self.kernel, 'v')
+                unwrap_vector, k_arr = nstep.multifreq_unwrap(self.pitch_list,
+                                                              phase_map,
+                                                              self.kernel,
+                                                              self.fringe_direc,
+                                                              mask,
+                                                              self.cam_width,
+                                                              self.cam_height)
                
             elif self.processing == 'gpu':
-               images_arr = cp.asarray(images_arr) 
-               modulation_vector, orig_img, phase_map, mask = nstep_cp.phase_cal_cp(images_arr, self.limit, self.N_list, False )
-               phase_map[0][phase_map[0] < EPSILON] = phase_map[0][phase_map[0] < EPSILON] + 2 * np.pi
-               unwrap_vector, k_arr = nstep_cp.multifreq_unwrap_cp(self.pitch_list, phase_map, self.kernel, self.fringe_direc)
-           
+                images_arr = cp.asarray(images_arr)
+                modulation_vector, orig_img, phase_map, mask = nstep_cp.phase_cal_cp(images_arr,
+                                                                                     self.limit,
+                                                                                     self.N_list,
+                                                                                     False)
+                phase_map[0][phase_map[0] < EPSILON] = phase_map[0][phase_map[0] < EPSILON] + 2 * np.pi
+                unwrap_vector, k_arr = nstep_cp.multifreq_unwrap_cp(self.pitch_list,
+                                                                    phase_map,
+                                                                    self.kernel,
+                                                                    self.fringe_direc,
+                                                                    mask,
+                                                                    self.cam_width,
+                                                                    self.cam_height)
         elif self.type_unwrap == 'multiwave':
             eq_wav12 = (self.pitch_list[-1] * self.pitch_list[1]) / (self.pitch_list[1] - self.pitch_list[-1])
             eq_wav123 = self.pitch_list[0] * eq_wav12 / (self.pitch_list[0] - eq_wav12)
@@ -515,17 +502,23 @@ class Reconstruction:
             phase_wav123[phase_wav123 > TAU] = phase_wav123[phase_wav123 > TAU] - 2 * np.pi
             #unwrapped phase
             phase_arr = np.stack([phase_wav123, phase_map[2], phase_wav12, phase_map[1], phase_map[0]])
-            unwrap_vector, k = nstep.multiwave_unwrap(self.pitch_list, phase_arr, self.kernel, self.fringe_direc)
-        inte_img = cv2.imread(os.path.join(self.obj_path, 'white.jpg'))
+            unwrap_vector, k = nstep.multiwave_unwrap(self.pitch_list,
+                                                      phase_arr,
+                                                      self.kernel,
+                                                      self.fringe_direc,
+                                                      mask,
+                                                      self.cam_width,
+                                                      self.cam_height)
+        inte_img = cv2.imread(os.path.join(self.object_path, 'white.jpg'))
         if self.temp:
-            temperature = np.load(os.path.join(self.obj_path, 'temperature.npy'))
+            temperature = np.load(os.path.join(self.object_path, 'temperature.npy'))
             temperature_vector = temperature[mask]
         else:
-            temperature = None
+            temperature_vector = None
         inte_rgb = inte_img[..., ::-1].copy()
         inte_rgb_vector = inte_rgb[mask]
-        np.save(os.path.join(self.obj_path, '{}_obj_mod.npy'.format(self.type_unwrap)), modulation_vector)
-        np.save(os.path.join(self.obj_path, '{}_unwrap.npy'.format(self.type_unwrap)), unwrap_vector)
+        np.save(os.path.join(self.object_path, '{}_obj_mod.npy'.format(self.type_unwrap)), modulation_vector)
+        np.save(os.path.join(self.object_path, '{}_unwrap.npy'.format(self.type_unwrap)), unwrap_vector)
         obj_cordi, obj_color, cordi_sigma = self.complete_recon(unwrap_vector,
                                                                 mask,
                                                                 inte_rgb_vector,
@@ -533,4 +526,29 @@ class Reconstruction:
                                                                 temperature_vector)
         return obj_cordi, obj_color, temperature_vector, cordi_sigma, modulation_vector
        
-       
+def point_error(cord1, cord2):
+    """
+    Function to plot error between two coordinate.
+    :param cord1: coordinate 1
+    :param cord2: coordinate 2
+    :type cord1: float array
+    :type cord2: float array
+    :return err_df: error dataframe
+    :rtype err_df: pandas dataframe
+    """
+    
+    delta = cord1 - cord2
+    abs_delta = abs(delta)
+    err_df = pd.DataFrame(np.hstack((delta, abs_delta)),
+                          columns=['$\Delta x$', '$\Delta y$', '$\Delta z$', 
+                                   '$abs(\Delta x)$', '$abs(\Delta y)$', '$abs(\Delta z)$'])
+    plt.figure()
+    gfg = sns.histplot(data=err_df[['$abs(\Delta x)$', '$abs(\Delta y)$', '$abs(\Delta z)$']])
+    plt.xlabel('Absolute error mm', fontsize=30)
+    plt.ylabel('Count', fontsize=30)
+    plt.title('Reconstruction error', fontsize=30)
+    plt.xticks(fontsize=30)
+    plt.yticks(fontsize=30)
+    plt.xlim(0, 3)
+    plt.setp(gfg.get_legend().get_texts(), fontsize='20') 
+    return err_df
