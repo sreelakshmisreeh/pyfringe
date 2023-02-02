@@ -379,8 +379,8 @@ def phase_cal(images: np.ndarray,
                 white_stack = np.vstack((white_stack, (modulation + average_int)))
             mask_temp = modulation > limit
             mask &= np.prod(mask_temp, axis=0, dtype=bool)
-    elif len(set(N)) == 1:
-        image_set = images.reshape(int(images.shape[0] / N[0]), N[0], images.shape[-2], images.shape[-1])
+    else:
+        image_set = images.reshape(int(images.shape[0]/N[0]), N[0], images.shape[-2], images.shape[-1])
         sin_stack, cos_stack, mod_stack, average_stack = level_process(image_set, N[0])
         white_stack = mod_stack + average_stack
         mask = mod_stack > limit
@@ -392,7 +392,7 @@ def phase_cal(images: np.ndarray,
 def recover_image(vector_array: np.ndarray, 
                   flag: np.ndarray, 
                   cam_height: int, 
-                  cam_width: int)-> Tuple[np.ndarray]:
+                  cam_width: int)-> np.ndarray:
     """
     Function to convert vector to image array using flag.
     vector_array: np.ndarray
@@ -404,7 +404,7 @@ def recover_image(vector_array: np.ndarray,
     cam_height: int.
                 Height of image.
     """
-    image = np.full((cam_height,cam_width), np.nan)
+    image = np.full((cam_height, cam_width), np.nan)
     image[flag] = vector_array
     return image
 
@@ -580,7 +580,7 @@ def multi_kunwrap(wavelength: np.array,
     return unwrap, k
 
 def multifreq_unwrap(wavelength_arr: np.array,
-                     phase_arr: list,
+                     phase_arr: np.ndarray,
                      kernel_size: int, 
                      direc: str,
                      mask: np.ndarray,
@@ -593,12 +593,18 @@ def multifreq_unwrap(wavelength_arr: np.array,
     ----------
     wavelength_arr: np.array:float.
                     Wavelengths from high wavelength to low wavelength.
-    phase_arr: list.
+    phase_arr: np.ndarray.
                Wrapped phase maps from high wavelength to low wavelength.
     kernel_size: int
             Filter kernel.
     direc: str
            'v' for vertical or 'h' for horizontal filter
+    mask: np.ndarray
+            Mask for image recovery.
+    cam_width: int
+                Camera width
+    cam_height: int
+                Camera height
     Returns
     -------
     absolute_ph4: np.ndarray:float.
@@ -618,7 +624,10 @@ def multifreq_unwrap(wavelength_arr: np.array,
 def multiwave_unwrap(wavelength_arr: np.ndarray,
                      phase_arr: np.array,
                      kernel: int,
-                     direc: str) -> Tuple[np.ndarray, np.ndarray]:
+                     direc: str,
+                     mask: np.ndarray, 
+                     cam_width: int, 
+                     cam_height: int) -> Tuple[np.ndarray, np.ndarray]:
     """
     Function performs sequential temporal multi wavelength phase unwrapping from high wavelength and applies median filter rectification to remove artifacts.
 
@@ -637,10 +646,14 @@ def multiwave_unwrap(wavelength_arr: np.ndarray,
     """
     
     absolute_ph, k = multi_kunwrap(wavelength_arr[0:2], phase_arr[0:2])
+    absolute_ph = recover_image(absolute_ph, mask, cam_height, cam_width)
     absolute_ph, k0 = filt(absolute_ph, kernel, direc)
+    absolute_ph = absolute_ph[mask]
     for i in range(1, len(wavelength_arr)-1):
         absolute_ph, k = multi_kunwrap(wavelength_arr[i:i+2], [absolute_ph, phase_arr[i+1]])
-    absolute_ph, k0 = filt(absolute_ph, kernel, direc)    
+    absolute_ph = recover_image(absolute_ph, mask, cam_height, cam_width)
+    absolute_ph, k0 = filt(absolute_ph, kernel, direc)
+    absolute_ph = absolute_ph[mask]    
     return absolute_ph, k
 
 def edge_rectification(multi_phase_123: np.ndarray,
@@ -703,14 +716,14 @@ def undistort(image, camera_mtx, camera_dist):
     u = np.arange(0, image.shape[1])
     v = np.arange(0, image.shape[0])
     uc, vc = np.meshgrid(u, v)
-    x = (uc - camera_mtx[0,2])/camera_mtx[0,0]
-    y = (vc - camera_mtx[1,2])/camera_mtx[1,1]
+    x = (uc - camera_mtx[0, 2])/camera_mtx[0, 0]
+    y = (vc - camera_mtx[1, 2])/camera_mtx[1, 1]
     r_sq = x**2 + y**2
-    x_double_dash = x*(1 + camera_dist[0,0] * r_sq + camera_dist[0,1] * r_sq**2)
-    y_double_dash = y*(1 + camera_dist[0,0] * r_sq + camera_dist[0,1] * r_sq**2)
-    map_x = x_double_dash * camera_mtx[0,0] + camera_mtx[0,2]
-    map_y = y_double_dash * camera_mtx[1,1] + camera_mtx[1,2]
-    undist_image = bilinear_interpolate(image, map_x,map_y)
+    x_double_dash = x*(1 + camera_dist[0, 0] * r_sq + camera_dist[0, 1] * r_sq**2)
+    y_double_dash = y*(1 + camera_dist[0, 0] * r_sq + camera_dist[0, 1] * r_sq**2)
+    map_x = x_double_dash * camera_mtx[0, 0] + camera_mtx[0, 2]
+    map_y = y_double_dash * camera_mtx[1, 1] + camera_mtx[1, 2]
+    undist_image = bilinear_interpolate(image, map_x, map_y)
     return undist_image
 # =====================================================
 # For diagnosis
@@ -737,6 +750,8 @@ def main():
     test_limit = 0.9
     pitch_list = [50, 20]
     N_list = [3, 3]
+    cam_width = 128
+    cam_height = 128
     fringe_arr_np = np.load("test_data/toy_data.npy")
     with open(r'test_data\vertical_fringes_np.pickle', 'rb') as f:
         vertical_fringes = pickle.load(f)
@@ -746,18 +761,18 @@ def main():
     mod_stack, white_stack, phase_map, mask = phase_cal(fringe_arr_np, test_limit, N_list, True)
     phase_np_v = phase_map[::2]
     phase_np_h = phase_map[1::2]
-    if (phase_np_v.all() == vertical_fringes['phase_map_np_v'].all()):
+    if phase_np_v.all() == vertical_fringes['phase_map_np_v'].all():
         print('\n All vertical phase maps match')
-        multifreq_unwrap_np_v, k_arr_np_v = multifreq_unwrap(pitch_list, phase_np_v, 1, 'v')
+        multifreq_unwrap_np_v, k_arr_np_v = multifreq_unwrap(pitch_list, phase_np_v, 1, 'v', mask, cam_width, cam_height)
         if multifreq_unwrap_np_v.all() == vertical_fringes['multifreq_unwrap_np_v'].all():
             print('\n Vertical unwrapped phase maps match')
         else:
             print('\n Vertical unwrapped phase map mismatch ')  
     else:
         print('\n Vertical phase map mismatch')
-    if (phase_np_h.all() == horizontal_fringes['phase_map_np_h'].all()):
+    if phase_np_h.all() == horizontal_fringes['phase_map_np_h'].all():
         print('\n All horizontal phase maps match')
-        multifreq_unwrap_np_h, k_arr_np_h = multifreq_unwrap(pitch_list, phase_np_h, 1, 'h')
+        multifreq_unwrap_np_h, k_arr_np_h = multifreq_unwrap(pitch_list, phase_np_h, 1, 'h', mask, cam_width, cam_height)
         if multifreq_unwrap_np_h.all() == horizontal_fringes['multifreq_unwrap_np_h'].all():
             print('\n Horizontal unwrapped phase maps match')
         else:
