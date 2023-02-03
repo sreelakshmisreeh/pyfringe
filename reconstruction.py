@@ -8,9 +8,6 @@ Created on Tue May 24 13:00:19 2022
 import numpy as np
 import cupy as cp
 import glob
-import pandas as pd
-import seaborn as sns
-import matplotlib.pyplot as plt
 import cv2
 import os
 from plyfile import PlyData, PlyElement
@@ -19,8 +16,8 @@ import nstep_fringe_cp as nstep_cp
 
 EPSILON = -0.5
 TAU = 5.5
-#TODO: Move out ply saving. 
-#TODO: Convert to pyqtgraph. 
+#TODO: Move out ply saving.  Convert to pyqtgraph. 
+#TODO: Complete testing
 
 class Reconstruction:
     """
@@ -43,7 +40,8 @@ class Reconstruction:
                  calib_path,
                  sigma_path,
                  object_path,
-                 temp):
+                 temp,
+                 probability):
         self.proj_width = proj_width
         self.proj_height = proj_height
         self.cam_width = cam_width
@@ -58,6 +56,7 @@ class Reconstruction:
         self.object_path = object_path
         self.temp = temp
         self. data_type = data_type
+        self.probability = probability
         if (self.type_unwrap == 'multifreq') or (self.type_unwrap == 'multiwave'):
             self.phase_st = 0
         else:
@@ -78,32 +77,42 @@ class Reconstruction:
     
         if processing == 'cpu':
             self.processing = processing
-            calibration = np.load(os.path.join(self.calib_path, 'mean_calibration_param.npz'))
-            self.cam_mtx = calibration["arr_0"]
-            self.cam_dist = calibration["arr_2"]
-            self.proj_mtx = calibration["arr_4"]
-            self.camproj_rot_mtx = calibration["arr_8"]
-            self.camproj_trans_mtx = calibration["arr_10"]
-            h_matrix_param = np.load(os.path.join(self.calib_path, 'h_matrix_param.npz'))
-            self.proj_h_mtx = h_matrix_param["arr_2"]
-            self.cam_h_mtx = h_matrix_param["arr_0"]
-            self.proj_h_mtx_std = h_matrix_param["arr_3"]
-            self.cam_h_mtx_std = h_matrix_param["arr_1"]
             self.sigma = np.load(self.sigma_path)
+            calibration_mean = np.load(os.path.join(self.calib_path, '{}_mean_calibration_param.npz'.format(self.type_unwrap)))
+            self.cam_mtx = calibration_mean["cam_mtx_mean"]
+            self.cam_dist = calibration_mean["cam_dist_mean"]
+            self.proj_mtx = calibration_mean["proj_mtx_mean"]
+            self.proj_dist = calibration_mean["proj_dist_mean"]
+            self.camproj_rot_mtx = calibration_mean["st_rmat_mean"]
+            self.camproj_trans_mtx = calibration_mean["st_tvec_std"]
+            self.proj_h_mtx = calibration_mean["cam_h_mtx_mean"]
+            self.cam_h_mtx = calibration_mean["proj_h_mtx_mean"]
+            if probability:
+                calibration_std = np.load(os.path.join(self.calib_path, '{}_std_calibration_param.npz'.format(self.type_unwrap)))
+                self.cam_h_mtx_std = calibration_std["cam_h_mtx_std"]
+                self.proj_h_mtx_std = calibration_std["proj_h_mtx_std"]
+            else:
+                self.proj_h_mtx_std = None
+                self.cam_h_mtx_std = None
         elif processing == 'gpu':
             self.processing = processing
-            calibration = cp.load(os.path.join(self.calib_path, 'mean_calibration_param.npz'))
-            self.cam_mtx = cp.asarray(calibration["arr_0"])
-            self.cam_dist = cp.asarray(calibration["arr_2"])
-            self.proj_mtx = cp.asarray(calibration["arr_4"])
-            self.camproj_rot_mtx = cp.asarray(calibration["arr_8"])
-            self.camproj_trans_mtx = cp.asarray(calibration["arr_10"])
-            h_matrix_param = cp.load(os.path.join(self.calib_path, 'h_matrix_param.npz'))
-            self.proj_h_mtx = cp.asarray(h_matrix_param["arr_2"])
-            self.cam_h_mtx = cp.asarray(h_matrix_param["arr_0"])
-            self.proj_h_mtx_std = cp.asarray(h_matrix_param["arr_3"])
-            self.cam_h_mtx_std = cp.asarray(h_matrix_param["arr_1"])
             self.sigma = cp.load(self.sigma_path)
+            calibration_mean = cp.load(os.path.join(self.calib_path, '{}_mean_calibration_param.npz'.format(self.type_unwrap)))
+            self.cam_mtx = cp.asarray(calibration_mean["cam_mtx_mean"])
+            self.cam_dist = cp.asarray(calibration_mean["cam_dist_mean"])
+            self.proj_mtx = cp.asarray(calibration_mean["proj_mtx_mean"])
+            self.proj_dist = cp.asarray(calibration_mean["proj_dist_mean"])
+            self.camproj_rot_mtx = cp.asarray(calibration_mean["st_rmat_mean"])
+            self.camproj_trans_mtx = cp.asarray(calibration_mean["st_tvec_std"])
+            self.proj_h_mtx = cp.asarray(calibration_mean["cam_h_mtx_mean"])
+            self.cam_h_mtx = cp.asarray(calibration_mean["proj_h_mtx_mean"])
+            if probability:
+                calibration_std = cp.load(os.path.join(self.calib_path, '{}_std_calibration_param.npz'.format(self.type_unwrap)))
+                self.cam_h_mtx_std = cp.asarray(calibration_std["cam_h_mtx_std"])
+                self.proj_h_mtx_std = cp.asarray(calibration_std["proj_h_mtx_std"])
+            else:
+                self.proj_h_mtx_std = None
+                self.cam_h_mtx_std = None
         else:
             self.processing = None
             print("ERROR: Invalid processing type.")
@@ -402,16 +411,19 @@ class Reconstruction:
                     Standard deviation of each pixel.
         """
         coords = self.reconstruction_obj(unwrap_vector, mask)
-        sigmasq_x, sigmasq_y, sigmasq_z, derv_x, derv_y, derv_z = self.sigma_random(modulation_vector, unwrap_vector, mask)
-        sigma_x = np.sqrt(sigmasq_x)
-        sigma_y = np.sqrt(sigmasq_y)
-        sigma_z = np.sqrt(sigmasq_z)
-        cordi_sigma = np.vstack((sigma_x, sigma_y, sigma_z)).T
         xyz = list(map(tuple, coords)) 
         inte_img = inte_rgb_vector / np.nanmax(inte_rgb_vector)
         inte_rgb = np.stack((inte_img, inte_img, inte_img), axis=-1)
         color = list(map(tuple, inte_rgb))
-        xyz_sigma = list(map(tuple, cordi_sigma))
+        if self.probability:
+            sigmasq_x, sigmasq_y, sigmasq_z, derv_x, derv_y, derv_z = self.sigma_random(modulation_vector, unwrap_vector, mask)
+            sigma_x = np.sqrt(sigmasq_x)
+            sigma_y = np.sqrt(sigmasq_y)
+            sigma_z = np.sqrt(sigmasq_z)
+            cordi_sigma = np.vstack((sigma_x, sigma_y, sigma_z)).T
+            xyz_sigma = list(map(tuple, cordi_sigma))
+        else:
+            xyz_sigma = None
         mod_vect = np.array(modulation_vector, dtype=[('modulation', 'f4')])
         if self.temp:
             temperature_vector = np.array(temperature_vector, dtype=[('temperature', 'f4')])
@@ -526,29 +538,3 @@ class Reconstruction:
                                                                 temperature_vector)
         return obj_cordi, obj_color, temperature_vector, cordi_sigma, modulation_vector
        
-def point_error(cord1, cord2):
-    """
-    Function to plot error between two coordinate.
-    :param cord1: coordinate 1
-    :param cord2: coordinate 2
-    :type cord1: float array
-    :type cord2: float array
-    :return err_df: error dataframe
-    :rtype err_df: pandas dataframe
-    """
-    
-    delta = cord1 - cord2
-    abs_delta = abs(delta)
-    err_df = pd.DataFrame(np.hstack((delta, abs_delta)),
-                          columns=['$\Delta x$', '$\Delta y$', '$\Delta z$', 
-                                   '$abs(\Delta x)$', '$abs(\Delta y)$', '$abs(\Delta z)$'])
-    plt.figure()
-    gfg = sns.histplot(data=err_df[['$abs(\Delta x)$', '$abs(\Delta y)$', '$abs(\Delta z)$']])
-    plt.xlabel('Absolute error mm', fontsize=30)
-    plt.ylabel('Count', fontsize=30)
-    plt.title('Reconstruction error', fontsize=30)
-    plt.xticks(fontsize=30)
-    plt.yticks(fontsize=30)
-    plt.xlim(0, 3)
-    plt.setp(gfg.get_legend().get_texts(), fontsize='20') 
-    return err_df
