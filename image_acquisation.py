@@ -768,8 +768,8 @@ def gamma_curve(gamma_image_index_list,
                                     cam_capt_timeout=10,
                                     cam_black_level=0,
                                     cam_ExposureCompensation=0,
-                                    proj_exposure_period=27084,
-                                    proj_frame_period=33334,
+                                    proj_exposure_period=25000,
+                                    proj_frame_period=34000,
                                     do_insert_black=True,
                                     led_select=4,
                                     preview_image_index=21,
@@ -778,7 +778,7 @@ def gamma_curve(gamma_image_index_list,
                                     save_npy=True,
                                     save_jpeg=False)
     if result:
-        n_scanned_image_list = np.load(os.path.join(savedir, 'capt_0.npy'))
+        n_scanned_image_list = np.load(os.path.join(savedir, 'capt_000_000000.npy'))
         camera_captured = n_scanned_image_list[:, camy - half_cross_length: camy + half_cross_length, camx - half_cross_length: camx + half_cross_length]
         mean_intensity = np.mean(camera_captured.reshape((camera_captured.shape[0], -1)), axis=1)
         x_axis = np.arange(5, 256, 5)
@@ -831,7 +831,6 @@ def meanpixel_std(savedir,
                   image_index,
                   pattern_no,
                   no_images,
-                  acquisition_index,
                   cam_width=1920,
                   cam_height=1200,
                   half_cross_length=100):
@@ -862,7 +861,7 @@ def meanpixel_std(savedir,
     result = run_proj_single_camera(savedir=savedir,
                                     preview_option='Once',
                                     number_scan=1,
-                                    acquisition_index=acquisition_index,
+                                    acquisition_index=0,
                                     image_index_list=image_index_list,
                                     pattern_num_list=pattern_num_list,
                                     cam_gain=0,
@@ -870,19 +869,20 @@ def meanpixel_std(savedir,
                                     cam_capt_timeout=10,
                                     cam_black_level=0,
                                     cam_ExposureCompensation=0,
-                                    proj_exposure_period=27084,
-                                    proj_frame_period=33334,
+                                    proj_exposure_period=25000,
+                                    proj_frame_period=34000,
                                     do_insert_black=True,
                                     led_select=4,
-                                    preview_image_index=None,#21,
-                                    focus_image_index=None,
+                                    preview_image_index=21,
+                                    focus_image_index=34,
+                                    image_section_size=None,
                                     pprint_status=True,
                                     save_npy=True,
                                     save_jpeg=False)
     mean_std_pixel = None
     std_pixel = None
     if result:
-        n_scanned_image_list = np.load(os.path.join(savedir, 'capt_%d.npy' % acquisition_index))
+        n_scanned_image_list = np.load(os.path.join(savedir, 'capt_000_000000.npy'))
         camx = int(cam_width/2)
         camy = int(cam_height/2)
         capt_cropped = n_scanned_image_list[:, camy - half_cross_length: camy + half_cross_length, camx - half_cross_length: camx + half_cross_length]
@@ -915,7 +915,7 @@ def main():
     """
     Example main function.
     """
-    option = input("Please choose:\n1-- test\n2-- Approx. frame period and exposure time \n3-- gamma curve\n4-- calibration capture")
+    option = input("Please choose:\n1-- test\n2-- Approx. frame period and exposure time\n3-- gamma curve\n4-- Camera noise\n5-- calibration capture ")
     result = True
     if option == '1':
         image_index_list = np.repeat(np.arange(0, 5), 3).tolist()
@@ -959,6 +959,19 @@ def main():
                               cam_height=1200,
                               half_cross_length=100)
     elif option == '4':
+        image_index = int(input("\nImage index to be used:")) #image 18; pattern:200, 205, 210
+        pattern_no = int(input("\nPattern number:"))
+        no_images = int(input("\nNo. of iterations:"))
+        savedir = r'C:\Users\kl001\Documents\pyfringe_test\mean_pixel_std'
+        meanpixel_std(savedir,
+                      image_index,
+                      pattern_no,
+                      no_images,
+                      cam_width=1920,
+                      cam_height=1200,
+                      half_cross_length=100)
+        
+    elif option == '5':
         image_index_list = np.repeat(np.arange(22, 34), 3).tolist()
         pattern_num_list = [0, 1, 2] * len(set(image_index_list))
         savedir = r'C:\Users\kl001\Documents\pyfringe_test\multifreq_calib_images'
