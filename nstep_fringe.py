@@ -357,7 +357,7 @@ def phase_cal(images: np.ndarray,
         repeat = 1
     if len(set(N))==2:
         image_set1 = images[0:(repeat*len(N)-repeat)*N[0]].reshape((repeat*len(N)-repeat), N[0], images.shape[-2], images.shape[-1])
-        image_set2 = images[repeat*N[-1]:].reshape(repeat, N[-1], images.shape[-2], images.shape[-1])
+        image_set2 = images[(repeat*len(N)-repeat)*N[0]:].reshape(repeat, N[-1], images.shape[-2], images.shape[-1])
         image_set = [image_set1, image_set2]
 
         mask = np.full((images.shape[-2], images.shape[-1]), True)
