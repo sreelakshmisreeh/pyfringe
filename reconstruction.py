@@ -13,11 +13,10 @@ import os
 from plyfile import PlyData, PlyElement
 import nstep_fringe as nstep
 import nstep_fringe_cp as nstep_cp
-
+from time import perf_counter_ns
 EPSILON = -0.5
 TAU = 5.5
 #TODO: Move out ply saving.  Convert to pyqtgraph. 
-#TODO: Complete testing
 
 class Reconstruction:
     """
@@ -84,9 +83,9 @@ class Reconstruction:
             self.proj_mtx = calibration_mean["proj_mtx_mean"]
             self.proj_dist = calibration_mean["proj_dist_mean"]
             self.camproj_rot_mtx = calibration_mean["st_rmat_mean"]
-            self.camproj_trans_mtx = calibration_mean["st_tvec_std"]
-            self.proj_h_mtx = calibration_mean["cam_h_mtx_mean"]
-            self.cam_h_mtx = calibration_mean["proj_h_mtx_mean"]
+            self.camproj_trans_mtx = calibration_mean["st_tvec_mean"]
+            self.cam_h_mtx = calibration_mean["cam_h_mtx_mean"]
+            self.proj_h_mtx = calibration_mean["proj_h_mtx_mean"]
             if probability:
                 calibration_std = np.load(os.path.join(self.calib_path, '{}_std_calibration_param.npz'.format(self.type_unwrap)))
                 self.cam_h_mtx_std = calibration_std["cam_h_mtx_std"]
@@ -103,9 +102,9 @@ class Reconstruction:
             self.proj_mtx = cp.asarray(calibration_mean["proj_mtx_mean"])
             self.proj_dist = cp.asarray(calibration_mean["proj_dist_mean"])
             self.camproj_rot_mtx = cp.asarray(calibration_mean["st_rmat_mean"])
-            self.camproj_trans_mtx = cp.asarray(calibration_mean["st_tvec_std"])
-            self.proj_h_mtx = cp.asarray(calibration_mean["cam_h_mtx_mean"])
-            self.cam_h_mtx = cp.asarray(calibration_mean["proj_h_mtx_mean"])
+            self.camproj_trans_mtx = cp.asarray(calibration_mean["st_tvec_mean"])
+            self.cam_h_mtx = cp.asarray(calibration_mean["cam_h_mtx_mean"])
+            self.proj_h_mtx = cp.asarray(calibration_mean["proj_h_mtx_mean"])
             if probability:
                 calibration_std = cp.load(os.path.join(self.calib_path, '{}_std_calibration_param.npz'.format(self.type_unwrap)))
                 self.cam_h_mtx_std = cp.asarray(calibration_std["cam_h_mtx_std"])
@@ -199,9 +198,11 @@ class Reconstruction:
         """
         Sub function to reconstruct object from phase map
         """
+        start = perf_counter_ns()
         if self.processing == 'cpu':
             unwrap_image = nstep.recover_image(unwrap_vector, mask, self.cam_height, self.cam_width)
             unwrap_dist = nstep.undistort(unwrap_image, self.cam_mtx, self.cam_dist)
+            #unwrap_dist = cv2.undistort(unwrap_image, self.cam_mtx, self.cam_dist)
             u = np.arange(0, unwrap_dist.shape[1])
             v = np.arange(0, unwrap_dist.shape[0])
             uc, vc = np.meshgrid(u, v)
@@ -219,7 +220,13 @@ class Reconstruction:
             vc = vc[mask]
             up = (unwrap_dist - self.phase_st) * self.pitch_list[-1] / (2 * cp.pi)
             up = up[mask]
+        end = perf_counter_ns()
+        print('undistrort+mask: %2.6f'%((end-start)/1e9))
+        start = perf_counter_ns()
         coords = self.triangulation(uc, vc, up) #return is numpy
+        end = perf_counter_ns()
+        print('triangulation: %2.6f'%((end-start)/1e9))
+        
         return coords
 
     @staticmethod
@@ -411,10 +418,10 @@ class Reconstruction:
                     Standard deviation of each pixel.
         """
         coords = self.reconstruction_obj(unwrap_vector, mask)
-        xyz = list(map(tuple, coords)) 
+        #xyz = list(map(tuple, coords)) 
         inte_img = inte_rgb_vector / np.nanmax(inte_rgb_vector)
         inte_rgb = np.stack((inte_img, inte_img, inte_img), axis=-1)
-        color = list(map(tuple, inte_rgb))
+        #color = list(map(tuple, inte_rgb))
         if self.probability:
             sigmasq_x, sigmasq_y, sigmasq_z, derv_x, derv_y, derv_z = self.sigma_random(modulation_vector, unwrap_vector, mask)
             sigma_x = np.sqrt(sigmasq_x)
@@ -424,27 +431,31 @@ class Reconstruction:
             xyz_sigma = list(map(tuple, cordi_sigma))
         else:
             xyz_sigma = None
-        mod_vect = np.array(modulation_vector, dtype=[('modulation', 'f4')])
-        if self.temp:
-            temperature_vector = np.array(temperature_vector, dtype=[('temperature', 'f4')])
-            PlyData(
-                [
-                    PlyElement.describe(np.array(xyz, dtype=[('x', 'f4'), ('y', 'f4'), ('z', 'f4')]), 'points'),
-                    PlyElement.describe(np.array(color, dtype=[('r', 'f4'), ('g', 'f4'), ('b', 'f4')]), 'color'),
-                    PlyElement.describe(np.array(xyz_sigma, dtype=[('dx', 'f4'), ('dy', 'f4'), ('dz', 'f4')]), 'std'),
-                    PlyElement.describe(np.array(temperature_vector, dtype=[('temperature', 'f4')]), 'temperature'),
-                    PlyElement.describe(np.array(modulation_vector, dtype=[('modulation', 'f4')]), 'modulation')
-                    
-                ]).write(os.path.join(self.object_path, 'obj.ply'))
+            cordi_sigma = None
+        if self.processing =='cpu':
+            mod_vect = np.array(modulation_vector, dtype=[('modulation', 'f4')])
         else:
-            PlyData(
-                [
-                    PlyElement.describe(np.array(xyz, dtype=[('x', 'f4'), ('y', 'f4'), ('z', 'f4')]), 'points'),
-                    PlyElement.describe(np.array(color, dtype=[('r', 'f4'), ('g', 'f4'), ('b', 'f4')]), 'color'),
-                    PlyElement.describe(np.array(xyz_sigma, dtype=[('dx', 'f4'), ('dy', 'f4'), ('dz', 'f4')]), 'std'),
-                    PlyElement.describe(np.array(mod_vect, dtype=[('modulation', 'f4')]), 'modulation')
+            mod_vect = np.array(cp.asnumpy(modulation_vector), dtype=[('modulation', 'f4')])
+        # if self.temp:
+        #     temperature_vector = np.array(temperature_vector, dtype=[('temperature', 'f4')])
+        #     PlyData(
+        #         [
+        #             PlyElement.describe(np.array(xyz, dtype=[('x', 'f4'), ('y', 'f4'), ('z', 'f4')]), 'points'),
+        #             PlyElement.describe(np.array(color, dtype=[('r', 'f4'), ('g', 'f4'), ('b', 'f4')]), 'color'),
+        #             PlyElement.describe(np.array(xyz_sigma, dtype=[('dx', 'f4'), ('dy', 'f4'), ('dz', 'f4')]), 'std'),
+        #             PlyElement.describe(np.array(temperature_vector, dtype=[('temperature', 'f4')]), 'temperature'),
+        #             PlyElement.describe(np.array(modulation_vector, dtype=[('modulation', 'f4')]), 'modulation')
                     
-                ]).write(os.path.join(self.object_path, 'obj.ply'))
+        #         ]).write(os.path.join(self.object_path, 'obj.ply'))
+        # else:
+        #     PlyData(
+        #         [
+        #             PlyElement.describe(np.array(xyz, dtype=[('x', 'f4'), ('y', 'f4'), ('z', 'f4')]), 'points'),
+        #             PlyElement.describe(np.array(color, dtype=[('r', 'f4'), ('g', 'f4'), ('b', 'f4')]), 'color'),
+        #             PlyElement.describe(np.array(xyz_sigma, dtype=[('dx', 'f4'), ('dy', 'f4'), ('dz', 'f4')]), 'std'),
+        #             PlyElement.describe(np.array(mod_vect, dtype=[('modulation', 'f4')]), 'modulation')
+                    
+        #         ]).write(os.path.join(self.object_path, 'obj.ply'))
           
         return coords, inte_rgb, cordi_sigma
 
@@ -459,27 +470,34 @@ class Reconstruction:
                    Color (texture/ intensity) at each point.
     
         """
-       
+        start = perf_counter_ns()
         if self.data_type == 'jpeg':
-            if os.path.exists(os.path.join(self.object_path, 'capt_*.jpg')):
-                img_path = sorted(glob.glob(os.path.join(self.object_path, 'capt_*.jpg')), key=os.path.getmtime)
-                images_arr = [cv2.imread(file, 0) for file in img_path]
+            if os.path.exists(os.path.join(self.object_path, 'capt_000_000000.jpeg')):
+                img_path = sorted(glob.glob(os.path.join(self.object_path, 'capt_*')), key=os.path.getmtime)
+                images_arr = np.array([cv2.imread(file, 0) for file in img_path])
+                
             else:
                 print("ERROR:Data path does not exist!")
                 return
         elif self.data_type == 'npy':
-            if os.path.exists(os.path.join(self.object_path, 'capt_*.npy')):
-                images_arr = np.load(os.path.join(self.object_path, 'capt_*.npy')).astype(np.float64)
+            if os.path.exists(os.path.join(self.object_path, 'capt_000_000000.npy')):
+                images_arr = np.load(os.path.join(self.object_path, 'capt_000_000000.npy')).astype(np.float64)
             else:
                 print("ERROR:Data path does not exist!")
                 images_arr = None
         else:
             print("ERROR: data type is not supported, must be '.jpeg' or '.npy'.")
             images_arr = None
+        end = perf_counter_ns()
+        print('loading images to memory: %2.6f'%((end-start)/1e9))
         
         if self.type_unwrap == 'multifreq':
             if self.processing == 'cpu':
+                start = perf_counter_ns()
                 modulation_vector, orig_img, phase_map, mask = nstep.phase_cal(images_arr, self.limit, self.N_list, False)
+                end = perf_counter_ns()
+                print('Phase: %2.6f'%((end-start)/1e9))
+                start = perf_counter_ns()
                 phase_map[0][phase_map[0] < EPSILON] = phase_map[0][phase_map[0] < EPSILON] + 2 * np.pi
                 unwrap_vector, k_arr = nstep.multifreq_unwrap(self.pitch_list,
                                                               phase_map,
@@ -488,13 +506,19 @@ class Reconstruction:
                                                               mask,
                                                               self.cam_width,
                                                               self.cam_height)
-               
+                orig_img = orig_img[-1][mask] 
+                end = perf_counter_ns()
+                print('Unwrap: %2.6f'%((end-start)/1e9))
             elif self.processing == 'gpu':
+                start = perf_counter_ns()
                 images_arr = cp.asarray(images_arr)
                 modulation_vector, orig_img, phase_map, mask = nstep_cp.phase_cal_cp(images_arr,
                                                                                      self.limit,
                                                                                      self.N_list,
                                                                                      False)
+                end = perf_counter_ns()
+                print('Phase: %2.6f'%((end-start)/1e9))
+                start = perf_counter_ns()
                 phase_map[0][phase_map[0] < EPSILON] = phase_map[0][phase_map[0] < EPSILON] + 2 * np.pi
                 unwrap_vector, k_arr = nstep_cp.multifreq_unwrap_cp(self.pitch_list,
                                                                     phase_map,
@@ -503,6 +527,9 @@ class Reconstruction:
                                                                     mask,
                                                                     self.cam_width,
                                                                     self.cam_height)
+                orig_img = cp.asnumpy(orig_img[-1][mask])
+                end = perf_counter_ns()
+                print('Unwrap: %2.6f'%((end-start)/1e9))
         elif self.type_unwrap == 'multiwave':
             eq_wav12 = (self.pitch_list[-1] * self.pitch_list[1]) / (self.pitch_list[1] - self.pitch_list[-1])
             eq_wav123 = self.pitch_list[0] * eq_wav12 / (self.pitch_list[0] - eq_wav12)
@@ -521,20 +548,28 @@ class Reconstruction:
                                                       mask,
                                                       self.cam_width,
                                                       self.cam_height)
-        inte_img = cv2.imread(os.path.join(self.object_path, 'white.jpg'))
+        if os.path.exists(os.path.join(self.object_path, 'white.jpg')):
+            inte_img = cv2.imread(os.path.join(self.object_path, 'white.jpg'))
+            inte_rgb = inte_img[..., ::-1].copy()
+            inte_rgb_vector = inte_rgb[mask]
+        else:
+            inte_rgb_vector = orig_img
         if self.temp:
             temperature = np.load(os.path.join(self.object_path, 'temperature.npy'))
-            temperature_vector = temperature[mask]
+            if self.processing == 'gpu':
+                mask_temp = cp.asnumpy(mask)
+            temperature_vector = temperature[mask_temp]
         else:
             temperature_vector = None
-        inte_rgb = inte_img[..., ::-1].copy()
-        inte_rgb_vector = inte_rgb[mask]
-        np.save(os.path.join(self.object_path, '{}_obj_mod.npy'.format(self.type_unwrap)), modulation_vector)
-        np.save(os.path.join(self.object_path, '{}_unwrap.npy'.format(self.type_unwrap)), unwrap_vector)
+        
+        # np.save(os.path.join(self.object_path, '{}_obj_mod.npy'.format(self.type_unwrap)), modulation_vector)
+        # np.save(os.path.join(self.object_path, '{}_unwrap.npy'.format(self.type_unwrap)), unwrap_vector)
+        
         obj_cordi, obj_color, cordi_sigma = self.complete_recon(unwrap_vector,
                                                                 mask,
                                                                 inte_rgb_vector,
                                                                 modulation_vector,
                                                                 temperature_vector)
+        
         return obj_cordi, obj_color, temperature_vector, cordi_sigma, modulation_vector
        
