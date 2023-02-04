@@ -182,14 +182,14 @@ class Calibration:
                                                                                              unwraph_lst,
                                                                                              proj_img_lst)
         # Camera calibration error analysis
-        cam_mean_error, cam_delta, cam_df1 = self.intrinsic_error_analysis(cam_objpts, 
+        cam_mean_error, cam_delta = self.intrinsic_error_analysis(cam_objpts, 
                                                                            cam_imgpts, 
                                                                            cam_mtx, 
                                                                            cam_dist, 
                                                                            cam_rvecs, 
                                                                            cam_tvecs)
         # Projector calibration error analysis
-        proj_mean_error, proj_delta, proj_df1 = self.intrinsic_error_analysis(cam_objpts,
+        proj_mean_error, proj_delta = self.intrinsic_error_analysis(cam_objpts,
                                                                               proj_imgpts,
                                                                               proj_mtx,
                                                                               proj_dist,
@@ -219,11 +219,11 @@ class Calibration:
                  proj_mtx_mean=st_proj_mtx, 
                  proj_dist_mean=st_proj_dist,
                  st_rmat_mean=st_cam_proj_rmat, 
-                 st_tvec_std=st_cam_proj_tvec,
+                 st_tvec_mean=st_cam_proj_tvec,
                  cam_h_mtx_mean=cam_h_mtx,
                  proj_h_mtx_mean=proj_h_mtx)
         np.savez(os.path.join(self.path, '{}_cam_rot_tvecs.npz'.format(self.type_unwrap)), cam_rvecs, cam_tvecs)
-        return unwrapv_lst, unwraph_lst, white_lst, mask_lst, mod_lst, proj_img_lst, cam_objpts, cam_imgpts, proj_imgpts, euler_angles, cam_mean_error, cam_delta, cam_df1, proj_mean_error, proj_delta, proj_df1
+        return unwrapv_lst, unwraph_lst, white_lst, mask_lst, mod_lst, proj_img_lst, cam_objpts, cam_imgpts, proj_imgpts, euler_angles, cam_mean_error, cam_delta, proj_mean_error, proj_delta
     
     def update_list_calib(self, proj_df1, unwrapv_lst, unwraph_lst, white_lst, mod_lst, proj_img_lst, reproj_criteria):
         """
