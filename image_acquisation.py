@@ -153,8 +153,8 @@ def proj_cam_preview(cam,
             cv2.line(img_show_color, (center_x, center_y - delta_cross), (center_x, center_y + delta_cross), (0, 255, 0), 5)
             cv2.line(img_show_color, (center_x - delta_cross, center_y), (center_x + delta_cross, center_y), (0, 255, 0), 5)
             font = cv2.FONT_HERSHEY_SIMPLEX
-            cv2.putText(img_show_color,'Exposure time:%s'%str(proj_exposure_period),(0,50),font,1,(0,255,255),3)  #text,coordinate,font,size of text,color,thickness of font
-            cv2.putText(img_show_color,'Delta:%s'%str(delta_time),(0,75),font,1,(0,255,255),3)
+            cv2.putText(img_show_color,'Exposure time:%s'%str(proj_exposure_period),(0,50),font,1,(0,255,255),2)  #text,coordinate,font,size of text,color,thickness of font
+            cv2.putText(img_show_color,'Delta:%s'%str(delta_time),(0,100),font,1,(0,255,255),2)
             cv2.imshow("press q to quit", img_show_color)
             key = cv2.waitKey(1)
             if key ==ord("+"):
@@ -315,7 +315,7 @@ def run_proj_cam_capt(cam,
                     return_array = False
                 if save_jpeg:
                     save_path_jpeg = os.path.join(savedir,
-                                                  'capt_%3d_%6d.jpeg' % (acquisition_index, count))
+                                                  'capt_%03d_%06d.jpeg' % (acquisition_index, count))
                 else:
                     save_path_jpeg = None
                 ret, image_array = gspy.capture_image(cam=cam, save_path=save_path_jpeg, return_array=return_array)
@@ -449,7 +449,7 @@ def proj_cam_acquire_images(cam,
     gspy.print_device_info(nodemap_tldevice)
     frameRate = 1e6/proj_frame_period  # proj_frame_period is in μs
     
-    proj_preview_exp_period = proj_exposure_period + 230
+    proj_preview_exp_period = proj_exposure_period 
     proj_preview_frame_period = proj_preview_exp_period
     result = True
     ret = True
@@ -915,10 +915,10 @@ def main():
     """
     Example main function.
     """
-    option = input("Please choose:\n1-- test\n2-- Approx. frame period and exposure time\n3-- gamma curve\n4-- Camera noise\n5-- calibration capture ")
+    option = input("Please choose:\n1: test\n2: Approx.frame period and exposure time\n3: gamma curve\n4: Camera noise\n5: calibration capture\n6: Reconstruction ")
     result = True
     if option == '1':
-        image_index_list = np.repeat(np.arange(0, 5), 3).tolist()
+        image_index_list = np.repeat(np.array([22,24,26,28,29,30]),3).tolist()
         pattern_num_list = [0, 1, 2] * len(set(image_index_list))
         savedir = r'C:\Users\kl001\Documents\grasshopper3_python\images'
         result &= run_proj_single_camera(savedir=savedir,
@@ -932,8 +932,8 @@ def main():
                                          cam_capt_timeout=10,
                                          cam_black_level=0,
                                          cam_ExposureCompensation=0,
-                                         proj_exposure_period=25000,#27084,
-                                         proj_frame_period=66668,#33334,
+                                         proj_exposure_period=27000,#27084,
+                                         proj_frame_period=34000,#33334,
                                          do_insert_black=True,
                                          led_select=4,
                                          preview_image_index=21,
@@ -982,6 +982,36 @@ def main():
                                 savedir=savedir,
                                 number_scan=number_scan,
                                 acquisition_index=acquisition_index)
+    elif option == '6':
+        no_of_levels =input("\nNo. of levels 3,4:")
+        if no_of_levels == "3":
+            image_index_list = np.repeat(np.arange(0, 5), 3).tolist()
+            pattern_num_list = [0, 1, 2] * len(set(image_index_list))
+        elif no_of_levels == "4" :
+            image_index_list = np.repeat(np.array([22,24,26,28,29,30]),3).tolist()
+            pattern_num_list = [0, 1, 2] * len(set(image_index_list))
+        savedir = r'C:\Users\kl001\Documents\grasshopper3_python\images'
+        result &= run_proj_single_camera(savedir=savedir,
+                                         preview_option='Always',
+                                         number_scan=1,
+                                         acquisition_index=0,
+                                         image_index_list=image_index_list,
+                                         pattern_num_list=pattern_num_list,
+                                         cam_gain=0,
+                                         cam_bufferCount=15,
+                                         cam_capt_timeout=10,
+                                         cam_black_level=0,
+                                         cam_ExposureCompensation=0,
+                                         proj_exposure_period=27000,#27084,
+                                         proj_frame_period=34000,#33334,
+                                         do_insert_black=True,
+                                         led_select=4,
+                                         preview_image_index=21,
+                                         focus_image_index=34,
+                                         image_section_size=None,
+                                         pprint_status=True,
+                                         save_npy=False,
+                                         save_jpeg=True)
     
     return result 
 
