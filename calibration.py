@@ -18,7 +18,6 @@ from plyfile import PlyData, PlyElement
 from scipy.optimize import leastsq
 from scipy.spatial import distance
 import shutil
-from time import perf_counter_ns
 EPSILON = -0.5
 TAU = 5.5
 
@@ -938,6 +937,7 @@ class Calibration:
             plt.figure()
             plt.imshow(unwrap[i], aspect=aspect_ratio)
             plt.title('{}'.format(title), fontsize=20)
+            plt.show()
         return
 
     def wrap_profile_analysis(self, wrapped_phase_lst, direc):
@@ -1056,6 +1056,7 @@ class Calibration:
         ax.set_xticks(xaxis)
         plt.xticks(fontsize=15, rotation=45)
         plt.yticks(fontsize=20)
+        plt.show()
         plt.figure()
         plt.scatter((delta[:, :, 0]*pixel_size[0]).ravel(), (delta[:, :, 1]*pixel_size[1]).ravel())
         plt.xlabel('x [pixel]', fontsize=30)
@@ -1070,6 +1071,7 @@ class Calibration:
         plt.title('Re projection error for {}\n '.format(dev), fontsize=30)
         plt.xticks(fontsize=20)
         plt.yticks(fontsize=20)
+        plt.show()
         return
 
     # center reconstruction
@@ -1722,7 +1724,7 @@ def main():
     proj_width = 912
     proj_height = 1140  # 800 1280 912 1140
     cam_width = 1920
-    cam_hieght = 1200
+    cam_height = 1200
     fx=1 
     fy=2
     # type of unwrapping
@@ -1761,20 +1763,20 @@ def main():
         kernel_h = 7
 
     sigma_path = r'C:\Users\kl001\Documents\pyfringe_test\mean_pixel_std\mean_std_pixel.npy'
-    quantile_limit = 1
+    quantile_limit = 4.5
     limit = nstep.B_cutoff_limit(sigma_path, quantile_limit, N_list, pitch_list)
     # Instantiate calibration class
 
-    calib_inst = Calibration(proj_width=proj_width,
+    calib_inst = Calibration(proj_width=proj_width, 
                              proj_height=proj_height,
                              cam_width=cam_width,
-                             cam_height=cam_hieght,
-                             mask_limit=limit,
-                             type_unwrap=type_unwrap,
-                             N_list=N_list,
-                             pitch_list=pitch_list,
-                             board_gridrows=board_gridrows,
-                             board_gridcolumns=board_gridcolumns,
+                             cam_height=cam_height,
+                             mask_limit=limit, 
+                             type_unwrap=type_unwrap, 
+                             N_list=N_list, 
+                             pitch_list=pitch_list, 
+                             board_gridrows=board_gridrows, 
+                             board_gridcolumns=board_gridcolumns, 
                              dist_betw_circle=dist_betw_circle,
                              bobdetect_areamin=bobdetect_areamin,
                              bobdetect_convexity=bobdetect_convexity,
@@ -1783,10 +1785,21 @@ def main():
                              path=path,
                              data_type=data_type,
                              processing=processing)
-    unwrapv_lst, unwraph_lst, white_lst, mod_lst, proj_img_lst, cam_objpts, cam_imgpts, proj_imgpts, euler_angles, cam_mean_error, cam_delta, cam_df1, proj_mean_error, proj_delta, proj_df1 = calib_inst.calib(fx, fy)
+    unwrapv_lst, unwraph_lst, white_lst, mask_lst, mod_lst, proj_img_lst, cam_objpts, cam_imgpts, proj_imgpts, euler_angles, cam_mean_error, cam_delta, proj_mean_error, proj_delta = calib_inst.calib(fx, fy)
     # Plot for re projection error analysis
-    calib_inst.intrinsic_errors_plts(cam_mean_error, cam_delta, cam_df1, 'Camera', pixel_size=[1,1])
-    calib_inst.intrinsic_errors_plts(proj_mean_error, proj_delta, proj_df1, 'Projector', pixel_size=[1,0.5])
+    calib_inst.intrinsic_errors_plts( cam_mean_error, cam_delta, 'Camera', pixel_size = [1,1])
+    calib_inst.intrinsic_errors_plts( proj_mean_error, proj_delta, 'Projector', pixel_size =[1,0.5]) 
+    option = input("\nDo you want to see constructed projector images?(y/n):")
+    if option == "y":
+        calib_inst.image_analysis(proj_img_lst, title='Projector image', aspect_ratio=0.5)
+    print_option = input("Do you want to display calibration parameters?(y/n):")
+    if print_option == "y":
+        calibration = np.load(os.path.join(path,'{}_mean_calibration_param.npz'.format(type_unwrap)))
+        print("\nCamera matrix:\n{}".format(calibration["cam_mtx_mean"]))
+        print("\nCamera distortion:\n{}".format(calibration["cam_dist_mean"]))
+        print("Projector matrix:\n{}".format(calibration["proj_mtx_mean"]))
+        print("Camera projector rotation matrix:\n{}".format(calibration["st_rmat_mean"]))
+        print("Camera projector translation vector:\n{}".format(calibration["st_tvec_mean"]))
     return
 
 
