@@ -1,7 +1,7 @@
 # coding: utf-8
 
 import cupy as cp
-from time import perf_counter_ns
+#from time import perf_counter_ns
 from typing import Tuple
 from cupyx.scipy import ndimage
 import pickle
@@ -78,7 +78,6 @@ def phase_cal_cp(images_cp: cp.ndarray,
     else:
         repeat = 1
     if len(set(N)) == 2:
-        start = perf_counter_ns()
         image_set1 = images_cp[0:(repeat*len(N)-repeat)*N[0]].reshape((repeat*len(N)-repeat), N[0], images_cp.shape[-2], images_cp.shape[-1])
         image_set2 = images_cp[(repeat*len(N)-repeat)*N[0]:].reshape(repeat, N[-1], images_cp.shape[-2], images_cp.shape[-1])
         image_set = [image_set1, image_set2]
@@ -111,16 +110,8 @@ def phase_cal_cp(images_cp: cp.ndarray,
         white_stack_cp = mod_stack_cp + average_stack_cp
         mask_cp = mod_stack_cp > limit
         mask_cp = cp.prod(mask_cp, axis=0, dtype=bool)
-    end = perf_counter_ns()
-    print('sin_deck, cos_deck loop : %2.6f'%((end-start)/1e9))
-    start = perf_counter_ns()
     sin_stack_cp, cos_stack_cp, mod_stack_cp = mask_application_cp(mask_cp, mod_stack_cp, sin_stack_cp, cos_stack_cp)
-    end = perf_counter_ns()
-    print('mask application : %2.6f'%((end-start)/1e9))
-    start = perf_counter_ns()
     phase_map_cp = -cp.arctan2(sin_stack_cp, cos_stack_cp)  # wrapped phase;
-    end = perf_counter_ns()
-    print('phase calc : %2.6f'%((end-start)/1e9))
     return mod_stack_cp, white_stack_cp, phase_map_cp, mask_cp
 
 def recover_image_cp(vector_array: cp.ndarray,
@@ -141,7 +132,7 @@ def recover_image_cp(vector_array: cp.ndarray,
     image = cp.full((cam_height, cam_width), cp.nan)
     image[mask] = vector_array
     return image
-#TODO:Fix filter
+
 def filt_cp(unwrap_cp: cp.ndarray,
             kernel_size: int,
             direc: str) -> Tuple[cp.ndarray, cp.ndarray]:
