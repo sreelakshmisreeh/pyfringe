@@ -618,6 +618,7 @@ def multifreq_unwrap(wavelength_arr: np.array,
         absolute_ph, k = multi_kunwrap(wavelength_arr[i:i+2], [absolute_ph, phase_arr[i+1]]) 
     absolute_ph = recover_image(absolute_ph, mask, cam_height, cam_width)
     absolute_ph, k0 = filt(absolute_ph, kernel_size, direc)
+    #mask &= ~np.isnan(absolute_ph) # correction of unwrapped phase map image with nan using median filter creates nan values.
     absolute_ph = absolute_ph[mask]
     return absolute_ph, k
 
@@ -712,7 +713,7 @@ def bilinear_interpolate(unwrap, x, y):
 
     return wa*unwrap_a + wb*unwrap_b + wc*unwrap_c + wd*unwrap_d
 
-def undistort(image, camera_mtx, camera_dist):
+def undistort(image, camera_mtx, camera_dist): # image with nan values after undistorting and applying interpolation creates nan values
     u = np.arange(0, image.shape[1])
     v = np.arange(0, image.shape[0])
     uc, vc = np.meshgrid(u, v)
