@@ -455,7 +455,7 @@ class Reconstruction:
             cordi_sigma = None
         if self.save_ply: 
             self.cloud_save(coords, inte_rgb, cordi_sigma, temperature_image, mask)  
-        return coords, inte_rgb, cordi_sigma
+        return coords, inte_rgb, cordi_sigma, mask
 
     def obj_reconst_wrapper(self):
         """
@@ -553,13 +553,13 @@ class Reconstruction:
         # np.save(os.path.join(self.object_path, '{}_obj_mod.npy'.format(self.type_unwrap)), modulation_vector)
         # np.save(os.path.join(self.object_path, '{}_unwrap.npy'.format(self.type_unwrap)), unwrap_vector)
         
-        obj_cordi, obj_color, cordi_sigma = self.complete_recon(unwrap_vector,
+        obj_cordi, obj_color, cordi_sigma, mask = self.complete_recon(unwrap_vector,
                                                                 mask,
                                                                 inte_rgb_image,
                                                                 modulation_vector,
                                                                 temperature_image)
         
-        return obj_cordi, obj_color, cordi_sigma
+        return obj_cordi, obj_color, cordi_sigma, mask
     
 def undistort_point(xc_yc, camera_dist):
     r_sq = xc_yc[0]**2 + xc_yc[1]**2
@@ -702,7 +702,7 @@ def main():
                                   save_ply=save_ply,
                                   probability=probability)
     
-    obj_cordi, obj_color, cordi_sigma = reconst_inst.obj_reconst_wrapper()
+    obj_cordi, obj_color, cordi_sigma, mask = reconst_inst.obj_reconst_wrapper()
     return
 
 
