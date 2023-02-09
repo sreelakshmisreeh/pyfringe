@@ -1292,6 +1292,7 @@ class Calibration:
                                         sigma_path,
                                         self.path,
                                         False,
+                                        True,
                                         False)
         for i, (u, w, m) in tqdm(enumerate(zip(unwrap_phase, white_imgs, mask_lst)), desc='building board 3d coordinates'):
             
@@ -1418,21 +1419,21 @@ class Calibration:
     def sample_indices(delta_pose, pool_size_list, no_sample_sets):
         sample_indices_list = []
         for p in pool_size_list:
-            sub_sample_size = int(p/4) # no of poses from each delta_pose
-            left = np.arange(0, delta_pose)
-            right = np.arange(delta_pose, 2*delta_pose)
-            down = np.arange(2*delta_pose, 3*delta_pose)
-            up = np.arange(3*delta_pose, 4*delta_pose)
-            sample_index = np.sort(np.concatenate((np.random.choice(left, size = sub_sample_size, replace = False),
-                                                  np.random.choice(right, size = sub_sample_size, replace = False),
-                                                  np.random.choice(down, size = sub_sample_size, replace = False),
-                                                  np.random.choice(up, size = sub_sample_size, replace = False))))
-            if len(sample_index) < p:
-                total = np.arange(0,4*delta_pose)
-                extras = np.random.choice(total, size = p - len(sample_index), replace = False)
-                sample_index = np.sort(np.append(sample_index, extras))
-            sample_indices_list.append(sample_index)
-        sample_indices_list = sorted((sample_indices_list * no_sample_sets), key=len)
+            for i in range (no_sample_sets):
+                sub_sample_size = int(p/4) # no of poses from each delta_pose
+                left = np.arange(0, delta_pose)
+                right = np.arange(delta_pose, 2*delta_pose)
+                down = np.arange(2*delta_pose, 3*delta_pose)
+                up = np.arange(3*delta_pose, 4*delta_pose)
+                sample_index = np.sort(np.concatenate((np.random.choice(left, size = sub_sample_size, replace = False),
+                                                      np.random.choice(right, size = sub_sample_size, replace = False),
+                                                      np.random.choice(down, size = sub_sample_size, replace = False),
+                                                      np.random.choice(up, size = sub_sample_size, replace = False))))
+                if len(sample_index) < p:
+                    total = np.arange(0,4*delta_pose)
+                    extras = np.random.choice(total, size = p - len(sample_index), replace = False)
+                    sample_index = np.sort(np.append(sample_index, extras))
+                sample_indices_list.append(sample_index)
         return sample_indices_list
     
     @staticmethod
