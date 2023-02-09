@@ -282,7 +282,7 @@ class Reconstruction:
     def diff_funs_z(hc_11, hc_13, hc_22, hc_23, hc_33, hp_11, hp_12, hp_13,
                     hp_14, hp_31, hp_32, hp_33, hp_34, det, z_num, uc, vc, up):
         """
-        Subfunction used to calculate z cordinate variance
+        Sub function used to calculate z coordinate variance
     
         """
         df_dup = (det * (hc_11 * hc_22 * hp_34) - z_num * (-hc_11 * hc_22 * hp_33 + hc_22 * hc_13 * hp_31 - uc * hc_22 * hc_33 * hp_31 + hc_11 * hc_23 * hp_32 - vc * hc_11 * hc_33 * hp_32))/det**2
@@ -408,7 +408,7 @@ class Reconstruction:
                 PlyElement.describe(np.array(xyz_sigma, dtype=[('dx', 'f4'), ('dy', 'f4'), ('dz', 'f4')]), 'std'),
                 PlyElement.describe(np.array(temperature_vector, dtype=[('temperature', 'f4')]), 'temperature'),
             ]).write(os.path.join(self.object_path, 'obj.ply'))
-        print("\n Point cloud saved at %s"%(os.path.join(self.object_path, 'obj.ply')))
+        print("\n Point cloud saved at %s"% (os.path.join(self.object_path, 'obj.ply')))
         return
 
     def complete_recon(self,
@@ -428,9 +428,9 @@ class Reconstruction:
                         Masked used to convert between image and vector format of data.
         modulation_vector: np.ndarray/cp.ndarray.
                            Intensity modulation image.
-        inte_rgb_vector: np.ndarray/cp.ndarray.
-                         Object texture vector.
-        temperature_vector: np.ndarray/cp.ndarray.
+        inte_rgb_image: np.ndarray/cp.ndarray.
+                         Object texture image.
+        temperature_image: np.ndarray/cp.ndarray.
                             Temperature data of object.
         Returns
         -------
@@ -476,7 +476,7 @@ class Reconstruction:
                 return
             if self.temp:
                 if not os.path.exists(os.path.join(self.object_path, 'temperature.jpeg')):
-                    print("ERROR: Temperature data path %s does not exist"%(os.path.join(self.object_path, 'temperature.jpeg')))
+                    print("ERROR: Temperature data path %s does not exist"% (os.path.join(self.object_path, 'temperature.jpeg')))
                 else:
                     temperature_image = np.load(os.path.join(self.object_path, 'temperature.jpeg'))
             else:
@@ -489,7 +489,7 @@ class Reconstruction:
                 images_arr = None
             if self.temp:
                 if not os.path.exists(os.path.join(self.object_path, 'temperature.npy')):
-                    print("ERROR: Temperature data path %s does not exist"%(os.path.join(self.object_path, 'temperature.npy')))
+                    print("ERROR: Temperature data path %s does not exist"% (os.path.join(self.object_path, 'temperature.npy')))
                 else:
                     temperature_image = np.load(os.path.join(self.object_path, 'temperature.npy'))
             else:
@@ -560,14 +560,14 @@ class Reconstruction:
         
         return obj_cordi, obj_color, cordi_sigma
     
-def undistort_point(xc_yc,camera_dist):
+def undistort_point(xc_yc, camera_dist):
     r_sq = xc_yc[0]**2 + xc_yc[1]**2
     undist_point = xc_yc * (1 + camera_dist[0, 0] * r_sq + camera_dist[0, 1] * r_sq**2)
     undist_point[2] = 1
     return undist_point
 
 def device_cord(world_cord, device_matrix, device_distortion, rotation_transl_matrix):
-    device_cordinate_xyz = np.dot(rotation_transl_matrix,world_cord.T)
+    device_cordinate_xyz = np.dot(rotation_transl_matrix, world_cord.T)
     device_xyz_norm = device_cordinate_xyz/device_cordinate_xyz[2]
     device_dist = undistort_point(device_xyz_norm, device_distortion)
     device_points = np.matmul(device_matrix, device_dist)
@@ -586,46 +586,46 @@ def reconst_test(savedir):
     camera_matrix = calibration['cam_mtx_mean']
     camera_dist = calibration["cam_dist_mean"]
     proj_rotation_trans_mtx = np.concatenate((proj_cam_rotation, proj_cam_trans), axis=1)
-    cam_rot_trans_mtx = np.concatenate([np.eye(3), [[0],[0],[0]]], axis = -1)
+    cam_rot_trans_mtx = np.concatenate([np.eye(3), [[0], [0], [0]]], axis=-1)
     # Point cloud data
-    cordinates = np.load(os.path.join(savedir,"cloud_coordinates.npy"))
-    color_index = np.load(os.path.join(savedir,"cloud_intensity.npy"))
+    cordinates = np.load(os.path.join(savedir, "cloud_coordinates.npy"))
+    color_index = np.load(os.path.join(savedir, "cloud_intensity.npy"))
     # Data obtained from forward calculation
-    cam_white_stack = np.load(os.path.join(savedir,"cam_white.npy"))
-    cam_unwrap = np.load(os.path.join(savedir,"cam_unwrap.npy"))
-    proj_unwrap = np.load(os.path.join(savedir,"proj_unwrap.npy"))
+    cam_white_stack = np.load(os.path.join(savedir, "cam_white.npy"))
+    cam_unwrap = np.load(os.path.join(savedir, "cam_unwrap.npy"))
+    proj_unwrap = np.load(os.path.join(savedir, "proj_unwrap.npy"))
 
-    world_cord = np.concatenate((cordinates, np.ones((len(cordinates),1))), axis=1)            
+    world_cord = np.concatenate((cordinates, np.ones((len(cordinates), 1))), axis=1)
     #world to device coordinates
     proj_point, proj_uv = device_cord(world_cord, proj_matrix, proj_dist, proj_rotation_trans_mtx)
     cam_point, cam_uv = device_cord(world_cord, camera_matrix, camera_dist, cam_rot_trans_mtx)
 
     plt.figure()
-    plt.imshow(proj_unwrap,cmap='gray')
-    plt.scatter(proj_uv[0,:],proj_uv[1,:],color='r',s=10)
+    plt.imshow(proj_unwrap, cmap='gray')
+    plt.scatter(proj_uv[0, :], proj_uv[1, :], color='r', s=10)
     plt.title('Projector unwrap phase', fontsize=20)
 
     plt.figure()
-    plt.imshow(cam_white_stack,cmap='gray')
-    plt.scatter(cam_uv[0,:],cam_uv[1,:],color='r',s=10)
+    plt.imshow(cam_white_stack, cmap='gray')
+    plt.scatter(cam_uv[0, :], cam_uv[1, :], color='r', s=10)
     plt.title('Camera unwrap phase', fontsize=20)
     #Intensity from camera image based on derived cloud coordinates
-    cam_int = nstep.bilinear_interpolate(cam_white_stack/np.max(cam_white_stack), cam_uv[0,:], cam_uv[1,:])
-    intensity_diff = np.diff(color_index[:,0] - cam_int)
+    cam_int = nstep.bilinear_interpolate(cam_white_stack/np.max(cam_white_stack), cam_uv[0, :], cam_uv[1, :])
+    intensity_diff = np.diff(color_index[:, 0] - cam_int)
     #
-    proj_phase = nstep.bilinear_interpolate(cam_unwrap, cam_uv[0,:], cam_uv[1,:])
+    proj_phase = nstep.bilinear_interpolate(cam_unwrap, cam_uv[0, :], cam_uv[1, :])
     proj_uv_phase = proj_uv*(2*np.pi/pitch_list[-1])
     phase_dif = proj_phase - proj_uv_phase[0]
 
     plt.figure()
     plt.hist(intensity_diff, bins=5)
-    plt.title("Intensity difference",fontsize=20)
+    plt.title("Intensity difference", fontsize=20)
     plt.xlabel("Count", fontsize=15)
     plt.show()
     plt.figure()
     plt.hist(phase_dif, bins=5)
-    plt.title("Phase difference",fontsize=20)
-    plt.xlabel("Count",fontsize=15)
+    plt.title("Phase difference", fontsize=20)
+    plt.xlabel("Count", fontsize=15)
     plt.show()
         
        
@@ -636,12 +636,12 @@ def main():
     if option == "1":
         savedir = input("Enter the path for data or enter None:")
         if savedir == "None":
-           savedir =  r'test_data\reconst_toydata'
+            savedir = r'test_data\reconst_toydata'
         reconst_test(savedir)
         return
     elif option == "3":
         pitch_list = [1000, 110, 16]
-        N_list = [3,3,9]
+        N_list = [3, 3, 9]
     elif option == "4":
         pitch_list =[1375, 275, 55, 11] 
         N_list = [3, 3, 3, 9]
@@ -676,7 +676,7 @@ def main():
     proj_height = 1140 
     cam_width = 1920 
     cam_height = 1200
-    type_unwrap =  'multifreq'
+    type_unwrap = 'multifreq'
     sigma_path = r'C:\Users\kl001\Documents\pyfringe_test\mean_pixel_std\mean_std_pixel.npy'
     obj_path = r'C:\Users\kl001\Documents\grasshopper3_python\images'
     calib_path = r'C:\Users\kl001\Documents\pyfringe_test\multifreq_calib_images'
@@ -703,6 +703,7 @@ def main():
     
     obj_cordi, obj_color, cordi_sigma = reconst_inst.obj_reconst_wrapper()
     return
+
 
 if __name__ == '__main__':
     main()
