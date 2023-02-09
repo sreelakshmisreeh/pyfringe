@@ -1,0 +1,195 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Tue Feb  7 09:27:09 2023
+
+@author: kl001
+"""
+
+import sys
+sys.path.append(r'C:\Users\kl001\pyfringe\functions')
+sys.path.append(r'C:\Users\kl001\pyfringe')
+import nstep_fringe as nstep
+import calibration as calib
+import numpy as np
+import os
+import matplotlib.pyplot as plt
+import seaborn as sns
+from time import perf_counter_ns
+
+
+#Initial parameters for calibration and testing results
+# proj properties
+proj_width = 912 ; proj_height = 1140 # 800 1280 912 1140
+cam_width = 1920; cam_height = 1200
+fx=1 
+fy=2
+#type of unwrapping 
+type_unwrap =  'multifreq'
+
+# circle detection parameters
+bobdetect_areamin = 100; bobdetect_convexity = 0.85
+
+# calibration board properties
+dist_betw_circle = 25; #Distance between centers
+board_gridrows = 5; board_gridcolumns = 15 # calibration board parameters
+
+# Define the path from which data is to be read. The calibration parameters will be saved in the same path. 
+# reconstruction point clouds will also be saved in the same path
+
+path = r'C:\Users\kl001\Documents\pyfringe_test\test_calib_data\test_data'
+data_type = 'npy'
+processing = 'gpu'
+sigma_path = r'C:\Users\kl001\Documents\pyfringe_test\mean_pixel_std\mean_std_pixel.npy'
+#multifrequency unwrapping parameters
+if type_unwrap == 'multifreq':
+    pitch_list =[1375, 275, 55, 11] 
+    N_list = [3, 3, 3, 9]
+    kernel_v = 7; kernel_h= 7
+    quantile_limit = 4.5
+    limit = nstep.B_cutoff_limit(sigma_path, quantile_limit, N_list, pitch_list)
+    
+# multiwavelength unwrapping parameters
+if type_unwrap == 'multiwave':
+    pitch_list = [139,21,18]
+    N_list =[5,5,9]
+    kernel_v = 9; kernel_h= 9  
+    quantile_limit =3
+    limit = nstep.B_cutoff_limit(sigma_path, quantile_limit, N_list, pitch_list)
+
+# phase coding unwrapping parameters
+if type_unwrap == 'phase':
+    pitch_list =[20]
+    N_list =[9]
+    kernel_v = 25; kernel_h=25
+    limit = 2
+
+# no_pose = int(len(glob.glob(os.path.join(path,'capt*.jpg'))) / np.sum(np.array(N_list)) / 2)
+no_pose = 100#50 100 poses unwrapping time 74.866771/60 = 1.2478 min
+acquisition_index = 0
+resid_outlier_limit = 20
+val_label = 176.777
+
+# Reprojection criteria
+reproj_criteria = 0.05
+
+calib_inst = calib.Calibration(proj_width=proj_width, 
+                               proj_height=proj_height,
+                               cam_width=cam_width,
+                               cam_height=cam_height,
+                               mask_limit=limit, 
+                               type_unwrap=type_unwrap, 
+                               N_list=N_list, 
+                               pitch_list=pitch_list, 
+                               board_gridrows=board_gridrows, 
+                               board_gridcolumns=board_gridcolumns, 
+                               dist_betw_circle=dist_betw_circle,
+                               bobdetect_areamin=bobdetect_areamin,
+                               bobdetect_convexity=bobdetect_convexity,
+                               kernel_v=kernel_v,
+                               kernel_h=kernel_h,
+                               path=path,
+                               data_type=data_type,
+                               processing=processing)
+#%%Bootstrap
+delta_pose=25   # number of samples in each direction
+pool_size_list =np.arange(15,55,1) # number of poses 
+no_sample_sets =100 # no of iterations
+cam_mtx_sample, cam_dist_sample, proj_mtx_sample, proj_dist_sample, st_rmat_sample, st_tvec_sample, cam_h_mtx_sample, proj_h_mtx_sample = calib_inst.bootstrap_intrinsics_extrinsics(delta_pose,
+                                                                                                                                                                                     pool_size_list, 
+                                                                                                                                                                                     no_sample_sets)
+#%%
+calibration_mean = np.load(os.path.join(path, '{}_mean_calibration_param.npz'.format(type_unwrap)))
+samples = np.load(os.path.join(path, '{}_sample_calibration_param.npz'.format(type_unwrap)))
+calibration_std = np.load(os.path.join(path, '{}_std_calibration_param.npz'.format(type_unwrap)))
+#%%
+cam_mtx_std = calibration_std["cam_mtx_std"]
+proj_mtx_std = calibration_std["proj_mtx_std"]
+
+fig, ax = plt.subplots(1)
+fig.suptitle("Camera focal length", fontsize=20)
+ax.plot(pool_size_list,cam_mtx_std[:,0,0], '--o', color='purple', label='$f_x$')
+ax.plot(pool_size_list,cam_mtx_std[:,1,1],'--o', color='blue', label='$f_y$')
+ax.axvline(x=40, color='r', linestyle='--')
+ax.set_ylim(0,70)
+ax.set_xlim(15,60)
+ax.tick_params(axis='both', which='major', labelsize=15)
+ax.set_xlabel("No. of poses", fontsize=15)
+ax.set_ylabel("Standard deviation (pixels)", fontsize=15)
+ax.legend(fontsize=15)
+
+fig, ax = plt.subplots(1)
+fig.suptitle("Projector focal length", fontsize=20)
+ax.plot(pool_size_list,proj_mtx_std[:,0,0],'--o', color='purple', label='$f_x$')
+ax.plot(pool_size_list,proj_mtx_std[:,1,1],'--o', color='blue', label='$f_y$')
+ax.axvline(x=40, color='r', linestyle='--')
+ax.set_ylim(0,140)
+ax.set_xlim(15,60)
+ax.tick_params(axis='both', which='major', labelsize=15)
+ax.set_xlabel("No. of poses", fontsize=15)
+ax.set_ylabel("Standard deviation (pixels)", fontsize=15)
+ax.legend(fontsize=20)
+#%%
+fig, ax = plt.subplots(1)
+fig.suptitle("Camera focal length", fontsize=20)
+ax.plot(pool_size_list,cam_mtx_std[:,0,2], '--o', label='$c_x$')
+ax.plot(pool_size_list,cam_mtx_std[:,1,2],'--o', label='$c_y$')
+ax.axvline(x=40, color='r', linestyle='--')
+# ax.set_ylim(0,10)
+# ax.set_xlim(15,60)
+ax.tick_params(axis='both', which='major', labelsize=15)
+ax.set_xlabel("No. of poses", fontsize=15)
+ax.set_ylabel("Standard deviation(pixels)", fontsize=15)
+ax.legend(fontsize=15)
+
+fig, ax = plt.subplots(1)
+fig.suptitle("Projector focal length", fontsize=20)
+ax.plot(pool_size_list,proj_mtx_std[:,0,2],'--o', label='$c_x$')
+ax.plot(pool_size_list,proj_mtx_std[:,1,2],'--o', label='$c_y$')
+ax.axvline(x=40, color='r', linestyle='--')
+# ax.set_ylim(0,15)
+# ax.set_xlim(15,60)
+ax.tick_params(axis='both', which='major', labelsize=15)
+ax.set_xlabel("No. of poses", fontsize=15)
+ax.set_ylabel("Standard deviation(pixels)", fontsize=15)
+ax.legend(fontsize=20)
+#%%
+st_tvec_std = calibration_std["st_tvec_std"]
+
+fig, ax = plt.subplots(1,2)
+fig.suptitle("Stereo calibration parameter variance", fontsize=20)
+ax[0].plot(pool_size_list,st_tvec_std[:,0], '--bo', label="$T_x$")
+ax[0].plot(pool_size_list,st_tvec_std[:,1],'--go', label="$T_y$")
+ax[1].plot(pool_size_list,st_tvec_std[:,2],'--mo', label="$T_z$")
+ax[0].tick_params(axis='both', which='major', labelsize=15)
+ax[0].set_xlabel("No. of poses", fontsize=15)
+ax[0].set_ylabel("Standard deviation (mm)", fontsize=15)
+ax[0].legend(fontsize=20)
+ax[1].tick_params(axis='both', which='major', labelsize=15)
+ax[1].set_xlabel("No. of poses", fontsize=15)
+ax[1].set_ylabel("Standard deviation (mm)", fontsize=15)
+ax[1].legend(fontsize=20)
+#%% Not required
+# cam_mtx_mean = calibration_mean["cam_mtx_mean"]
+# cam_mtx_mean_diff = np.diff(cam_mtx_mean, axis=0)
+# proj_mtx_mean = calibration_mean["proj_mtx_mean"]
+# proj_mtx_mean_diff = np.diff(proj_mtx_mean, axis=0)
+# pool_diff = [[pool_size_list[i],pool_size_list[i+1]] for i in range(0,len(pool_size_list)-1)] 
+# fig, ax = plt.subplots(2)
+# ax[0].plot(cam_mtx_mean_diff[:,0,0], "--o", color='purple', label="$f_x$")
+# ax[0].plot(cam_mtx_mean_diff[:,1,1], "--o", color='blue',label="$f_y$")
+# ax[0].set_ylim(-3,3)
+# ax[0].tick_params(axis='both', which='major', labelsize=15)
+# ax[0].set_title("Camera", fontsize=20)
+# ax[0].set_xlabel("Pose difference ", fontsize=15)
+# ax[0].set_ylabel("Mean difference", fontsize=15)
+# ax[0].legend(fontsize=15, loc="upper right")
+# ax[0].set_xticklabels(pool_diff)
+# ax[1].plot(proj_mtx_mean_diff[:,0,0], "--o", color='purple', label="$f_x$")
+# ax[1].plot(proj_mtx_mean_diff[:,1,1], "--o", color='blue', label="$f_y$")
+# ax[1].set_ylim(-3,3)
+# ax[1].tick_params(axis='both', which='major', labelsize=15)
+# ax[1].set_title("Projector", fontsize=20)
+# ax[1].set_xlabel("Pose difference ", fontsize=15)
+# ax[1].set_ylabel("Mean difference", fontsize=15)
+# ax[1].set_xticklabels(pool_diff)
+# ax[1].legend(fontsize=15, loc="upper right")
