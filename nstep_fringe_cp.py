@@ -1,7 +1,7 @@
 # coding: utf-8
 
 import cupy as cp
-#from time import perf_counter_ns
+from time import perf_counter_ns
 from typing import Tuple
 from cupyx.scipy import ndimage
 import pickle
