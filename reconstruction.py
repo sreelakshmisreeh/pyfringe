@@ -621,10 +621,12 @@ def reconst_test(savedir):
     plt.hist(intensity_diff, bins=5)
     plt.title("Intensity difference",fontsize=20)
     plt.xlabel("Count", fontsize=15)
+    plt.show()
     plt.figure()
     plt.hist(phase_dif, bins=5)
     plt.title("Phase difference",fontsize=20)
     plt.xlabel("Count",fontsize=15)
+    plt.show()
         
        
 def main():
@@ -632,7 +634,9 @@ def main():
     print("\nPlease Choose")
     option = input("\n1:Reconstruction test\n3: 3 level reconstruction \n4: 4 level reconstruction")
     if option == "1":
-        savedir = input("Enter the path for data:")
+        savedir = input("Enter the path for data or enter None:")
+        if savedir == "None":
+           savedir =  r'test_data\reconst_toydata'
         reconst_test(savedir)
         return
     elif option == "3":
