@@ -18,7 +18,8 @@ from time import perf_counter_ns
 EPSILON = -0.5
 TAU = 5.5
 #TODO: Convert to pyqtgraph. 
-
+#Note: Befor running probabilistic reconstruction make sure the calibration parameter have single mean and std.
+#Since bootstrap now performs multiple number of poses the mean file will have mean of each number of poses.
 class Reconstruction:
     """
     Reconstruction class is used for complete reconstruction of 3D object with per coordinate uncertainity. 
