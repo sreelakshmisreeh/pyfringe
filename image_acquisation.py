@@ -984,6 +984,7 @@ def main():
                                 acquisition_index=acquisition_index)
     elif option == '6':
         no_of_levels =input("\nNo. of levels 3,4:")
+        number_scan = int(input("\nEnter number of scans"))
         if no_of_levels == "3":
             image_index_list = np.repeat(np.arange(0, 5), 3).tolist()
             pattern_num_list = [0, 1, 2] * len(set(image_index_list))
@@ -992,8 +993,8 @@ def main():
             pattern_num_list = [0, 1, 2] * len(set(image_index_list))
         savedir = r'C:\Users\kl001\Documents\grasshopper3_python\images'
         result &= run_proj_single_camera(savedir=savedir,
-                                         preview_option='Always',
-                                         number_scan=1,
+                                         preview_option='Once',
+                                         number_scan=number_scan,
                                          acquisition_index=0,
                                          image_index_list=image_index_list,
                                          pattern_num_list=pattern_num_list,
