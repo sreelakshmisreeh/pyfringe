@@ -1003,7 +1003,7 @@ def main():
                                          cam_capt_timeout=10,
                                          cam_black_level=0,
                                          cam_ExposureCompensation=0,
-                                         proj_exposure_period=27000,#27084,
+                                         proj_exposure_period=27500,#27084,Check option 2 for recomended value
                                          proj_frame_period=34000,#33334,
                                          do_insert_black=True,
                                          led_select=4,
