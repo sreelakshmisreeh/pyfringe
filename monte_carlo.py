@@ -220,7 +220,6 @@ def main():
     data_path = os.path.join(save_dir,scan_object)
     sigma_path = r"C:\Users\kl001\Documents\pyfringe_test\mean_pixel_std\mean_std_pixel.npy"
     calib_path = r"C:\Users\kl001\Documents\pyfringe_test\multifreq_calib_images"
-    #calib_path = r"C:\Users\kl001\Documents\pyfringe_test\test_calib_data\test_data\test_reconst"
     quantile_limit = 4.5
     limit = nstep.B_cutoff_limit(sigma_path, quantile_limit, N_list, pitch_list)
     total_virtual_scans = 5
