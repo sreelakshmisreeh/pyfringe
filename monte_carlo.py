@@ -222,7 +222,7 @@ def main():
     calib_path = r"C:\Users\kl001\Documents\pyfringe_test\multifreq_calib_images"
     quantile_limit = 4.5
     limit = nstep.B_cutoff_limit(sigma_path, quantile_limit, N_list, pitch_list)
-    total_virtual_scans = 5
+    total_virtual_scans = 500
     full_images, images_mean, images_std = image_read(data_path, N_list, scan_object)
     mean_cords, std_cords, mean_cords_vector, std_cords_vector, mask, mean_inten = virtual_scan(total_virtual_scans,
                                                                                                 proj_width,
