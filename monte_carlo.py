@@ -71,27 +71,18 @@ def random_images(images_mean, images_std):
     random_img = rv_array.reshape(images_mean.shape[0],images_mean.shape[1],images_mean.shape[2])
     return random_img
 
-def random_ext_intinsics(type_unwrap, calib_path, total_virtual_scans):
+def random_ext_intinsics(calibration_mean, calibration_std):
     """
     Function to random generate intrinsics and extrinsics
     """
-    calibration_mean = np.load(os.path.join(calib_path,'{}_mean_calibration_param.npz'.format(type_unwrap)))
-    calibration_std = np.load(os.path.join(calib_path,'{}_std_calibration_param.npz'.format(type_unwrap)))
-    camera_mtx = []
-    camera_dist = []
-    proj_mtx = []
-    camera_proj_rot_mtx = []
-    camera_proj_trans = []
-    camera_h_mtx = []
-    proj_h_mtx = []
-    for i in trange(total_virtual_scans):
-        camera_mtx.append(np.random.normal(loc=calibration_mean["cam_mtx_mean"], scale=calibration_std["cam_mtx_std"]))
-        camera_dist.append(np.random.normal(loc=calibration_mean["cam_dist_mean"], scale=calibration_std["cam_dist_std"]))
-        proj_mtx.append(np.random.normal(loc=calibration_mean["proj_mtx_mean"], scale=calibration_std["proj_mtx_std"]))
-        camera_proj_rot_mtx.append(np.random.normal(loc=calibration_mean["st_rmat_mean"], scale=calibration_std["st_rmat_std"]))
-        camera_proj_trans.append(np.random.normal(loc=calibration_mean["st_tvec_mean"], scale=calibration_std["st_tvec_std"]))
-        proj_h_mtx.append(np.dot(proj_mtx[i], np.hstack((camera_proj_rot_mtx[i], camera_proj_trans[i]))))
-        camera_h_mtx.append(np.dot(camera_mtx[i], np.hstack((np.identity(3), np.zeros((3, 1))))))
+    
+    camera_mtx = np.random.normal(loc=calibration_mean["cam_mtx_mean"], scale=calibration_std["cam_mtx_std"])
+    camera_dist = np.random.normal(loc=calibration_mean["cam_dist_mean"], scale=calibration_std["cam_dist_std"])
+    proj_mtx = np.random.normal(loc=calibration_mean["proj_mtx_mean"], scale=calibration_std["proj_mtx_std"])
+    camera_proj_rot_mtx = np.random.normal(loc=calibration_mean["st_rmat_mean"], scale=calibration_std["st_rmat_std"])
+    camera_proj_trans = np.random.normal(loc=calibration_mean["st_tvec_mean"], scale=calibration_std["st_tvec_std"])
+    proj_h_mtx = np.dot(proj_mtx, np.hstack((camera_proj_rot_mtx, camera_proj_trans)))
+    camera_h_mtx = np.dot(camera_mtx, np.hstack((np.identity(3), np.zeros((3, 1)))))
     return camera_mtx, camera_dist, proj_mtx, camera_proj_rot_mtx, camera_proj_trans, proj_h_mtx, camera_h_mtx
 
 def random_reconst(proj_width, 
@@ -104,13 +95,67 @@ def random_reconst(proj_width,
                    calib_path, 
                    obj_path, 
                    random_img,
-                   random_calib_param):
+                   random_calib_param,
+                   reconst_inst):
     """
     Sub function to do reconstruction based on generated images.
 
     """
-    cam_width = random_img[0].shape[2]
-    cam_height = random_img[0].shape[1]
+    cam_width = random_img.shape[-2]
+    cam_height = random_img.shape[-1]
+    images_arr = cp.asarray(random_img)
+    reconst_inst.cam_mtx = cp.asarray(random_calib_param[0])
+    reconst_inst.cam_dist = cp.asarray(random_calib_param[1])
+    reconst_inst.proj_mtx = cp.asarray(random_calib_param[2])
+    reconst_inst.camproj_rot_mtx = cp.asarray(random_calib_param[3])
+    reconst_inst.camproj_trans_mtx = cp.asarray(random_calib_param[4])
+    reconst_inst.cam_h_mtx = cp.asarray(random_calib_param[5])
+    reconst_inst.proj_h_mtx = cp.asarray(random_calib_param[6])
+    modulation_vector, orig_img, phase_map, mask = nstep_cp.phase_cal_cp(images_arr,
+                                                                         limit,
+                                                                         N_list,
+                                                                         False)
+    phase_map[0][phase_map[0] < EPSILON] = phase_map[0][phase_map[0] < EPSILON] + 2 * np.pi
+    unwrap_vector, k_arr = nstep_cp.multifreq_unwrap_cp(pitch_list,
+                                                        phase_map,
+                                                        kernel_size=7,
+                                                        direc='v',
+                                                        mask=mask,
+                                                        cam_width=cam_width,
+                                                        cam_height=cam_height)
+    orig_img = cp.asnumpy(orig_img[-1])
+    coords, inte_rgb, cordi_sigma, mask = reconst_inst. complete_recon(unwrap_vector, 
+                                                                 mask,
+                                                                 orig_img, 
+                                                                 modulation_vector,    
+                                                                 temperature_image=None)
+    mask = cp.asnumpy(mask)
+    retrived_cord = np.array([nstep.recover_image(coords[:,i], mask, cam_height, cam_width) for i in range(coords.shape[-1])])
+    retrived_int = np.array([nstep.recover_image(inte_rgb[:,i], mask, cam_height, cam_width) for i in range(coords.shape[-1])])
+        
+    return retrived_cord, retrived_int, mask
+
+def virtual_scan(total_virtual_scans,
+                 proj_width,
+                 proj_height,
+                 pitch_list,
+                 N_list,
+                 limit,
+                 sigma_path,
+                 type_unwrap,
+                 calib_path,
+                 obj_path,
+                 scan_object):
+    """
+    Function to generate pattern
+    """
+    image_stat = np.load(os.path.join(obj_path,'images_stat_{}.npz'.format(scan_object)))
+    image_mean = image_stat["images_mean"]
+    image_std = image_stat["images_std"]
+    cam_width = image_mean.shape[-2]
+    cam_height = image_mean.shape[-1]
+    calibration_mean = np.load(os.path.join(calib_path,'{}_mean_calibration_param.npz'.format(type_unwrap)))
+    calibration_std = np.load(os.path.join(calib_path,'{}_std_calibration_param.npz'.format(type_unwrap)))
     reconst_inst = rc.Reconstruction(proj_width=proj_width,
                                   proj_height=proj_height,
                                   cam_width=cam_width,
@@ -129,77 +174,33 @@ def random_reconst(proj_width,
                                   temp=False,
                                   save_ply=False,
                                   probability=False)
-    images_arr = cp.asarray(random_img)
-    full_cord_list = []
-    full_inte_list = []
+    full_coords = []
+    full_inte = []
+    mask_list = []
     mask_list = np.full((cam_height, cam_width), True)
-    for i in trange(0,len(random_img) ,desc='reconstructing random image'):
-        reconst_inst.cam_mtx = cp.asarray(random_calib_param[0][i])
-        reconst_inst.cam_dist = cp.asarray(random_calib_param[1][i])
-        reconst_inst.proj_mtx = cp.asarray(random_calib_param[2][i])
-        reconst_inst.camproj_rot_mtx = cp.asarray(random_calib_param[3][i])
-        reconst_inst.camproj_trans_mtx = cp.asarray(random_calib_param[4][i])
-        reconst_inst.cam_h_mtx = cp.asarray(random_calib_param[5][i])
-        reconst_inst.proj_h_mtx = cp.asarray(random_calib_param[6][i])
-        modulation_vector, orig_img, phase_map, mask = nstep_cp.phase_cal_cp(images_arr[i],
-                                                                             limit,
-                                                                             N_list,
-                                                                             False)
-        phase_map[0][phase_map[0] < EPSILON] = phase_map[0][phase_map[0] < EPSILON] + 2 * np.pi
-        unwrap_vector, k_arr = nstep_cp.multifreq_unwrap_cp(pitch_list,
-                                                            phase_map,
-                                                            kernel_size=7,
-                                                            direc='v',
-                                                            mask=mask,
-                                                            cam_width=cam_width,
-                                                            cam_height=cam_height)
-        orig_img = cp.asnumpy(orig_img[-1])
-        coords, inte_rgb, cordi_sigma, mask = reconst_inst. complete_recon(unwrap_vector, 
-                                                                     mask,
-                                                                     orig_img, 
-                                                                     modulation_vector,    
-                                                                     temperature_image=None)
-        mask = cp.asnumpy(mask)
-        retrived_cord = np.array([nstep.recover_image(coords[:,i], mask, cam_height, cam_width) for i in range(coords.shape[-1])])
-        retrived_int = np.array([nstep.recover_image(inte_rgb[:,i], mask, cam_height, cam_width) for i in range(coords.shape[-1])])
-        full_cord_list.append(retrived_cord)
-        full_inte_list.append(retrived_int)
+    for i in trange(0, total_virtual_scans):
+        random_img = random_images(image_mean, image_std)
+        camera_mtx, camera_dist, proj_mtx, camera_proj_rot_mtx, camera_proj_trans, proj_h_mtx, camera_h_mtx = random_ext_intinsics(calibration_mean, 
+                                                                                                                                   calibration_std)
+        random_calib_param = [camera_mtx, camera_dist, proj_mtx, camera_proj_rot_mtx, camera_proj_trans, camera_h_mtx, proj_h_mtx]
+        coords, inte, mask = random_reconst(proj_width, 
+                                            proj_height, 
+                                            pitch_list, 
+                                            N_list, 
+                                            limit,
+                                            sigma_path, 
+                                            type_unwrap, 
+                                            calib_path, 
+                                            obj_path, 
+                                            random_img=random_img,
+                                            random_calib_param=random_calib_param,
+                                            reconst_inst=reconst_inst)
         mask_list &=mask
-    return np.array(full_cord_list), np.array(full_inte_list), mask_list 
-
-def virtual_scan(total_virtual_scans,
-                 proj_width,
-                 proj_height,
-                 pitch_list,
-                 N_list,
-                 limit,
-                 sigma_path,
-                 type_unwrap,
-                 calib_path,
-                 obj_path,
-                 scan_object):
-    """
-    Function to generate pattern
-    """
-    image_stat = np.load(os.path.join(obj_path,'images_stat_{}.npz'.format(scan_object)))
-    print("\n Generating virtual fringe images")
-    random_img = [random_images(image_stat["images_mean"], image_stat["images_std"]) for i in trange(0,total_virtual_scans)]
-    print("\n Generating virtual intrinsics and extrinsics")
-    camera_mtx, camera_dist, proj_mtx, camera_proj_rot_mtx, camera_proj_trans, proj_h_mtx, camera_h_mtx = random_ext_intinsics(type_unwrap, 
-                                                                                                                               calib_path, 
-                                                                                                                               total_virtual_scans)
-    random_calib_param = [camera_mtx, camera_dist, proj_mtx, camera_proj_rot_mtx, camera_proj_trans, camera_h_mtx, proj_h_mtx]
-    full_coords, full_inte, mask = random_reconst(proj_width, 
-                                                  proj_height, 
-                                                  pitch_list, 
-                                                  N_list, 
-                                                  limit,
-                                                  sigma_path, 
-                                                  type_unwrap, 
-                                                  calib_path, 
-                                                  obj_path, 
-                                                  random_img=random_img,
-                                                  random_calib_param=random_calib_param)
+        full_coords.append(coords)
+        full_inte.append(inte)
+        mask_list.append(mask)
+    full_coords = np.array(full_coords)
+    full_inte = np.array(full_inte)
     mean_cords = np.mean(full_coords, axis=0)
     std_cords = np.std(full_coords, axis=0)
     mean_intensity = np.mean(full_inte, axis=0)
