@@ -199,7 +199,7 @@ def virtual_scan(total_virtual_scans,
         retrived_int = np.array([nstep.recover_image(inte[:,i], mask, cam_height, cam_width) for i in range(coords.shape[-1])])
         full_coords.append(retrived_cord)
         full_inte.append(retrived_int)
-        mask_list.append(mask)
+        mask_list &= mask
     full_coords = np.array(full_coords)
     full_inte = np.array(full_inte)
     mean_cords = np.mean(full_coords, axis=0)
