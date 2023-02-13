@@ -86,7 +86,9 @@ def random_ext_intinsics(calibration_mean, calibration_std):
     return camera_mtx, camera_dist, proj_mtx, camera_proj_rot_mtx, camera_proj_trans, proj_h_mtx, camera_h_mtx
 
 def random_reconst(proj_width, 
-                   proj_height, 
+                   proj_height,
+                   cam_width,
+                   cam_height,
                    pitch_list, 
                    N_list, 
                    limit,
@@ -101,8 +103,6 @@ def random_reconst(proj_width,
     Sub function to do reconstruction based on generated images.
 
     """
-    cam_width = random_img.shape[-2]
-    cam_height = random_img.shape[-1]
     images_arr = cp.asarray(random_img)
     reconst_inst.cam_mtx = cp.asarray(random_calib_param[0])
     reconst_inst.cam_dist = cp.asarray(random_calib_param[1])
@@ -135,6 +135,8 @@ def random_reconst(proj_width,
 def virtual_scan(total_virtual_scans,
                  proj_width,
                  proj_height,
+                 cam_width,
+                 cam_height,
                  pitch_list,
                  N_list,
                  limit,
@@ -149,8 +151,6 @@ def virtual_scan(total_virtual_scans,
     image_stat = np.load(os.path.join(obj_path,'images_stat_{}.npz'.format(scan_object)))
     image_mean = image_stat["images_mean"]
     image_std = image_stat["images_std"]
-    cam_width = image_mean.shape[-2]
-    cam_height = image_mean.shape[-1]
     calibration_mean = np.load(os.path.join(calib_path,'{}_mean_calibration_param.npz'.format(type_unwrap)))
     calibration_std = np.load(os.path.join(calib_path,'{}_std_calibration_param.npz'.format(type_unwrap)))
     reconst_inst = rc.Reconstruction(proj_width=proj_width,
@@ -182,6 +182,8 @@ def virtual_scan(total_virtual_scans,
         random_calib_param = [camera_mtx, camera_dist, proj_mtx, camera_proj_rot_mtx, camera_proj_trans, camera_h_mtx, proj_h_mtx]
         coords, inte, mask = random_reconst(proj_width, 
                                             proj_height, 
+                                            cam_width,
+                                            cam_height,
                                             pitch_list, 
                                             N_list, 
                                             limit,
@@ -214,6 +216,8 @@ def main():
     N_list = [3,3,9]
     proj_width = 912  
     proj_height = 1140 
+    cam_width = 1920
+    cam_height = 1200
     type_unwrap = 'multifreq'
     save_dir = r"C:\Users\kl001\Documents\pyfringe_test\monte_carlo"
     scan_object = "plane"
@@ -222,11 +226,13 @@ def main():
     calib_path = r"C:\Users\kl001\Documents\pyfringe_test\multifreq_calib_images"
     quantile_limit = 4.5
     limit = nstep.B_cutoff_limit(sigma_path, quantile_limit, N_list, pitch_list)
-    total_virtual_scans = 500
+    total_virtual_scans = 5
     full_images, images_mean, images_std = image_read(data_path, N_list, scan_object)
     mean_cords, std_cords, mean_cords_vector, std_cords_vector, mask, mean_inten = virtual_scan(total_virtual_scans,
                                                                                                 proj_width,
                                                                                                 proj_height,
+                                                                                                cam_width,
+                                                                                                cam_height,
                                                                                                 pitch_list,
                                                                                                 N_list,
                                                                                                 limit,
