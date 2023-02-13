@@ -209,7 +209,7 @@ def virtual_scan(total_virtual_scans,
     std_cords_vector = np.array([std_cords[i][mask] for i in range(0,std_cords.shape[0])])
     mean_intensity_vector = np.array([mean_intensity[i][mask] for i in range(0,mean_intensity.shape[0])])
     
-    return mean_cords, std_cords, mean_cords_vector, std_cords_vector, mask, mean_intensity_vector
+    return mean_cords, std_cords, mean_cords_vector, std_cords_vector, mask_list, mean_intensity_vector
 
 def main():
     pitch_list = [1000, 110, 16]
