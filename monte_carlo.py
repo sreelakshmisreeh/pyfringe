@@ -129,11 +129,8 @@ def random_reconst(proj_width,
                                                                  orig_img, 
                                                                  modulation_vector,    
                                                                  temperature_image=None)
-    mask = cp.asnumpy(mask)
-    retrived_cord = np.array([nstep.recover_image(coords[:,i], mask, cam_height, cam_width) for i in range(coords.shape[-1])])
-    retrived_int = np.array([nstep.recover_image(inte_rgb[:,i], mask, cam_height, cam_width) for i in range(coords.shape[-1])])
-        
-    return retrived_cord, retrived_int, mask
+    mask = cp.asnumpy(mask) 
+    return cp.asnumpy(coords), cp.asnumpy(inte_rgb), mask
 
 def virtual_scan(total_virtual_scans,
                  proj_width,
@@ -196,8 +193,10 @@ def virtual_scan(total_virtual_scans,
                                             random_calib_param=random_calib_param,
                                             reconst_inst=reconst_inst)
         mask_list &=mask
-        full_coords.append(coords)
-        full_inte.append(inte)
+        retrived_cord = np.array([nstep.recover_image(coords[:,i], mask, cam_height, cam_width) for i in range(coords.shape[-1])])
+        retrived_int = np.array([nstep.recover_image(inte[:,i], mask, cam_height, cam_width) for i in range(coords.shape[-1])])
+        full_coords.append(retrived_cord)
+        full_inte.append(retrived_int)
         mask_list.append(mask)
     full_coords = np.array(full_coords)
     full_inte = np.array(full_inte)
