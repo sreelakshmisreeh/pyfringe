@@ -559,7 +559,7 @@ class Reconstruction:
                                                                 modulation_vector,
                                                                 temperature_image)
         
-        return obj_cordi, obj_color, cordi_sigma, mask
+        return obj_cordi, obj_color, cordi_sigma, mask, modulation_vector
     
 def undistort_point(xc_yc, camera_dist):
     r_sq = xc_yc[0]**2 + xc_yc[1]**2
@@ -702,7 +702,7 @@ def main():
                                   save_ply=save_ply,
                                   probability=probability)
     
-    obj_cordi, obj_color, cordi_sigma, mask = reconst_inst.obj_reconst_wrapper()
+    obj_cordi, obj_color, cordi_sigma, mask, modulation_vector = reconst_inst.obj_reconst_wrapper()
     return
 
 
