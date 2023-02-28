@@ -124,11 +124,11 @@ def random_reconst(proj_width,
                                                         cam_width=cam_width,
                                                         cam_height=cam_height)
     orig_img = cp.asnumpy(orig_img[-1])
-    coords, inte_rgb, cordi_sigma, mask = reconst_inst. complete_recon(unwrap_vector, 
-                                                                 mask,
-                                                                 orig_img, 
-                                                                 modulation_vector,    
-                                                                 temperature_image=None)
+    coords, inte_rgb, cordi_sigma, mask, modulation_vector = reconst_inst. complete_recon(unwrap_vector, 
+                                                                                         mask,
+                                                                                         orig_img, 
+                                                                                         modulation_vector,    
+                                                                                         temperature_image=None)
     mask = cp.asnumpy(mask) 
     return cp.asnumpy(coords), cp.asnumpy(inte_rgb), mask
 
