@@ -453,7 +453,7 @@ class Reconstruction:
         """
         if self.data_type == 'jpeg':
             if os.path.exists(os.path.join(self.object_path, 'capt_000_000000.jpeg')):
-                img_path = sorted(glob.glob(os.path.join(self.object_path, 'capt_*')), key=os.path.getmtime)
+                img_path = sorted(glob.glob(os.path.join(self.object_path, 'capt_*')), key=lambda x:int(os.path.basename(x)[-11:-5]))
                 images_arr = np.array([cv2.imread(file, 0) for file in img_path])
             else:
                 print("ERROR:Data path does not exist!")
