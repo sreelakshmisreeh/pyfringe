@@ -193,8 +193,14 @@ class dlpc350(object):
         buffer.extend(data_len)
         buffer.append(com2)
         buffer.append(com1)
+#TODO: Projecter need 6 bytes for initial value
+#the first 6 bytes are occupied by projector, which causes there are only 58 space 
+#can be fill data, which means can add up to 19 patterns and remains 1 spaces(total 6 imgs), then 
+#add the second 64 space, then there are total 65(1+64) space available and loading 21 patterns remaining 2 space.
+#Add one more 64 spaceshas total 66 space that fill in 22 patterns
+#19+21+22=62; 62/3=20%2 missing 1 space for last pattern if want to load 21 images.
 
-        # # if data fits into single buffer, write all and fill. Single command = 64 bytes
+        ## if data fits into single buffer, write all and fill. Single command = 64 bytes
         if len(buffer) + len(data) < 65:
             for i in range(len(data)):
                 buffer.append(data[i])
