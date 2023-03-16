@@ -187,18 +187,13 @@ class dlpc350(object):
 
         data_len = conv_len(len(data) + 2, 16)  # size of data + subcommands to 16 bits binary
         data_len = bits_to_bytes(data_len)
-
         buffer.append(flagstring)
         buffer.append(sequence_byte)
         buffer.extend(data_len)
         buffer.append(com2)
         buffer.append(com1)
-#TODO: Projecter need 6 bytes for initial value
-#the first 6 bytes are occupied by projector, which causes there are only 58 space 
-#can be fill data, which means can add up to 19 patterns and remains 1 spaces(total 6 imgs), then 
-#add the second 64 space, then there are total 65(1+64) space available and loading 21 patterns remaining 2 space.
-#Add one more 64 spaceshas total 66 space that fill in 22 patterns
-#19+21+22=62; 62/3=20%2 missing 1 space for last pattern if want to load 21 images.
+#TODO: 21 imgs doesnot work
+
 
         ## if data fits into single buffer, write all and fill. Single command = 64 bytes
         if len(buffer) + len(data) < 65:
@@ -217,6 +212,7 @@ class dlpc350(object):
                 buffer.append(data[i])
 
             self.dlpc.write(1, buffer)
+           # print("First buffer",buffer, "\n")
             buffer = []
             
             # One packet includes 64 bytes starting from
@@ -234,23 +230,33 @@ class dlpc350(object):
 
                 if j % 64 == 0:
                     self.dlpc.write(1, buffer)
+                    #print("Next buffer",buffer,"\n")
                     buffer = []
 
             if j % 64 != 0:
+                print(j)
                 while j % 64 != 0:
                     buffer.append(0x00)
                     j += 1
+                    #print("====================================================================%d"%j)
+                    
 
                 self.dlpc.write(1, buffer)
-        
+               # print("Last buffer",buffer,"\n")
+               # print(data_len)
         # listen to the response from the device for verification
         try:
             self.ans = self.dlpc.read(0x81, 64)            
             length_lsb = self.ans[2]
             length_msb = self.ans[3]
+            #print("length LSB %d"%length_lsb,"\nlength MSB %d"%length_msb)
             message_length = length_msb*256 + length_lsb
+            #print("\n message_length%d"%message_length)
             num_packet = message_length//64 + 1
+            if  message_length%64 > 60: # for fixing multiples of 7.
+                num_packet += 1
             if num_packet > 1:
+                print("num_packet %d"%num_packet)
                 for i in range(num_packet-1):
                     self.ans.extend(self.dlpc.read(0x81, 64))                
         except USBError as e:
@@ -1281,7 +1287,7 @@ def main():
     """
     Main function example.
     """
-    option = input("Please choose: 1 -- project single image; 2 -- project pattern sequence\n")
+    option = input("Please choose: 1 -- project single image; 2 -- project pattern sequence; 3 -- projector current settings \n")
     result = True
     if option == '1':
         received_image_index = input("Please provide the image index, if using default, press Enter: [default is 21]\n")
@@ -1299,6 +1305,8 @@ def main():
         pattern_num_list = [0, 1, 2] * len(set(image_index_list))
         result &= proj_pattern_LUT(image_index_list,
                                    pattern_num_list)
+    if option == "3":
+        current_setting()
     return result
 
 
