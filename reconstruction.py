@@ -426,8 +426,7 @@ class Reconstruction:
         coords, mask, uc, vc, up = self.reconstruction_obj(unwrap_vector, mask)
         inte_img = inte_rgb_image[mask] / np.nanmax(inte_rgb_image[mask])
         inte_rgb = np.stack((inte_img, inte_img, inte_img), axis=-1)
-        mod_dist = nstep.undistort(mod_img, self.cam_mtx, self.cam_dist)
-        modulation_vector = mod_dist[mask]
+        modulation_vector = mod_img[mask]
         if self.probability:
             sigmasq_x, sigmasq_y, sigmasq_z, derv_x, derv_y, derv_z = self.sigma_random(modulation_vector, uc, vc, up)
             sigma_x = np.sqrt(sigmasq_x)
@@ -495,6 +494,7 @@ class Reconstruction:
                                                               self.cam_height)
                 orig_img = orig_img[-1] 
                 mod_img = nstep.recover_image(modulation_vector[-1], mask, self.cam_height, self.cam_width)
+                mod_dist = nstep.undistort(mod_img, self.cam_mtx, self.cam_dist)
             elif self.processing == 'gpu':
                 images_arr = cp.asarray(images_arr)
                 modulation_vector, orig_img, phase_map, mask = nstep_cp.phase_cal_cp(images_arr,
@@ -510,7 +510,8 @@ class Reconstruction:
                                                                     self.cam_width,
                                                                     self.cam_height)
                 orig_img = cp.asnumpy(orig_img[-1])
-                mod_img = nstep.recover_image_cp(modulation_vector[-1], mask, self.cam_height, self.cam_width)
+                mod_img = nstep_cp.recover_image_cp(modulation_vector[-1], mask, self.cam_height, self.cam_width)
+                mod_dist = nstep_cp.undistort_cp(mod_img, self.cam_mtx, self.cam_dist)
         elif self.type_unwrap == 'multiwave':
             eq_wav12 = (self.pitch_list[-1] * self.pitch_list[1]) / (self.pitch_list[1] - self.pitch_list[-1])
             eq_wav123 = self.pitch_list[0] * eq_wav12 / (self.pitch_list[0] - eq_wav12)
@@ -538,7 +539,7 @@ class Reconstruction:
         obj_cordi, obj_color, cordi_sigma, mask, modulation_vector = self.complete_recon(unwrap_vector,
                                                                                          mask,
                                                                                          inte_rgb_image,
-                                                                                         mod_img,
+                                                                                         mod_dist,
                                                                                          temperature_image)
         
         return obj_cordi, obj_color, cordi_sigma, mask, modulation_vector
