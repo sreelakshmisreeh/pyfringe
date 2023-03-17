@@ -1019,7 +1019,6 @@ class Calibration:
             
         delta_lst = []
         mean_error = []
-        abs_error = []
         for i in range(len(objpts)):
             img2, _ = cv2.projectPoints(objpts[i], rvecs[i], tvecs[i], mtx, dist)
             delta = imgpts[i]-img2
