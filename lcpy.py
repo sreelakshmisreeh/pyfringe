@@ -244,7 +244,7 @@ class dlpc350(object):
                            
             message_length = length_msb*256 + length_lsb + 4 #overhead of first packet recieved is 4
             print("message length = %d"%message_length)
-            num_packet = message_length//64 + 1
+            num_packet = np.ceil(message_length/64)
             if num_packet > 1:
                 print("num_packet %d\n"%num_packet)
                 for i in range(num_packet-1):
