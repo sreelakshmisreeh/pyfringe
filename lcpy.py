@@ -4,8 +4,6 @@ Created on Sat Dec 24 13:27:49 2022
 
 @author: kl001
 """
-# TODO: Assemble files and set root directory
-
 import numpy as np
 import os
 import sys
@@ -192,8 +190,6 @@ class dlpc350(object):
         buffer.extend(data_len)
         buffer.append(com2)
         buffer.append(com1)
-#TODO: 21 imgs doesnot work
-
 
         ## if data fits into single buffer, write all and fill. Single command = 64 bytes
         if len(buffer) + len(data) < 65:
@@ -212,7 +208,6 @@ class dlpc350(object):
                 buffer.append(data[i])
 
             self.dlpc.write(1, buffer)
-           # print("First buffer",buffer, "\n")
             buffer = []
             
             # One packet includes 64 bytes starting from
@@ -230,33 +225,24 @@ class dlpc350(object):
 
                 if j % 64 == 0:
                     self.dlpc.write(1, buffer)
-                    #print("Next buffer",buffer,"\n")
                     buffer = []
 
             if j % 64 != 0:
-                print(j)
+                print("Total number of data bytes: %d\n"%(j+58))
                 while j % 64 != 0:
                     buffer.append(0x00)
                     j += 1
-                    #print("====================================================================%d"%j)
                     
-
                 self.dlpc.write(1, buffer)
-               # print("Last buffer",buffer,"\n")
-               # print(data_len)
         # listen to the response from the device for verification
         try:
             self.ans = self.dlpc.read(0x81, 64)            
             length_lsb = self.ans[2]
             length_msb = self.ans[3]
-            #print("length LSB %d"%length_lsb,"\nlength MSB %d"%length_msb)
-            message_length = length_msb*256 + length_lsb
-            #print("\n message_length%d"%message_length)
+            message_length = length_msb*256 + length_lsb + 4 #overhead of first packet recieved is 4
             num_packet = message_length//64 + 1
-            if  message_length%64 > 60: # for fixing multiples of 7.
-                num_packet += 1
             if num_packet > 1:
-                print("num_packet %d"%num_packet)
+                print("num_packet %d\n"%num_packet)
                 for i in range(num_packet-1):
                     self.ans.extend(self.dlpc.read(0x81, 64))                
         except USBError as e:
