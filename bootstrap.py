@@ -13,16 +13,12 @@ import calibration as calib
 import numpy as np
 import os
 import matplotlib.pyplot as plt
-import seaborn as sns
-from time import perf_counter_ns
 
 def main():
     #Initial parameters for calibration and testing results
     # proj properties
     proj_width = 912 ; proj_height = 1140 # 800 1280 912 1140
     cam_width = 1920; cam_height = 1200
-    fx=1 
-    fy=2
     #type of unwrapping 
     type_unwrap =  'multifreq'
     
@@ -62,15 +58,6 @@ def main():
         N_list =[9]
         kernel_v = 25; kernel_h=25
         limit = 2
-    
-    # no_pose = int(len(glob.glob(os.path.join(path,'capt*.jpg'))) / np.sum(np.array(N_list)) / 2)
-    no_pose = 100#50 100 poses unwrapping time 74.866771/60 = 1.2478 min
-    acquisition_index = 0
-    resid_outlier_limit = 20
-    val_label = 176.777
-    
-    # Reprojection criteria
-    reproj_criteria = 0.05
     
     calib_inst = calib.Calibration(proj_width=proj_width, 
                                    proj_height=proj_height,
