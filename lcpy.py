@@ -201,6 +201,7 @@ class dlpc350(object):
                 buffer.append(0x00)
 
             self.dlpc.write(1, buffer)
+            print("First buffer:{}".format(buffer))
 
         # else, keep filling buffer and pushing until data all sent
         else:
@@ -236,10 +237,13 @@ class dlpc350(object):
                 self.dlpc.write(1, buffer)
         # listen to the response from the device for verification
         try:
-            self.ans = self.dlpc.read(0x81, 64)            
+            self.ans = self.dlpc.read(0x81, 64)        
+            print("ans:{}".format(self.ans))
             length_lsb = self.ans[2]
             length_msb = self.ans[3]
+                           
             message_length = length_msb*256 + length_lsb + 4 #overhead of first packet recieved is 4
+            print("message length = %d"%message_length)
             num_packet = message_length//64 + 1
             if num_packet > 1:
                 print("num_packet %d\n"%num_packet)
