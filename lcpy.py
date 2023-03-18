@@ -251,6 +251,7 @@ class dlpc350(object):
             print('USB Error:', e)
             result = False
         if verbose:
+            print("Command used: %s, %s" % (hex(command_message[5]), hex(command_message[4])))
             print("Entire command message sent:{}".format(command_message))
             command_message_length = command_message[3] * 256 + command_message[2] + 4
             print("Command message length = %d" % command_message_length)
