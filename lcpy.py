@@ -834,7 +834,6 @@ class dlpc350(object):
                 buffer_swap = True
             else:
                 buffer_swap = False
-            # pat_num = conv_len( i % 3, 6)
             byte_0 = conv_len(pattern_num_list[i], 6) + trig_type
             do_buf_swap = str(int(buffer_swap))
             byte_2 = '0000' + do_trig_out_prev + do_buf_swap + do_insert_black + do_invert_pat
