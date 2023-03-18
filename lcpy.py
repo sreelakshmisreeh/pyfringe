@@ -143,7 +143,8 @@ class dlpc350(object):
                 sequence_byte,
                 com1,
                 com2,
-                data=None):
+                data=None,
+                verbose=False):
         """
         From DLPC Programming guide:
         Byte0 report ID byte: User don't need to set up this parameter. Report ID = 0.
@@ -166,16 +167,19 @@ class dlpc350(object):
         :param com1: Command 1
         :param com2: Command 2
         :param data: Data to pass with command.
+        :param verbose: Print out the entire command sent to and the response received from the projector
         :type rw_mode: str
         :type sequence_byte: int
         :type com1: int
         :type com2: int
         :type data: list
+        :type verbose: bool
         :return result: True if successful, False otherwise.
         :rtype result:bool
         """
 
         buffer = []
+        command_message = []
         result = True
 
         if rw_mode == 'r':
@@ -191,7 +195,7 @@ class dlpc350(object):
         buffer.append(com2)
         buffer.append(com1)
 
-        ## if data fits into single buffer, write all and fill. Single command = 64 bytes
+        # if data fits into single buffer, write all and fill. Single command = 64 bytes
         if len(buffer) + len(data) < 65:
             for i in range(len(data)):
                 buffer.append(data[i])
@@ -199,16 +203,15 @@ class dlpc350(object):
             # append empty data to fill buffer
             for i in range(64 - len(buffer)):
                 buffer.append(0x00)
-
             self.dlpc.write(1, buffer)
-            print("First buffer:{}".format(buffer))
+            command_message.extend(buffer)
 
         # else, keep filling buffer and pushing until data all sent
         else:
             for i in range(64 - len(buffer)):
                 buffer.append(data[i])
-
             self.dlpc.write(1, buffer)
+            command_message.extend(buffer)
             buffer = []
             
             # One packet includes 64 bytes starting from
@@ -223,41 +226,33 @@ class dlpc350(object):
             while j < len(data) - 58:
                 buffer.append(data[j + 58])
                 j += 1
-
                 if j % 64 == 0:
                     self.dlpc.write(1, buffer)
+                    command_message.extend(buffer)
                     buffer = []
-
             if j % 64 != 0:
-                print("Total number of data bytes: %d\n"%(j+58))
                 while j % 64 != 0:
                     buffer.append(0x00)
                     j += 1
-                    
                 self.dlpc.write(1, buffer)
+                command_message.extend(buffer)
         # listen to the response from the device for verification
         try:
-            self.ans = self.dlpc.read(0x81, 64)        
-            print("ans:{}".format(self.ans))
+            self.ans = self.dlpc.read(0x81, 64)
             length_lsb = self.ans[2]
             length_msb = self.ans[3]
-
             # get the number of packets received
-            message_length = length_msb*256 + length_lsb + 4  # overhead of first packet received is 4
-            print("message length = %d"%message_length)
-            if message_length > 0:
-                num_packet = np.ceil(message_length/64)
-            else:
-                num_packet = 1
-
+            response_message_length = length_msb*256 + length_lsb + 4  # overhead of first packet received is 4
+            num_packet = np.ceil(response_message_length/64).astype(int)
             if num_packet > 1:
-                print("num_packet %d\n"%num_packet)
                 for i in range(num_packet-1):
                     self.ans.extend(self.dlpc.read(0x81, 64))                
         except USBError as e:
             print('USB Error:', e)
             result = False
-
+        if verbose:
+            print("Entire command message sent:{}".format(command_message))
+            print("Entire response message received:{}".format(self.ans))
         time.sleep(0.02)
         return result
 
