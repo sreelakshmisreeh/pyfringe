@@ -256,7 +256,7 @@ class dlpc350(object):
             print("Command message length = %d" % command_message_length)
             print("Commend message total number of bytes = %d" % len(command_message))
             if command_message_length > len(command_message):
-                print("ERROR: The command message is incomplete! The declared message length is greater than the total number of bytes sent.")            
+                print("ERROR: The command message is incomplete! The declared message length is greater than the total number of bytes sent.")
 
             print("Entire response message received:{}".format(self.ans))
             response_message_length = self.ans[3] * 256 + self.ans[2] + 4
