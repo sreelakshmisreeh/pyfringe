@@ -13,7 +13,10 @@ import os
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+from scipy import stats
+import sys
 import shutil
+#sys.path.append(r'C:\Users\kl001\pyfringe')
 import reconstruction as rc
 import nstep_fringe as nstep
 
@@ -166,33 +169,43 @@ def md_obj_reconst_withstd(proj_width,
         mod_lst.append(modulation_vector)
     return md_cord_lst, mask_lst, mod_lst   
 
-def boxplots_MD(mean_z_df, 
-                lower_z_df, 
-                upper_z_df, 
-                mod_lower_quantile, 
-                mod_mean_quantile, 
-                mod_upper_quantile):
+def boxplots_MD(z_list, mod_quantile, md_list):
     """
     """
-    plt.figure()
-    mean_z_df.boxplot(grid=False, fontsize =15)
-    plt.title('Modulation = %.3f'%mod_mean_quantile, fontsize = 20)
-    plt.ylabel('Z score', fontsize = 15)
-    plt.xlabel('Mahalanobis distance, D', fontsize = 15)
-    #plt.ylim(0,4)
-    plt.figure()
-    lower_z_df.boxplot(grid=False, fontsize =15)
-    plt.title('Modulation = %.3f'%mod_lower_quantile, fontsize = 20)
-    plt.ylabel('Z score', fontsize = 15)
-    plt.xlabel('Mahalanobis distance, D', fontsize = 15)
-    #plt.ylim(0,4)
-    plt.figure()
-    upper_z_df.boxplot(grid=False, fontsize =15)
-    plt.title('Modulation = %.3f'%mod_upper_quantile, fontsize = 20)
-    plt.ylabel('Z score', fontsize = 15)
-    plt.xlabel('Mahalanobis distance, D', fontsize = 15)
-    #plt.ylim(0,4)
+    md_list = np.around(md_list, decimals=3)
+    edge_color = ["green","blue","purple"]
+    fig, ax = plt.subplots()
+    fig.suptitle("Modulation = %f"%mod_quantile)
+    bp_x = ax.boxplot(z_list[0])
+    bp_y = ax.boxplot(z_list[1])
+    bp_z = ax.boxplot(z_list[-1])
+    for element in ['boxes', 'whiskers', 'fliers', 'means', 'medians', 'caps']:
+            plt.setp(bp_x[element], color=edge_color[0])
+            plt.setp(bp_y[element], color=edge_color[1])
+            plt.setp(bp_z[element], color=edge_color[2])
+    ax.set_xlabel("Mahalanobis distance, D", fontsize = 15)
+    ax.set_ylabel("Z score", fontsize = 15)
+    ax.legend([bp_x["boxes"][0], bp_y["boxes"][0], bp_z["boxes"][0]], ['x', 'y', 'z'], title = 'Boxplot for')
+    ax.set_xticks([1,2,3],md_list)
     return
+
+def z_score_plot(min_md_df, mean_md_df, max_md_df, mod_quantile, md_list):
+    """
+    find values close to given modulations
+    """
+    zscore_x = [min_md_df['Z_score_x'].loc[(min_md_df['modulation']- mod_quantile).abs()< 0.01].values.tolist(),
+                mean_md_df['Z_score_x'].loc[(mean_md_df['modulation'] - mod_quantile).abs()<0.01].values.tolist(), 
+                max_md_df['Z_score_x'].loc[(max_md_df['modulation'] - mod_quantile).abs()<0.01].values.tolist()]
+    zscore_y = [min_md_df['Z_score_y'].loc[(min_md_df['modulation']- mod_quantile).abs()< 0.01].values.tolist(),
+                mean_md_df['Z_score_y'].loc[(mean_md_df['modulation'] - mod_quantile).abs()<0.01].values.tolist(), 
+                max_md_df['Z_score_y'].loc[(max_md_df['modulation'] - mod_quantile).abs()<0.01].values.tolist()]
+    zscore_z = [min_md_df['Z_score_z'].loc[(min_md_df['modulation']- mod_quantile).abs()< 0.01].values.tolist(),
+                mean_md_df['Z_score_z'].loc[(mean_md_df['modulation'] - mod_quantile).abs()<0.01].values.tolist(), 
+                max_md_df['Z_score_z'].loc[(max_md_df['modulation'] - mod_quantile).abs()<0.01].values.tolist()]
+    z_list = [zscore_x, zscore_y, zscore_z]
+    boxplots_MD(z_list, mod_quantile, md_list)
+    return
+    
 def z_score_cal(ground_truth_path, 
                 md_cord_lst, 
                 mask_lst, 
@@ -215,7 +228,9 @@ def z_score_cal(ground_truth_path,
     min_md_data = np.concatenate((md_cord_lst[0], gt_cord1, gt_std1), axis = 1)
     min_md_df = pd.DataFrame(min_md_data,  columns = col_head)
     min_md_df['modulation'] = mod_lst[0]
-    min_md_df['Z_score'] = (min_md_df['x'] - min_md_df['x*'])/min_md_df['sigma_x*']
+    min_md_df['Z_score_x'] = (min_md_df['x'] - min_md_df['x*'])/min_md_df['sigma_x*']
+    min_md_df['Z_score_y'] = (min_md_df['y'] - min_md_df['y*'])/min_md_df['sigma_y*']
+    min_md_df['Z_score_z'] = (min_md_df['z'] - min_md_df['z*'])/min_md_df['sigma_z*']
     min_md_df.dropna(inplace=True)
 
     gt_mask2 = np.tile(mask_lst[1],(gt_std_img.shape[0],1,1))
@@ -224,7 +239,9 @@ def z_score_cal(ground_truth_path,
     mean_md_data = np.concatenate((md_cord_lst[1], gt_cord2, gt_std2), axis = 1)
     mean_md_df = pd.DataFrame(mean_md_data,  columns = col_head)
     mean_md_df['modulation'] = mod_lst[1]
-    mean_md_df['Z_score'] = (mean_md_df['x'] - mean_md_df['x*'])/mean_md_df['sigma_x*']
+    mean_md_df['Z_score_x'] = (mean_md_df['x'] - mean_md_df['x*'])/mean_md_df['sigma_x*']
+    mean_md_df['Z_score_y'] = (mean_md_df['y'] - mean_md_df['y*'])/mean_md_df['sigma_y*']
+    mean_md_df['Z_score_z'] = (mean_md_df['z'] - mean_md_df['z*'])/mean_md_df['sigma_z*']
     mean_md_df.dropna(inplace=True)
 
     gt_mask3 = np.tile(mask_lst[2],(gt_std_img.shape[0],1,1))
@@ -233,34 +250,16 @@ def z_score_cal(ground_truth_path,
     max_md_data = np.concatenate((md_cord_lst[2], gt_cord3, gt_std3), axis = 1)
     max_md_df = pd.DataFrame(max_md_data,  columns = col_head)
     max_md_df['modulation'] = mod_lst[2]
-    max_md_df['Z_score'] = (max_md_df['x'] - max_md_df['x*'])/max_md_df['sigma_x*']
+    max_md_df['Z_score_x'] = (max_md_df['x'] - max_md_df['x*'])/max_md_df['sigma_x*']
+    max_md_df['Z_score_y'] = (max_md_df['y'] - max_md_df['y*'])/max_md_df['sigma_y*']
+    max_md_df['Z_score_z'] = (max_md_df['z'] - max_md_df['z*'])/max_md_df['sigma_z*']
     max_md_df.dropna(inplace=True)
     
-    #find values close to given modulations
-    mean_z_df = pd.DataFrame([min_md_df['Z_score'].loc[(min_md_df['modulation']- mod_mean_quantile).abs()< 0.01], 
-                             mean_md_df['Z_score'].loc[(mean_md_df['modulation'] - mod_mean_quantile).abs()<0.01], 
-                             max_md_df['Z_score'].loc[(max_md_df['modulation'] - mod_mean_quantile).abs()<0.01]]).T
-
-    mean_z_df.columns = np.around(md_list, decimals =3)
-    #mean_z_df= mean_z_df.reset_index(drop = True)
-
-    lower_z_df = pd.DataFrame([min_md_df['Z_score'].loc[(min_md_df['modulation']-mod_lower_quantile).abs()<0.01],
-                               mean_md_df['Z_score'].loc[(mean_md_df['modulation']-mod_lower_quantile).abs()<0.01], 
-                               max_md_df['Z_score'].loc[(max_md_df['modulation'] - mod_lower_quantile).abs()<0.01]]).T
-    lower_z_df.columns = np.around(md_list, decimals =3)
-    #lower_z_df= lower_z_df.reset_index(drop = True)
-
-    upper_z_df = pd.DataFrame([min_md_df['Z_score'].loc[(min_md_df['modulation']- mod_upper_quantile).abs()<0.01],
-                               mean_md_df['Z_score'].loc[(mean_md_df['modulation'] - mod_upper_quantile).abs()<0.01],
-                               max_md_df['Z_score'].loc[(max_md_df['modulation']- mod_upper_quantile).abs()<0.01]]).T
-    upper_z_df.columns = np.around(md_list, decimals =3)
+    #find values close to given modulations and plot
+    mean_mod_zscore = z_score_plot(min_md_df, mean_md_df, max_md_df, mod_mean_quantile, md_list)
+    lower_mod_zscore = z_score_plot(min_md_df, mean_md_df, max_md_df, mod_lower_quantile, md_list)
+    upper_mod_zscore = z_score_plot(min_md_df, mean_md_df, max_md_df, mod_upper_quantile, md_list)
     
-    boxplots_MD(mean_z_df, 
-                lower_z_df, 
-                upper_z_df, 
-                mod_lower_quantile, 
-                mod_mean_quantile, 
-                mod_upper_quantile)
     return min_md_df, mean_md_df, max_md_df
 
     
@@ -325,15 +324,16 @@ md_cord_lst, mask_lst, mod_lst =  md_obj_reconst_withstd(proj_width,
 #Quantile value of modulation to select which Z score to be plotted
 flat_mod_lst = [item for sublist in mod_lst for item in sublist]
 mod_lower_quantile, mod_mean_quantile, mod_upper_quantile = np.nanquantile(flat_mod_lst,[0.05,0.5, 0.95])
-fig, ax = plt.subplots()
+fig, ax = plt.subplots(figsize=(16,9))
 sns.distplot(flat_mod_lst,ax= ax, label = 'Modulation data', kde = False)
 ax.set_xlabel('Modulation', fontsize = 15)
 ax.set_ylabel('Density', fontsize = 15)
 ax.tick_params(axis = 'both', labelsize = 15)
-ax.axvline(x = mod_lower_quantile , color = 'r', linestyle = '--', label = 'Q1 = %.3f (0.05 Q)'%md_list[0])
-ax.axvline(x =mod_mean_quantile , color = 'g', linestyle = '--', label = 'Q2 = %.3f (0.50 Q)'%md_list[1])
-ax.axvline(x = mod_upper_quantile , color = 'b', linestyle = '--', label = 'Q3 = %.3f (0.95 Q)'%md_list[2])
+ax.axvline(x = mod_lower_quantile , color = 'r', linestyle = '--', label = 'Q1 = %.3f (0.05 Q)'%mod_lower_quantile)
+ax.axvline(x =mod_mean_quantile , color = 'g', linestyle = '--', label = 'Q2 = %.3f (0.50 Q)'%mod_mean_quantile)
+ax.axvline(x = mod_upper_quantile , color = 'b', linestyle = '--', label = 'Q3 = %.3f (0.95 Q)'%mod_upper_quantile)
 plt.legend(fontsize = 20)
+plt.tight_layout()
 min_md_df, mean_md_df, max_md_df = z_score_cal(ground_truth_path, 
                                                 md_cord_lst, 
                                                 mask_lst, 
@@ -342,8 +342,4 @@ min_md_df, mean_md_df, max_md_df = z_score_cal(ground_truth_path,
                                                 mod_lower_quantile, 
                                                 mod_mean_quantile, 
                                                 mod_upper_quantile)
-
-
-
-
 
