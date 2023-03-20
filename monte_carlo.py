@@ -124,10 +124,12 @@ def random_reconst(proj_width,
                                                         cam_width=cam_width,
                                                         cam_height=cam_height)
     orig_img = cp.asnumpy(orig_img[-1])
+    mod_img = nstep_cp.recover_image_cp(modulation_vector[-1], mask, cam_height, cam_width)
+    mod_dist = nstep_cp.undistort_cp(mod_img, reconst_inst.cam_mtx, reconst_inst.cam_dist)
     coords, inte_rgb, cordi_sigma, mask, modulation_vector = reconst_inst. complete_recon(unwrap_vector, 
                                                                                          mask,
                                                                                          orig_img, 
-                                                                                         modulation_vector,    
+                                                                                         mod_dist,    
                                                                                          temperature_image=None)
     mask = cp.asnumpy(mask) 
     return cp.asnumpy(coords), cp.asnumpy(inte_rgb), mask
@@ -220,7 +222,7 @@ def main():
     cam_height = 1200
     type_unwrap = 'multifreq'
     save_dir = r"C:\Users\kl001\Documents\pyfringe_test\monte_carlo"
-    scan_object = "plane"
+    scan_object = "sphere"
     data_path = os.path.join(save_dir,scan_object)
     sigma_path = r"C:\Users\kl001\Documents\pyfringe_test\mean_pixel_std\mean_std_pixel.npy"
     calib_path = r"C:\Users\kl001\Documents\pyfringe_test\multifreq_calib_images"
