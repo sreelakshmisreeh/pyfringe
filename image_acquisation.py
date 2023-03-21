@@ -833,7 +833,8 @@ def meanpixel_std(savedir,
                   no_images,
                   cam_width=1920,
                   cam_height=1200,
-                  half_cross_length=100):
+                  half_cross_length=100,
+                  acquisition_index=0):
     """
     Function to determine additive noise std of camera sensor using constant image (image_index).
     :param savedir : path to save npy file.
@@ -861,7 +862,7 @@ def meanpixel_std(savedir,
     result = run_proj_single_camera(savedir=savedir,
                                     preview_option='Once',
                                     number_scan=1,
-                                    acquisition_index=0,
+                                    acquisition_index=acquisition_index,
                                     image_index_list=image_index_list,
                                     pattern_num_list=pattern_num_list,
                                     cam_gain=0,
@@ -869,7 +870,7 @@ def meanpixel_std(savedir,
                                     cam_capt_timeout=10,
                                     cam_black_level=0,
                                     cam_ExposureCompensation=0,
-                                    proj_exposure_period=25000,
+                                    proj_exposure_period=27000,
                                     proj_frame_period=34000,
                                     do_insert_black=True,
                                     led_select=4,
@@ -962,6 +963,7 @@ def main():
         image_index = int(input("\nImage index to be used:")) #image 18; pattern:200, 205, 210
         pattern_no = int(input("\nPattern number:"))
         no_images = int(input("\nNo. of iterations:"))
+        acquisition_index=int(input("\nAcquisation index"))
         savedir = r'C:\Users\kl001\Documents\pyfringe_test\mean_pixel_std'
         meanpixel_std(savedir,
                       image_index,
@@ -969,7 +971,8 @@ def main():
                       no_images,
                       cam_width=1920,
                       cam_height=1200,
-                      half_cross_length=100)
+                      half_cross_length=100,
+                      acquisition_index=acquisition_index)
         
     elif option == '5':
         image_index_list = np.repeat(np.arange(22, 34), 3).tolist()
