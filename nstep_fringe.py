@@ -257,13 +257,13 @@ def recon_generate(width: int,
     np.save(os.path.join(path, '{}_fringes.npy'.format(type_unwrap)), fringe_arr) 
     return fringe_arr, delta_deck_list
 
-def B_cutoff_limit(sigma_path: str,
+def B_cutoff_limit(sigma: float,
                    quantile_limit: float,
                    N_list: list,
                    pitch_list: list) -> float:
     """
     Function to calculate modulation minimum based on success rate.
-    :param sigma_path:  Path to read variance of noise model (sigma)
+    :param sigma:  value of sigma
     :param quantile_limit:  Sigma level upto which all pixels can be successfully unwrapped.
     :param N_list:  Number of images taken for each level.
     :param pitch_list: Number of pixels per fringe period in each level
@@ -275,7 +275,6 @@ def B_cutoff_limit(sigma_path: str,
     :rtype:float
 
     """
-    sigma = np.load(sigma_path)
     sigma_sq_delta_phi = (np.pi / quantile_limit)**2
     modulation_limit_sq = ((pitch_list[-1]**2 / pitch_list[-2]**2) + 1) * (2 * sigma**2) / (N_list[-1] * sigma_sq_delta_phi)
     return np.sqrt(modulation_limit_sq)
