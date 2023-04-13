@@ -14,7 +14,8 @@ from plyfile import PlyData, PlyElement
 import nstep_fringe as nstep
 import nstep_fringe_cp as nstep_cp
 import matplotlib.pyplot as plt
-from time import perf_counter_ns
+import pickle
+
 EPSILON = -0.5
 TAU = 5.5
 #TODO: Convert to pyqtgraph. 
@@ -39,8 +40,8 @@ class Reconstruction:
                  data_type,
                  processing,
                  calib_path,
-                 sigma_path,
                  object_path,
+                 model_path,
                  temp,
                  save_ply,
                  probability):
@@ -60,6 +61,8 @@ class Reconstruction:
         self. data_type = data_type
         self.save_ply = save_ply
         self.probability = probability
+        
+        self.mask = None
         if (self.type_unwrap == 'multifreq') or (self.type_unwrap == 'multiwave'):
             self.phase_st = 0
         else:
@@ -67,20 +70,22 @@ class Reconstruction:
             return
         if not os.path.exists(self.calib_path):
             print('ERROR:calibration parameter path  %s does not exist' % self.calib_path)
-        if not os.path.exists(sigma_path):
-            print('ERROR:Path for noise error  %s does not exist' % self.calib_path)
-        else:
-            self.sigma_path = sigma_path
         if not object_path:
             self.object_path = calib_path
         if not os.path.exists(object_path):
             print('ERROR:Path for noise error  %s does not exist' % self.calib_path)
         else:
             self.object_path = object_path
+            
+        if not os.path.exists(model_path):
+            print('ERROR:Path for noise error  %s does not exist' % self.calib_path)
+        else:
+            with open(model_path, "rb") as tt:
+                model_dict = pickle.load(tt)
+            self.model_list = [model_dict[pitch_list[-2]], model_dict[pitch_list[-1]]]
     
         if processing == 'cpu':
             self.processing = processing
-            self.sigma = np.load(self.sigma_path)
             calibration_mean = np.load(os.path.join(self.calib_path, '{}_mean_calibration_param.npz'.format(self.type_unwrap)))
             self.cam_mtx = calibration_mean["cam_mtx_mean"]
             self.cam_dist = calibration_mean["cam_dist_mean"]
@@ -99,7 +104,6 @@ class Reconstruction:
                 self.cam_h_mtx_std = None
         elif processing == 'gpu':
             self.processing = processing
-            self.sigma = cp.load(self.sigma_path)
             calibration_mean = cp.load(os.path.join(self.calib_path, '{}_mean_calibration_param.npz'.format(self.type_unwrap)))
             self.cam_mtx = cp.asarray(calibration_mean["cam_mtx_mean"])
             self.cam_dist = cp.asarray(calibration_mean["cam_dist_mean"])
@@ -175,12 +179,12 @@ class Reconstruction:
             coords = np.einsum('ijk,ikl->lij', A_inv, c)[0]
         return coords
     
-    def reconstruction_pts(self, uv_true, unwrap_vector, mask):
+    def reconstruction_pts(self, uv_true, unwrap_vector):
         """
         Function to reconstruct 3D point coordinates of 2D points.
         """
         no_pts = uv_true.shape[0]
-        unwrap_image = nstep.recover_image(unwrap_vector, mask, self.cam_height, self.cam_width)
+        unwrap_image = nstep.recover_image(unwrap_vector, self.mask, self.cam_height, self.cam_width)
         uv = cv2.undistortPoints(uv_true, self.cam_mtx, self.cam_dist, None, self.cam_mtx)
         uv = uv.reshape(uv.shape[0], 2)
         uv_true = uv_true.reshape(no_pts, 2)
@@ -197,37 +201,36 @@ class Reconstruction:
         return coordintes
    
     def reconstruction_obj(self,
-                           unwrap_vector,
-                           mask):
+                           unwrap_vector):
         """
         Sub function to reconstruct object from phase map
         """
         if self.processing == 'cpu':
-            unwrap_image = nstep.recover_image(unwrap_vector, mask, self.cam_height, self.cam_width)
+            unwrap_image = nstep.recover_image(unwrap_vector, self.mask, self.cam_height, self.cam_width)
             unwrap_dist = nstep.undistort(unwrap_image, self.cam_mtx, self.cam_dist)
-            mask = ~np.isnan(unwrap_dist)
+            self.mask = ~np.isnan(unwrap_dist)
             u = np.arange(0, unwrap_dist.shape[1])
             v = np.arange(0, unwrap_dist.shape[0])
             uc, vc = np.meshgrid(u, v)
-            uc = uc[mask]
-            vc = vc[mask]
+            uc = uc[self.mask]
+            vc = vc[self.mask]
             up = (unwrap_dist - self.phase_st) * self.pitch_list[-1] / (2 * np.pi)
-            up = up[mask]
+            up = up[self.mask]
         else:
-            unwrap_image = nstep_cp.recover_image_cp(unwrap_vector, mask, self.cam_height, self.cam_width)
+            unwrap_image = nstep_cp.recover_image_cp(unwrap_vector, self.mask, self.cam_height, self.cam_width)
             unwrap_dist = nstep_cp.undistort_cp(unwrap_image, self.cam_mtx, self.cam_dist)
-            mask = ~np.isnan(unwrap_dist)
+            self.mask = ~cp.isnan(unwrap_dist)
             u = cp.arange(0, unwrap_dist.shape[1])
             v = cp.arange(0, unwrap_dist.shape[0])
             uc, vc = cp.meshgrid(u, v)
-            uc = uc[mask]
-            vc = vc[mask]
+            uc = uc[self.mask]
+            vc = vc[self.mask]
             up = (unwrap_dist - self.phase_st) * self.pitch_list[-1] / (2 * cp.pi)
-            up = up[mask]
-            mask = cp.asnumpy(mask)
+            up = up[self.mask]
+            self.mask = cp.asnumpy(self.mask)
         
         coords = self.triangulation(uc, vc, up) #return is numpy
-        return coords, mask, uc, vc, up
+        return coords, uc, vc, up
 
     @staticmethod
     def diff_funs_x(hc_11, hc_13, hc_22, hc_23, hc_33, hp_11, hp_12, hp_13,
@@ -302,14 +305,12 @@ class Reconstruction:
         df_dhp_34 = (det * (up * hc_11 * hc_22))/det**2
         
         return df_dup, df_dhc_11, df_dhc_13, df_dhc_22, df_dhc_23, df_dhc_33, df_dhp_11, df_dhp_12, df_dhp_13, df_dhp_14, df_dhp_31, df_dhp_32, df_dhp_33, df_dhp_34
-
-    def sigma_random(self, modulation_vector, uc, vc, up):
+#TODO: Directly pass sigmasq phi for calculation
+    def sigma_random(self, sigma_sq_phi, uc, vc, up):
         """
         Function to calculate variance of x,y,z coordinates
         """
         
-        
-        sigma_sq_phi = (2 * self.sigma**2) / (self.N_list[-1] * modulation_vector**2)
         sigma_sq_up = sigma_sq_phi * self.pitch_list[-1]**2 / 4 * np.pi**2
         
         hc_11 = self.cam_h_mtx[0, 0]
@@ -369,12 +370,12 @@ class Reconstruction:
         return sigmasq_x, sigmasq_y, sigmasq_z, derv_x, derv_y, derv_z
     
     # This will be optional once instant display is setup
-    def cloud_save(self, coords, inte_rgb, cordi_sigma, temperature_image, mask):
+    def cloud_save(self, coords, inte_rgb, cordi_sigma, temperature_image):
         
         xyz = list(map(tuple, coords)) 
         color = list(map(tuple, inte_rgb))
         if self.temp:
-            temperature_vector = temperature_image[mask]
+            temperature_vector = temperature_image[self.mask]
             temperature_vector = np.array(temperature_vector, dtype=[('temperature', 'f4')])
         else:
             temperature_vector = [None]
@@ -395,9 +396,8 @@ class Reconstruction:
 
     def complete_recon(self,
                        unwrap_vector, 
-                       mask,
                        inte_rgb_image, 
-                       mod_img,    
+                       sigma_sq_high_phi,    
                        temperature_image):
         """
         Function to completely reconstruct object applying modulation mask to saving point cloud.
@@ -406,12 +406,10 @@ class Reconstruction:
         ----------
         unwrap_vector: np.ndarray/cp.ndarray. 
                        Unwrapped phase map vector of object.
-        mask: np.ndarray/cp.ndarray.
-                        Masked used to convert between image and vector format of data.
-        mod_img: np.ndarray/cp.ndarray.
-                           Intensity modulation image.
         inte_rgb_image: np.ndarray/cp.ndarray.
                          Object texture image.
+        sigma_sq_high_phi: np.ndarray/cp.ndarray.
+                           Variance of lowest pitch.
         temperature_image: np.ndarray/cp.ndarray.
                             Temperature data of object.
         Returns
@@ -423,12 +421,12 @@ class Reconstruction:
         cordi_sigma: np.ndarray/cp.ndarray. 
                     Standard deviation of each pixel.
         """
-        coords, mask, uc, vc, up = self.reconstruction_obj(unwrap_vector, mask)
-        inte_img = inte_rgb_image[mask] / np.nanmax(inte_rgb_image[mask])
+        coords, uc, vc, up = self.reconstruction_obj(unwrap_vector)
+        inte_img = inte_rgb_image[self.mask] / np.nanmax(inte_rgb_image[self.mask])
         inte_rgb = np.stack((inte_img, inte_img, inte_img), axis=-1)
-        modulation_vector = mod_img[mask]
+        sigma_sq_high_phi_vect = sigma_sq_high_phi[self.mask]
         if self.probability:
-            sigmasq_x, sigmasq_y, sigmasq_z, derv_x, derv_y, derv_z = self.sigma_random(modulation_vector, uc, vc, up)
+            sigmasq_x, sigmasq_y, sigmasq_z, derv_x, derv_y, derv_z = self.sigma_random(sigma_sq_high_phi_vect, uc, vc, up)
             sigma_x = np.sqrt(sigmasq_x)
             sigma_y = np.sqrt(sigmasq_y)
             sigma_z = np.sqrt(sigmasq_z)
@@ -436,8 +434,8 @@ class Reconstruction:
         else:
             cordi_sigma = None
         if self.save_ply: 
-            self.cloud_save(coords, inte_rgb, cordi_sigma, temperature_image, mask)  
-        return coords, inte_rgb, cordi_sigma, mask, modulation_vector
+            self.cloud_save(coords, inte_rgb, cordi_sigma, temperature_image)  
+        return coords, inte_rgb, cordi_sigma
 
     def obj_reconst_wrapper(self):
         """
@@ -483,7 +481,12 @@ class Reconstruction:
         
         if self.type_unwrap == 'multifreq':
             if self.processing == 'cpu':
-                modulation_vector, orig_img, phase_map, mask = nstep.phase_cal(images_arr, self.limit, self.N_list, False)
+                modulation_vector, orig_img, phase_map, mask, sigma_sq_high_phi = nstep.phase_cal(images_arr,
+                                                                                                  self.limit, 
+                                                                                                  self.N_list, 
+                                                                                                  self.pitch_list, 
+                                                                                                  self.model_list,
+                                                                                                  False)
                 phase_map[0][phase_map[0] < EPSILON] = phase_map[0][phase_map[0] < EPSILON] + 2 * np.pi
                 unwrap_vector, k_arr = nstep.multifreq_unwrap(self.pitch_list,
                                                               phase_map,
@@ -493,13 +496,14 @@ class Reconstruction:
                                                               self.cam_width,
                                                               self.cam_height)
                 orig_img = orig_img[-1] 
-                mod_img = nstep.recover_image(modulation_vector[-1], mask, self.cam_height, self.cam_width)
-                mod_dist = nstep.undistort(mod_img, self.cam_mtx, self.cam_dist)
+                self.mask = mask
             elif self.processing == 'gpu':
                 images_arr = cp.asarray(images_arr)
-                modulation_vector, orig_img, phase_map, mask = nstep_cp.phase_cal_cp(images_arr,
+                modulation_vector, orig_img, phase_map, mask, sigma_sq_high_phi = nstep_cp.phase_cal_cp(images_arr,
                                                                                      self.limit,
                                                                                      self.N_list,
+                                                                                     self.pitch_list,
+                                                                                     self.model_list,
                                                                                      False)
                 phase_map[0][phase_map[0] < EPSILON] = phase_map[0][phase_map[0] < EPSILON] + 2 * np.pi
                 unwrap_vector, k_arr = nstep_cp.multifreq_unwrap_cp(self.pitch_list,
@@ -510,14 +514,17 @@ class Reconstruction:
                                                                     self.cam_width,
                                                                     self.cam_height)
                 orig_img = cp.asnumpy(orig_img[-1])
-                mod_img = nstep_cp.recover_image_cp(modulation_vector[-1], mask, self.cam_height, self.cam_width)
-                mod_dist = nstep_cp.undistort_cp(mod_img, self.cam_mtx, self.cam_dist)
+                self.mask = mask
         elif self.type_unwrap == 'multiwave':
             eq_wav12 = (self.pitch_list[-1] * self.pitch_list[1]) / (self.pitch_list[1] - self.pitch_list[-1])
             eq_wav123 = self.pitch_list[0] * eq_wav12 / (self.pitch_list[0] - eq_wav12)
             self.pitch_list = np.insert(self.pitch_list, 0, eq_wav123)
             self.pitch_list = np.insert(self.pitch_list, 2, eq_wav12)
-            modulation_vector, orig_img, phase_map, mask = nstep.phase_cal(images_arr, self.limit, self.N_list, False)
+            modulation_vector, orig_img, phase_map, mask, sigma_sq_high_phi = nstep.phase_cal(images_arr, 
+                                                                                              self.limit, 
+                                                                                              self.N_list, 
+                                                                                              self.pitch_list, 
+                                                                                              False)
             phase_wav12 = np.mod(phase_map[0] - phase_map[1], 2 * np.pi)
             phase_wav123 = np.mod(phase_wav12 - phase_map[2], 2 * np.pi)
             phase_wav123[phase_wav123 > TAU] = phase_wav123[phase_wav123 > TAU] - 2 * np.pi
@@ -530,19 +537,19 @@ class Reconstruction:
                                                       mask,
                                                       self.cam_width,
                                                       self.cam_height)
+            self.mask = mask
         if os.path.exists(os.path.join(self.object_path, 'white.jpg')):
             inte_img = cv2.imread(os.path.join(self.object_path, 'white.jpg'))
             inte_rgb_image = inte_img[..., ::-1].copy()
         else:
             inte_rgb_image = orig_img
         
-        obj_cordi, obj_color, cordi_sigma, mask, modulation_vector = self.complete_recon(unwrap_vector,
-                                                                                         mask,
-                                                                                         inte_rgb_image,
-                                                                                         mod_dist,
-                                                                                         temperature_image)
+        obj_cordi, obj_color, cordi_sigma, = self.complete_recon(unwrap_vector,                                                
+                                                                 inte_rgb_image,
+                                                                 sigma_sq_high_phi,
+                                                                 temperature_image)
         
-        return obj_cordi, obj_color, cordi_sigma, mask, modulation_vector
+        return obj_cordi, obj_color, cordi_sigma, self.mask 
     
 def undistort_point(xc_yc, camera_dist):
     r_sq = xc_yc[0]**2 + xc_yc[1]**2
@@ -616,13 +623,16 @@ def reconst_test(savedir):
 def main():
     
     print("\nPlease Choose")
-    option = input("\n1:Reconstruction test\n3: 3 level reconstruction \n4: 4 level reconstruction")
+    option = input("\n1:Reconstruction test \n2: 2 level reconstruction \n3: 3 level reconstruction \n4: 4 level reconstruction")
     if option == "1":
         savedir = input("Enter the path for data or enter None:")
         if savedir == "None":
             savedir = r'test_data\reconst_toydata'
         reconst_test(savedir)
         return
+    elif option == "2":
+        pitch_list =[1000, 16]
+        N_list = [3, 3]
     elif option == "3":
         pitch_list = [1000, 110, 16]
         N_list = [3, 3, 9]
@@ -632,6 +642,7 @@ def main():
     else:
         print("ERROR: Invalid entry for number of levels")
         return
+    limit = float(input("\n Enter background limit:"))
     save_option = input("\n Do you want to save as .ply?(y/n):")
     if save_option == "y":
         save_ply = True
@@ -661,11 +672,9 @@ def main():
     cam_width = 1920 
     cam_height = 1200
     type_unwrap = 'multifreq'
-    sigma_path = r'C:\Users\kl001\Documents\pyfringe_test\mean_pixel_std\mean_std_pixel.npy'
     obj_path = r'C:\Users\kl001\Documents\grasshopper3_python\images'
     calib_path = r'C:\Users\kl001\Documents\pyfringe_test\multifreq_calib_images'
-    quantile_limit = 4.5
-    limit = nstep.B_cutoff_limit(sigma_path, quantile_limit, N_list, pitch_list)
+    model_path = r"E:\result_lut_calib\lut_models_pitch_dict.pkl"
     reconst_inst = Reconstruction(proj_width=proj_width,
                                   proj_height=proj_height,
                                   cam_width=cam_width,
@@ -677,15 +686,15 @@ def main():
                                   fringe_direc='v',
                                   kernel=7,
                                   data_type='jpeg',
-                                  processing='gpu',
+                                  processing='cpu',
                                   calib_path=calib_path,
-                                  sigma_path=sigma_path,
                                   object_path=obj_path,
+                                  model_path=model_path,
                                   temp=temp,
                                   save_ply=save_ply,
                                   probability=probability)
     
-    obj_cordi, obj_color, cordi_sigma, mask, modulation_vector = reconst_inst.obj_reconst_wrapper()
+    obj_cordi, obj_color, cordi_sigma, mask = reconst_inst.obj_reconst_wrapper()
     return
 
 
