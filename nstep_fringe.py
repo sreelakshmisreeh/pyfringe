@@ -784,7 +784,7 @@ def trend(x_grid, y_grid, coeff):
     xy_arr = np.array([one_row, x_row, y_row]).T
     phi_col = xy_arr@coeff
     return phi_col.reshape(x_grid.shape)
-
+#TODO: Update test function based new LUT table for corresponding pitches
 def main():
     test_limit = 0.9
     pitch_list = [50, 20]
@@ -797,7 +797,7 @@ def main():
     with open(r'test_data\horizontal_fringes_np.pickle', 'rb') as f:
         horizontal_fringes = pickle.load(f)
     # testing #1:
-    mod_stack, white_stack, phase_map, mask = phase_cal(fringe_arr_np, test_limit, N_list, True)
+    mod_stack, white_stack, phase_map, mask, sigmasq_phi_highpitch = phase_cal(fringe_arr_np, test_limit, N_list, True)
     phase_np_v = phase_map[::2]
     phase_np_h = phase_map[1::2]
     if phase_np_v.all() == vertical_fringes['phase_map_np_v'].all():
