@@ -619,7 +619,7 @@ def reconst_test(savedir):
     plt.xlabel("Count", fontsize=15)
     plt.show()
         
-       
+ #TODO: Update the pitch_list and N_list based new LUT       
 def main():
     
     print("\nPlease Choose")
