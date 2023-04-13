@@ -256,7 +256,7 @@ def recon_generate(width: int,
         delta_deck_list = None
     np.save(os.path.join(path, '{}_fringes.npy'.format(type_unwrap)), fringe_arr) 
     return fringe_arr, delta_deck_list
-
+#TODO: to be removed
 def B_cutoff_limit(sigma: float,
                    quantile_limit: float,
                    N_list: list,
@@ -301,6 +301,33 @@ def level_process(image_stack: np.ndarray,
     average_deck = np.sum(image_stack, axis=1) / n
     return sin_deck, cos_deck, modulation_deck, average_deck
 
+def mask_creation(sin_deck_last2levels: np.ndarray, 
+                  cos_deck_last2levels: np.ndarray, 
+                  images_last2levels: np.ndarray, 
+                  N_last2levels: list, 
+                  model_list: list, 
+                  pitch_last2levels: list):
+    """
+     Mask based on pixel quality. Quality is computed with local pixel variance in intensity for last two levels.
+     
+    """
+    images_shap = [images_last2levels[0].shape, images_last2levels[1].shape]
+    single_ik_std = np.array([model_list[i].predict(images_last2levels[i].ravel()).reshape(images_shap[i]) for i in range(2)])
+    single_ik_var = single_ik_std**2
+    denominator_cs = sin_deck_last2levels**2 + cos_deck_last2levels**2
+    sin_lst_k1 =  np.sin(2*np.pi*(np.tile(np.arange(1,N_last2levels[0] + 1), N_last2levels[0])
+                                  -np.repeat(np.arange(1, N_last2levels[0] + 1), N_last2levels[0]))/ N_last2levels[0])
+    sin_lst_k2 =  np.sin(2*np.pi*(np.tile(np.arange(1,N_last2levels[1] + 1), N_last2levels[1])
+                                  -np.repeat(np.arange(1, N_last2levels[1] + 1), N_last2levels[1]))/ N_last2levels[1])
+    
+    sigmasq_phi_highpitch = (np.sum(np.array([np.einsum("i,ijk->jk",sin_lst_k1[i*N_last2levels[0]:(i+1)*N_last2levels[0]], images_last2levels[0])**2 
+                                     *single_ik_var[0,i]/(denominator_cs[0]**2) for i in range(N_last2levels[0])]),axis=0))
+    sigmasq_phi_lowpitch = (np.sum(np.array([np.einsum("i,ijk->jk",sin_lst_k2[i*N_last2levels[1]:(i+1)*N_last2levels[1]], images_last2levels[1])**2 
+                                     *single_ik_var[1,i]/(denominator_cs[1]**2) for i in range(N_last2levels[1])]),axis=0))
+    sigmasq_delta = ((pitch_last2levels[1]**2/pitch_last2levels[0]**2) * sigmasq_phi_highpitch) + sigmasq_phi_lowpitch
+    mask = np.full((sigmasq_delta.shape), False)
+    mask = sigmasq_delta < (np.pi/6.5)**2
+    return mask, sigmasq_phi_highpitch
 
 def mask_application(mask: np.ndarray,
                      mod_stack: np.ndarray,
@@ -324,6 +351,8 @@ def mask_application(mask: np.ndarray,
 def phase_cal(images: np.ndarray,
               limit: float, 
               N: list,
+              pitch: list,
+              model_list: list,
               calibration: bool) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     Function computes phase map for all levels given in list N.
@@ -332,9 +361,13 @@ def phase_cal(images: np.ndarray,
     images: np.ndarray:np.float64.
             Captured fringe images.
     limit: float.
-           Data modulation limit. Regions with data modulation lower than limit will be masked out.
+           Background limit. Regions with low intensity for reference images lesser than limit will be masked out.
     N: list.
         List of number of patterns in each level.
+    pitch: list.
+         List of number of pixels per fringe period each level.
+    model_list: list.
+            List of LUT models corresponding to last two levels.
     calibration: bool.
                  If calibration is set the double of N is taken assuming horizontal and vertical fringes.
 
@@ -348,18 +381,23 @@ def phase_cal(images: np.ndarray,
                Wrapped phase map of each level stacked together after applying mask.
     mask: bool
           Mask applied to image.
-
+    
+    sigmasq_phi_highpitch: np.ndarray: float
+                            Variance map for smallest pitch.
     """
     if calibration:
         repeat = 2
     else:
         repeat = 1
+    
+    back_mask = (np.max(images[:3], axis=0) > limit).astype(float)
+    back_mask[back_mask == 0] = np.nan
+    images = np.einsum("ijk,jk->ijk", images, back_mask)
+    
     if len(set(N))==2:
         image_set1 = images[0:(repeat*len(N)-repeat)*N[0]].reshape((repeat*len(N)-repeat), N[0], images.shape[-2], images.shape[-1])
         image_set2 = images[(repeat*len(N)-repeat)*N[0]:].reshape(repeat, N[-1], images.shape[-2], images.shape[-1])
         image_set = [image_set1, image_set2]
-
-        mask = np.full((images.shape[-2], images.shape[-1]), True)
         sin_stack = None
         cos_stack = None
         mod_stack = None
@@ -376,17 +414,19 @@ def phase_cal(images: np.ndarray,
                 cos_stack = np.vstack((cos_stack, cos_deck))
                 mod_stack = np.vstack((mod_stack, modulation))
                 white_stack = np.vstack((white_stack, (modulation + average_int)))
-            mask_temp = modulation > limit
-            mask &= np.prod(mask_temp, axis=0, dtype=bool)
     else:
         image_set = images.reshape(int(images.shape[0]/N[0]), N[0], images.shape[-2], images.shape[-1])
         sin_stack, cos_stack, mod_stack, average_stack = level_process(image_set, N[0])
         white_stack = mod_stack + average_stack
-        mask = mod_stack > limit
-        mask = np.prod(mask, axis=0, dtype=bool)
+    mask, sigmasq_phi_highpitch =  mask_creation(sin_stack[-2:], 
+                                                 cos_stack[-2:], 
+                                                 image_set[-2:], 
+                                                 N[-2:], 
+                                                 model_list, 
+                                                 pitch[-2:])
     sin_stack, cos_stack, mod_stack = mask_application(mask, mod_stack, sin_stack, cos_stack)
     phase_map = -np.arctan2(sin_stack, cos_stack)  # wrapped phase;
-    return mod_stack, white_stack, phase_map, mask
+    return mod_stack, white_stack, phase_map, mask, sigmasq_phi_highpitch
 
 def recover_image(vector_array: np.ndarray, 
                   flag: np.ndarray, 
