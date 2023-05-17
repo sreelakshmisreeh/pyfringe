@@ -40,8 +40,8 @@ def mask_creation_cp(sin_deck_last2levels: cp.ndarray,
      
     """
     images_shap = [images_last2levels[0].shape, images_last2levels[1].shape]
-    single_ik_std = cp.array([model_list[i].predict(cp.asnumpy(images_last2levels[i].ravel())).reshape(images_shap[i]) for i in range(2)])
-    single_ik_var = single_ik_std**2
+    single_ik_var1 = cp.asarray((model_list[0].predict(cp.asnumpy(images_last2levels[0].ravel())).reshape(images_shap[0]))**2)
+    single_ik_var2 = cp.asarray((model_list[1].predict(cp.asnumpy(images_last2levels[1].ravel())).reshape(images_shap[1]))**2)
     denominator_cs = sin_deck_last2levels**2 + cos_deck_last2levels**2
     sin_lst_k1 =  cp.sin(2*cp.pi*(cp.tile(cp.arange(1,N_last2levels[0] + 1), N_last2levels[0])
                                   -cp.repeat(cp.arange(1, N_last2levels[0] + 1), N_last2levels[0]))/ N_last2levels[0])
@@ -49,13 +49,13 @@ def mask_creation_cp(sin_deck_last2levels: cp.ndarray,
                                   -cp.repeat(cp.arange(1, N_last2levels[1] + 1), N_last2levels[1]))/ N_last2levels[1])
     
     sigmasq_phi_highpitch = (cp.sum(cp.array([cp.einsum("i,ijk->jk",sin_lst_k1[i*N_last2levels[0]:(i+1)*N_last2levels[0]], images_last2levels[0])**2 
-                                     *single_ik_var[0,i]/(denominator_cs[0]**2) for i in range(N_last2levels[0])]),axis=0))
+                                     *single_ik_var1[i]/(denominator_cs[0]**2) for i in range(N_last2levels[0])]),axis=0))
     sigmasq_phi_lowpitch = (cp.sum(cp.array([cp.einsum("i,ijk->jk",sin_lst_k2[i*N_last2levels[1]:(i+1)*N_last2levels[1]], images_last2levels[1])**2 
-                                     *single_ik_var[1,i]/(denominator_cs[1]**2) for i in range(N_last2levels[1])]),axis=0))
+                                     *single_ik_var2[i]/(denominator_cs[1]**2) for i in range(N_last2levels[1])]),axis=0))
     sigmasq_delta = ((pitch_last2levels[1]**2/pitch_last2levels[0]**2) * sigmasq_phi_highpitch) + sigmasq_phi_lowpitch
     mask = cp.full((sigmasq_delta.shape), False)
     mask = sigmasq_delta < (cp.pi/6.5)**2
-    return mask, sigmasq_phi_highpitch
+    return mask, sigmasq_phi_lowpitch
 
 def mask_application_cp(mask_cp: cp.ndarray,
                         mod_stack_cp: cp.ndarray,
@@ -75,8 +75,6 @@ def mask_application_cp(mask_cp: cp.ndarray,
 def phase_cal_cp(images_cp: cp.ndarray,
                  limit: float,
                  N: list,
-                 pitch: list,
-                 model_list: list,
                  calibration: bool) -> Tuple[cp.ndarray, cp.ndarray, cp.ndarray, cp.ndarray]:
     """
     Function computes phase map for all levels given in list N.
@@ -106,8 +104,9 @@ def phase_cal_cp(images_cp: cp.ndarray,
         repeat = 2
     else:
         repeat = 1
-    
-    back_mask = (cp.max(images_cp[:3], axis=0) > limit).astype(float)
+        
+    mask_cp = (cp.max(images_cp[:N[0]], axis=0) > limit)
+    back_mask = mask_cp.astype(float)
     back_mask[back_mask == 0] = cp.nan
     images_cp = cp.einsum("ijk,jk->ijk", images_cp, back_mask)
     
@@ -115,6 +114,7 @@ def phase_cal_cp(images_cp: cp.ndarray,
         image_set1 = images_cp[0:(repeat*len(N)-repeat)*N[0]].reshape((repeat*len(N)-repeat), N[0], images_cp.shape[-2], images_cp.shape[-1])
         image_set2 = images_cp[(repeat*len(N)-repeat)*N[0]:].reshape(repeat, N[-1], images_cp.shape[-2], images_cp.shape[-1])
         image_set = [image_set1, image_set2]
+        #images_last2levels = [image_set1[-1],image_set2[0]]
         sin_stack_cp = None
         cos_stack_cp = None
         mod_stack_cp = None
@@ -136,17 +136,13 @@ def phase_cal_cp(images_cp: cp.ndarray,
 
     else:
         image_set = images_cp.reshape(int(images_cp.shape[0]/N[0]), N[0], images_cp.shape[-2], images_cp.shape[-1])
+        #images_last2levels = image_set[-2:]
         sin_stack_cp, cos_stack_cp, mod_stack_cp, average_stack_cp = level_process_cp(image_set, N[0])
         white_stack_cp = mod_stack_cp + average_stack_cp
-    mask_cp, sigmasq_phi_highpitch_cp =  mask_creation_cp(sin_stack_cp[-2:], 
-                                                          cos_stack_cp[-2:], 
-                                                          image_set[-2:], 
-                                                          N[-2:], 
-                                                          model_list, 
-                                                          pitch[-2:])
+   
     sin_stack_cp, cos_stack_cp, mod_stack_cp = mask_application_cp(mask_cp, mod_stack_cp, sin_stack_cp, cos_stack_cp)
     phase_map_cp = -cp.arctan2(sin_stack_cp, cos_stack_cp)  # wrapped phase;
-    return mod_stack_cp, white_stack_cp, phase_map_cp, mask_cp, sigmasq_phi_highpitch_cp
+    return mod_stack_cp, white_stack_cp, phase_map_cp, mask_cp
 
 def recover_image_cp(vector_array: cp.ndarray,
                      mask: cp.ndarray,

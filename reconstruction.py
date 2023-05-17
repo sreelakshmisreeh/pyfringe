@@ -58,7 +58,7 @@ class Reconstruction:
         self.calib_path = calib_path
         self.object_path = object_path
         self.temp = temp
-        self. data_type = data_type
+        self.data_type = data_type
         self.save_ply = save_ply
         self.probability = probability
         
@@ -305,13 +305,13 @@ class Reconstruction:
         df_dhp_34 = (det * (up * hc_11 * hc_22))/det**2
         
         return df_dup, df_dhc_11, df_dhc_13, df_dhc_22, df_dhc_23, df_dhc_33, df_dhp_11, df_dhp_12, df_dhp_13, df_dhp_14, df_dhp_31, df_dhp_32, df_dhp_33, df_dhp_34
-#TODO: Directly pass sigmasq phi for calculation
+
     def sigma_random(self, sigma_sq_phi, uc, vc, up):
         """
         Function to calculate variance of x,y,z coordinates
         """
         
-        sigma_sq_up = sigma_sq_phi * self.pitch_list[-1]**2 / 4 * np.pi**2
+        sigma_sq_up = sigma_sq_phi * self.pitch_list[-1]**2 / (4 * np.pi**2)
         
         hc_11 = self.cam_h_mtx[0, 0]
         sigmasq_hc_11 = self.cam_h_mtx_std[0, 0]**2
@@ -367,6 +367,14 @@ class Reconstruction:
                     + (df_dhp_11_z**2 * sigmasq_hp_11) + (df_dhp_12_z**2 * sigmasq_hp_12) + (df_dhp_13_z**2 * sigmasq_hp_13) + (df_dhp_14_z**2 * sigmasq_hp_14) + (df_dhp_31_z**2 * sigmasq_hp_31) + (df_dhp_32_z**2 * sigmasq_hp_32) + (df_dhp_33_z**2 * sigmasq_hp_33) + (df_dhp_34_z**2 * sigmasq_hp_34))
         derv_z = np.stack((df_dup_z, df_dhc_11_z, df_dhc_13_z, df_dhc_22_z, df_dhc_23_z, df_dhc_33_z, df_dhp_11_z, df_dhp_12_z, df_dhp_13_z, df_dhp_14_z, df_dhp_31_z, df_dhp_32_z, df_dhp_33_z, df_dhp_34_z))
         
+        if self.processing == 'gpu':
+            sigmasq_x = cp.asnumpy(sigmasq_x)
+            sigmasq_y = cp.asnumpy(sigmasq_y)
+            sigmasq_z = cp.asnumpy(sigmasq_z)
+            derv_x = cp.asnumpy(derv_x)
+            derv_y = cp.asnumpy(derv_y)
+            derv_z = cp.asnumpy(derv_z)
+            
         return sigmasq_x, sigmasq_y, sigmasq_z, derv_x, derv_y, derv_z
     
     # This will be optional once instant display is setup
@@ -396,8 +404,7 @@ class Reconstruction:
 
     def complete_recon(self,
                        unwrap_vector, 
-                       inte_rgb_image, 
-                       sigma_sq_high_phi,    
+                       inte_rgb_image,  
                        temperature_image):
         """
         Function to completely reconstruct object applying modulation mask to saving point cloud.
@@ -424,9 +431,9 @@ class Reconstruction:
         coords, uc, vc, up = self.reconstruction_obj(unwrap_vector)
         inte_img = inte_rgb_image[self.mask] / np.nanmax(inte_rgb_image[self.mask])
         inte_rgb = np.stack((inte_img, inte_img, inte_img), axis=-1)
-        sigma_sq_high_phi_vect = sigma_sq_high_phi[self.mask]
         if self.probability:
-            sigmasq_x, sigmasq_y, sigmasq_z, derv_x, derv_y, derv_z = self.sigma_random(sigma_sq_high_phi_vect, uc, vc, up)
+            sigma_sq_low_phi_vect = None # TODO: To be fixed once the final phase error model is ready
+            sigmasq_x, sigmasq_y, sigmasq_z, derv_x, derv_y, derv_z = self.sigma_random(sigma_sq_low_phi_vect, uc, vc, up)
             sigma_x = np.sqrt(sigmasq_x)
             sigma_y = np.sqrt(sigmasq_y)
             sigma_z = np.sqrt(sigmasq_z)
@@ -481,50 +488,47 @@ class Reconstruction:
         
         if self.type_unwrap == 'multifreq':
             if self.processing == 'cpu':
-                modulation_vector, orig_img, phase_map, mask, sigma_sq_high_phi = nstep.phase_cal(images_arr,
-                                                                                                  self.limit, 
-                                                                                                  self.N_list, 
-                                                                                                  self.pitch_list, 
-                                                                                                  self.model_list,
-                                                                                                  False)
+                modulation_vector, orig_img, phase_map, mask = nstep.phase_cal(images_arr,
+                                                                               self.limit, 
+                                                                               self.N_list,
+                                                                               False)
+                self.mask = mask
                 phase_map[0][phase_map[0] < EPSILON] = phase_map[0][phase_map[0] < EPSILON] + 2 * np.pi
                 unwrap_vector, k_arr = nstep.multifreq_unwrap(self.pitch_list,
                                                               phase_map,
                                                               self.kernel,
                                                               self.fringe_direc,
-                                                              mask,
+                                                              self.mask,
                                                               self.cam_width,
                                                               self.cam_height)
                 orig_img = orig_img[-1] 
-                self.mask = mask
+                
             elif self.processing == 'gpu':
                 images_arr = cp.asarray(images_arr)
-                modulation_vector, orig_img, phase_map, mask, sigma_sq_high_phi = nstep_cp.phase_cal_cp(images_arr,
+                modulation_vector, orig_img, phase_map, mask = nstep_cp.phase_cal_cp(images_arr,
                                                                                      self.limit,
                                                                                      self.N_list,
-                                                                                     self.pitch_list,
-                                                                                     self.model_list,
                                                                                      False)
                 phase_map[0][phase_map[0] < EPSILON] = phase_map[0][phase_map[0] < EPSILON] + 2 * np.pi
+                self.mask = mask
                 unwrap_vector, k_arr = nstep_cp.multifreq_unwrap_cp(self.pitch_list,
                                                                     phase_map,
                                                                     self.kernel,
                                                                     self.fringe_direc,
-                                                                    mask,
+                                                                    self.mask,
                                                                     self.cam_width,
                                                                     self.cam_height)
                 orig_img = cp.asnumpy(orig_img[-1])
-                self.mask = mask
+                
         elif self.type_unwrap == 'multiwave':
             eq_wav12 = (self.pitch_list[-1] * self.pitch_list[1]) / (self.pitch_list[1] - self.pitch_list[-1])
             eq_wav123 = self.pitch_list[0] * eq_wav12 / (self.pitch_list[0] - eq_wav12)
             self.pitch_list = np.insert(self.pitch_list, 0, eq_wav123)
             self.pitch_list = np.insert(self.pitch_list, 2, eq_wav12)
-            modulation_vector, orig_img, phase_map, mask, sigma_sq_high_phi = nstep.phase_cal(images_arr, 
-                                                                                              self.limit, 
-                                                                                              self.N_list, 
-                                                                                              self.pitch_list, 
-                                                                                              False)
+            modulation_vector, orig_img, phase_map, mask = nstep.phase_cal(images_arr, 
+                                                                           self.limit, 
+                                                                           self.N_list,
+                                                                           False)
             phase_wav12 = np.mod(phase_map[0] - phase_map[1], 2 * np.pi)
             phase_wav123 = np.mod(phase_wav12 - phase_map[2], 2 * np.pi)
             phase_wav123[phase_wav123 > TAU] = phase_wav123[phase_wav123 > TAU] - 2 * np.pi
@@ -546,7 +550,6 @@ class Reconstruction:
         
         obj_cordi, obj_color, cordi_sigma, = self.complete_recon(unwrap_vector,                                                
                                                                  inte_rgb_image,
-                                                                 sigma_sq_high_phi,
                                                                  temperature_image)
         
         return obj_cordi, obj_color, cordi_sigma, self.mask 
@@ -618,8 +621,7 @@ def reconst_test(savedir):
     plt.title("Phase difference", fontsize=20)
     plt.xlabel("Count", fontsize=15)
     plt.show()
-        
- #TODO: Update the pitch_list and N_list based new LUT       
+            
 def main():
     
     print("\nPlease Choose")
@@ -631,10 +633,10 @@ def main():
         reconst_test(savedir)
         return
     elif option == "2":
-        pitch_list =[1000, 16]
+        pitch_list =[1200, 18]
         N_list = [3, 3]
     elif option == "3":
-        pitch_list = [1000, 110, 16]
+        pitch_list = [1200, 120, 12]
         N_list = [3, 3, 9]
     elif option == "4":
         pitch_list =[1375, 275, 55, 11] 
@@ -642,8 +644,8 @@ def main():
     else:
         print("ERROR: Invalid entry for number of levels")
         return
-    limit = float(input("\n Enter background limit:"))
-    save_option = input("\n Do you want to save as .ply?(y/n):")
+    limit = float(input("\nEnter background limit:"))
+    save_option = input("\nDo you want to save as .ply?(y/n):")
     if save_option == "y":
         save_ply = True
     elif save_option == "n":

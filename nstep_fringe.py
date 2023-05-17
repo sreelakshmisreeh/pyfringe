@@ -312,8 +312,8 @@ def mask_creation(sin_deck_last2levels: np.ndarray,
      
     """
     images_shap = [images_last2levels[0].shape, images_last2levels[1].shape]
-    single_ik_std = np.array([model_list[i].predict(images_last2levels[i].ravel()).reshape(images_shap[i]) for i in range(2)])
-    single_ik_var = single_ik_std**2
+    single_ik_var1 = (model_list[0].predict(images_last2levels[0].ravel()).reshape(images_shap[0]))**2
+    single_ik_var2 = (model_list[1].predict(images_last2levels[1].ravel()).reshape(images_shap[1]))**2
     denominator_cs = sin_deck_last2levels**2 + cos_deck_last2levels**2
     sin_lst_k1 =  np.sin(2*np.pi*(np.tile(np.arange(1,N_last2levels[0] + 1), N_last2levels[0])
                                   -np.repeat(np.arange(1, N_last2levels[0] + 1), N_last2levels[0]))/ N_last2levels[0])
@@ -321,13 +321,13 @@ def mask_creation(sin_deck_last2levels: np.ndarray,
                                   -np.repeat(np.arange(1, N_last2levels[1] + 1), N_last2levels[1]))/ N_last2levels[1])
     
     sigmasq_phi_highpitch = (np.sum(np.array([np.einsum("i,ijk->jk",sin_lst_k1[i*N_last2levels[0]:(i+1)*N_last2levels[0]], images_last2levels[0])**2 
-                                     *single_ik_var[0,i]/(denominator_cs[0]**2) for i in range(N_last2levels[0])]),axis=0))
+                                     *single_ik_var1[i]/(denominator_cs[0]**2) for i in range(N_last2levels[0])]),axis=0))
     sigmasq_phi_lowpitch = (np.sum(np.array([np.einsum("i,ijk->jk",sin_lst_k2[i*N_last2levels[1]:(i+1)*N_last2levels[1]], images_last2levels[1])**2 
-                                     *single_ik_var[1,i]/(denominator_cs[1]**2) for i in range(N_last2levels[1])]),axis=0))
+                                     *single_ik_var2[i]/(denominator_cs[1]**2) for i in range(N_last2levels[1])]),axis=0))
     sigmasq_delta = ((pitch_last2levels[1]**2/pitch_last2levels[0]**2) * sigmasq_phi_highpitch) + sigmasq_phi_lowpitch
     mask = np.full((sigmasq_delta.shape), False)
     mask = sigmasq_delta < (np.pi/6.5)**2
-    return mask, sigmasq_phi_highpitch
+    return mask, sigmasq_phi_lowpitch
 
 def mask_application(mask: np.ndarray,
                      mod_stack: np.ndarray,
@@ -351,8 +351,6 @@ def mask_application(mask: np.ndarray,
 def phase_cal(images: np.ndarray,
               limit: float, 
               N: list,
-              pitch: list,
-              model_list: list,
               calibration: bool) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     Function computes phase map for all levels given in list N.
@@ -366,8 +364,6 @@ def phase_cal(images: np.ndarray,
         List of number of patterns in each level.
     pitch: list.
          List of number of pixels per fringe period each level.
-    model_list: list.
-            List of LUT models corresponding to last two levels.
     calibration: bool.
                  If calibration is set the double of N is taken assuming horizontal and vertical fringes.
 
@@ -389,8 +385,9 @@ def phase_cal(images: np.ndarray,
         repeat = 2
     else:
         repeat = 1
-    
-    back_mask = (np.max(images[:3], axis=0) > limit).astype(float)
+    # Note: This mask method will remove all points below threshold like black regions    
+    mask = (np.max(images[:N[0]], axis=0) > limit)
+    back_mask = mask.astype(float)
     back_mask[back_mask == 0] = np.nan
     images = np.einsum("ijk,jk->ijk", images, back_mask)
     
@@ -398,6 +395,7 @@ def phase_cal(images: np.ndarray,
         image_set1 = images[0:(repeat*len(N)-repeat)*N[0]].reshape((repeat*len(N)-repeat), N[0], images.shape[-2], images.shape[-1])
         image_set2 = images[(repeat*len(N)-repeat)*N[0]:].reshape(repeat, N[-1], images.shape[-2], images.shape[-1])
         image_set = [image_set1, image_set2]
+        #images_last2levels = [image_set1[-1],image_set2[0]]
         sin_stack = None
         cos_stack = None
         mod_stack = None
@@ -416,17 +414,12 @@ def phase_cal(images: np.ndarray,
                 white_stack = np.vstack((white_stack, (modulation + average_int)))
     else:
         image_set = images.reshape(int(images.shape[0]/N[0]), N[0], images.shape[-2], images.shape[-1])
+        #images_last2levels = image_set[-2:]
         sin_stack, cos_stack, mod_stack, average_stack = level_process(image_set, N[0])
         white_stack = mod_stack + average_stack
-    mask, sigmasq_phi_highpitch =  mask_creation(sin_stack[-2:], 
-                                                 cos_stack[-2:], 
-                                                 image_set[-2:], 
-                                                 N[-2:], 
-                                                 model_list, 
-                                                 pitch[-2:])
     sin_stack, cos_stack, mod_stack = mask_application(mask, mod_stack, sin_stack, cos_stack)
     phase_map = -np.arctan2(sin_stack, cos_stack)  # wrapped phase;
-    return mod_stack, white_stack, phase_map, mask, sigmasq_phi_highpitch
+    return mod_stack, white_stack, phase_map, mask
 
 def recover_image(vector_array: np.ndarray, 
                   flag: np.ndarray, 
@@ -797,7 +790,7 @@ def main():
     with open(r'test_data\horizontal_fringes_np.pickle', 'rb') as f:
         horizontal_fringes = pickle.load(f)
     # testing #1:
-    mod_stack, white_stack, phase_map, mask, sigmasq_phi_highpitch = phase_cal(fringe_arr_np, test_limit, N_list, True)
+    mod_stack, white_stack, phase_map, mask = phase_cal(fringe_arr_np, test_limit, N_list, True)
     phase_np_v = phase_map[::2]
     phase_np_h = phase_map[1::2]
     if phase_np_v.all() == vertical_fringes['phase_map_np_v'].all():
