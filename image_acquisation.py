@@ -919,7 +919,7 @@ def main():
     option = input("Please choose:\n1: test\n2: Approx.frame period and exposure time\n3: gamma curve\n4: Camera noise\n5: calibration capture\n6: Reconstruction ")
     result = True
     if option == '1':
-        image_index_list = np.repeat(np.array([22,24,26,28,29,30]),3).tolist()
+        image_index_list = np.repeat(np.array([17,19,21,23,24,25]),3).tolist()
         pattern_num_list = [0, 1, 2] * len(set(image_index_list))
         savedir = r'C:\Users\kl001\Documents\grasshopper3_python\images'
         result &= run_proj_single_camera(savedir=savedir,
@@ -937,8 +937,8 @@ def main():
                                          proj_frame_period=34000,#33334,
                                          do_insert_black=True,
                                          led_select=4,
-                                         preview_image_index=21,
-                                         focus_image_index=34,
+                                         preview_image_index=16,
+                                         focus_image_index=29,
                                          image_section_size=None,
                                          pprint_status=True,
                                          save_npy=False,
@@ -950,7 +950,7 @@ def main():
         image_indices = np.arange(starting_index, starting_index+no_images).tolist()
         result &= optimal_frame_rate(image_indices, no_iterations)
     elif option == '3':
-        gamma_image_index_list = np.repeat(np.arange(5, 22), 3).tolist()
+        gamma_image_index_list = np.repeat(np.arange(0, 17), 3).tolist()
         gamma_pattern_num_list = [0, 1, 2] * len(set(gamma_image_index_list))
         savedir = r'C:\Users\kl001\Documents\pyfringe_test\gamma_images'
         result &= gamma_curve(gamma_image_index_list,
@@ -975,7 +975,7 @@ def main():
                       acquisition_index=acquisition_index)
         
     elif option == '5':
-        image_index_list = np.repeat(np.arange(22, 34), 3).tolist()
+        image_index_list = np.repeat(np.arange(17, 29), 3).tolist()
         pattern_num_list = [0, 1, 2] * len(set(image_index_list))
         savedir = r'C:\Users\kl001\Documents\pyfringe_test\multifreq_calib_images'
         number_scan = int(input("\nEnter number of scans"))
@@ -986,13 +986,16 @@ def main():
                                 number_scan=number_scan,
                                 acquisition_index=acquisition_index)
     elif option == '6':
-        no_of_levels =input("\nNo. of levels 3,4:")
+        no_of_levels =input("\nNo. of levels 2,3,4:")
         number_scan = int(input("\nEnter number of scans"))
-        if no_of_levels == "3":
-            image_index_list = np.repeat(np.arange(0, 5), 3).tolist()
+        if no_of_levels == "2":
+            image_index_list = np.repeat([30,35], 3).tolist()
+            pattern_num_list = [0, 1, 2] * len(set(image_index_list))
+        elif no_of_levels == "3":
+            image_index_list = np.repeat(np.arange(30, 35), 3).tolist()
             pattern_num_list = [0, 1, 2] * len(set(image_index_list))
         elif no_of_levels == "4" :
-            image_index_list = np.repeat(np.array([22,24,26,28,29,30]),3).tolist()
+            image_index_list = np.repeat(np.array([17,19,21,23,24,25]),3).tolist()
             pattern_num_list = [0, 1, 2] * len(set(image_index_list))
         savedir = r'C:\Users\kl001\Documents\grasshopper3_python\images'
         result &= run_proj_single_camera(savedir=savedir,
@@ -1010,8 +1013,8 @@ def main():
                                          proj_frame_period=34000,#33334,
                                          do_insert_black=True,
                                          led_select=4,
-                                         preview_image_index=21,
-                                         focus_image_index=34,
+                                         preview_image_index=16,
+                                         focus_image_index=29,
                                          image_section_size=None,
                                          pprint_status=True,
                                          save_npy=False,
