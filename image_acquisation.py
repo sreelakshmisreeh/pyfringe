@@ -10,6 +10,7 @@ import numpy as np
 import gspy
 import lcpy
 import cv2
+import glob
 from time import perf_counter_ns, sleep
 import usb.core
 import PySpin
@@ -136,11 +137,18 @@ def proj_cam_preview(cam,
     if result:
         delta_time = 50
         delta_cross = 100
+        mean_lst = []
+        max_int = 0
         result &= lcr.pattern_display('start')
         cam.BeginAcquisition()
         while True:                
             ret, frame = gspy.capture_image(cam)       
             img_show = cv2.resize(frame, None, fx=0.5, fy=0.5)
+            mean_lst.append(img_show)
+            if len(mean_lst) == 20:
+                mean_intensity = np.mean(np.array(mean_lst),axis=0)
+                max_int = np.max(mean_intensity)
+                mean_lst = []
             if preview_type == 'preview':
                 img_show_color = cv2.cvtColor(img_show, cv2.COLOR_GRAY2BGR)
                 img_show_color[img_show == 255] = [0, 0, 255]  # over exposed
@@ -155,6 +163,7 @@ def proj_cam_preview(cam,
             font = cv2.FONT_HERSHEY_SIMPLEX
             cv2.putText(img_show_color,'Exposure time:%s'%str(proj_exposure_period),(0,50),font,1,(0,255,255),2)  #text,coordinate,font,size of text,color,thickness of font
             cv2.putText(img_show_color,'Delta:%s'%str(delta_time),(0,100),font,1,(0,255,255),2)
+            cv2.putText(img_show_color,'Max intensity:%s'%str(max_int),(0,150),font,1,(0,255,255),2)
             cv2.imshow("press q to quit", img_show_color)
             key = cv2.waitKey(1)
             if key ==ord("+"):
@@ -643,7 +652,8 @@ def run_proj_single_camera(savedir,
                            image_section_size=None,
                            pprint_status=True,
                            save_npy=True,
-                           save_jpeg=False):
+                           save_jpeg=False,
+                           clear_dir=True):
     """
     Initialize and de-initialize projector and camera before and after capture.
     :param savedir: directory to save images.
@@ -668,6 +678,7 @@ def run_proj_single_camera(savedir,
     :param image_section_size: the number of images that are packed into a single npy file. If None is given, using len(image_index_list).
     :param save_npy: Save images as .npy format
     :param save_jpeg: Save images as .jpeg
+    :param clear_dir: Clear given directory
     :type savedir: str
     :type image_index_list: list
     :type pattern_num_list: list
@@ -689,13 +700,14 @@ def run_proj_single_camera(savedir,
     :type image_section_size: int/ None
     :type save_npy: bool
     :type save_jpeg: bool
+    :type clear_dir: bool
     :return result: True if successful, False otherwise.
     :rtype :bool
     """
     try:
         result, system, cam_list, num_cameras = gspy.sysScan()
         cam = cam_list[0]
-        if savedir is not None:
+        if clear_dir:
             gspy.clearDir(savedir)
         device = usb.core.find(idVendor=0x0451, idProduct=0x6401)  # find the projector usb port
         device.set_configuration()
@@ -827,10 +839,12 @@ def calib_capture(image_index_list,
                                     pprint_status=True,
                                     save_npy=True)
     return result
-def meanpixel_std(savedir,
+def meanpixel_var(savedir,
                   image_index,
                   pattern_no,
                   no_images,
+                  proj_exposure_period=27000,
+                  proj_frame_period=34000,
                   cam_width=1920,
                   cam_height=1200,
                   half_cross_length=100,
@@ -860,7 +874,7 @@ def meanpixel_std(savedir,
     image_index_list = [image_index]*no_images
     pattern_num_list = [pattern_no]*no_images
     result = run_proj_single_camera(savedir=savedir,
-                                    preview_option='Once',
+                                    preview_option='Never',
                                     number_scan=1,
                                     acquisition_index=acquisition_index,
                                     image_index_list=image_index_list,
@@ -870,29 +884,29 @@ def meanpixel_std(savedir,
                                     cam_capt_timeout=10,
                                     cam_black_level=0,
                                     cam_ExposureCompensation=0,
-                                    proj_exposure_period=27000,
-                                    proj_frame_period=34000,
+                                    proj_exposure_period=proj_exposure_period,
+                                    proj_frame_period=proj_frame_period,
                                     do_insert_black=True,
                                     led_select=4,
-                                    preview_image_index=21,
-                                    focus_image_index=34,
+                                    preview_image_index=16,
+                                    focus_image_index=None,
                                     image_section_size=None,
                                     pprint_status=True,
-                                    save_npy=True,
-                                    save_jpeg=False)
-    mean_std_pixel = None
-    std_pixel = None
+                                    save_npy=False,
+                                    save_jpeg=True)
+    mean_var_pixel = None
     if result:
-        n_scanned_image_list = np.load(os.path.join(savedir, 'capt_000_000000.npy'))
+        path = sorted(glob.glob(os.path.join(savedir,'capt_%03d_*.jpeg'%acquisition_index)),key=lambda x:int(os.path.basename(x)[-11:-5]))
+        n_scanned_image_list = np.array([cv2.imread(file,0) for file in path])
         camx = int(cam_width/2)
         camy = int(cam_height/2)
         capt_cropped = n_scanned_image_list[:, camy - half_cross_length: camy + half_cross_length, camx - half_cross_length: camx + half_cross_length]
-        std_pixel = np.std(capt_cropped, axis=0)
-        mean_std_pixel = np.mean(std_pixel)
-        np.save(os.path.join(savedir, 'mean_std_pixel.npy'), mean_std_pixel)
+        var_pixel = np.var(capt_cropped, axis=0)
+        mean_var_pixel = np.mean(var_pixel)
+        np.save(os.path.join(savedir, 'mean_var_pixel.npy'), mean_var_pixel)
     else:
-        print('ERROR: Capture failure ')
-    return mean_std_pixel, std_pixel
+        print('ERROR: Capture failure')
+    return mean_var_pixel, var_pixel
 
 def optimal_frame_rate(image_indices, no_iterations):
     device = usb.core.find(idVendor=0x0451, idProduct=0x6401)  # find the projector usb port
@@ -965,7 +979,7 @@ def main():
         no_images = int(input("\nNo. of iterations:"))
         acquisition_index=int(input("\nAcquisation index"))
         savedir = r'C:\Users\kl001\Documents\pyfringe_test\mean_pixel_std'
-        meanpixel_std(savedir,
+        meanpixel_var(savedir,
                       image_index,
                       pattern_no,
                       no_images,
@@ -998,6 +1012,7 @@ def main():
             image_index_list = np.repeat(np.array([17,19,21,23,24,25]),3).tolist()
             pattern_num_list = [0, 1, 2] * len(set(image_index_list))
         savedir = r'C:\Users\kl001\Documents\grasshopper3_python\images'
+        #savedir = r"E:\white board4\data20\test_data_30"
         result &= run_proj_single_camera(savedir=savedir,
                                          preview_option='Once',
                                          number_scan=number_scan,
@@ -1009,8 +1024,8 @@ def main():
                                          cam_capt_timeout=10,
                                          cam_black_level=0,
                                          cam_ExposureCompensation=0,
-                                         proj_exposure_period=27500,#27084,Check option 2 for recomended value
-                                         proj_frame_period=34000,#33334,
+                                         proj_exposure_period=20000,#27084,Check option 2 for recomended value
+                                         proj_frame_period=30000,#34000,#33334,
                                          do_insert_black=True,
                                          led_select=4,
                                          preview_image_index=16,
