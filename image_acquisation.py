@@ -324,7 +324,7 @@ def run_proj_cam_capt(cam,
                     return_array = False
                 if save_jpeg:
                     save_path_jpeg = os.path.join(savedir,
-                                                  'capt_%03d_%06d.jpeg' % (acquisition_index, count))
+                                                  'capt_%03d_%06d.tiff' % (acquisition_index, count))
                 else:
                     save_path_jpeg = None
                 ret, image_array = gspy.capture_image(cam=cam, save_path=save_path_jpeg, return_array=return_array)
