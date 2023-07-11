@@ -82,7 +82,7 @@ class Calibration:
         path: str.
               Path to read captured calibration images and save calibration results.
         data_type:str
-                  Calibration image data can be either .jpeg or .npy.
+                  Calibration image data can be either .tiff or .npy.
         processing:str.
                    Type of data processing. Use 'cpu' for desktop computation and 'gpu' for gpu.
 
@@ -110,8 +110,8 @@ class Calibration:
             return
         if not os.path.exists(self.path):
             print('ERROR: %s does not exist' % self.path)
-        if (data_type != 'jpeg') and (data_type != 'npy'):
-            print('ERROR: Invalid data type. Data type should be \'jpeg\' or \'npy\'')
+        if (data_type != 'tiff') and (data_type != 'npy'):
+            print('ERROR: Invalid data type. Data type should be \'tiff\' or \'npy\'')
         else:
             self.data_type = data_type
         if (processing != 'cpu') and (processing != 'gpu'):
@@ -213,14 +213,14 @@ class Calibration:
         proj_h_mtx = np.dot(st_proj_mtx, np.hstack((st_cam_proj_rmat, st_cam_proj_tvec)))
         cam_h_mtx = np.dot(st_cam_mtx, np.hstack((np.identity(3), np.zeros((3, 1)))))
         np.savez(os.path.join(self.path, '{}_mean_calibration_param.npz'.format(self.type_unwrap)), 
-                 cam_mtx_mean=st_cam_mtx, 
-                 cam_dist_mean=st_cam_dist, 
-                 proj_mtx_mean=st_proj_mtx, 
-                 proj_dist_mean=st_proj_dist,
-                 st_rmat_mean=st_cam_proj_rmat, 
-                 st_tvec_mean=st_cam_proj_tvec,
-                 cam_h_mtx_mean=cam_h_mtx,
-                 proj_h_mtx_mean=proj_h_mtx)
+                  cam_mtx_mean=st_cam_mtx, 
+                  cam_dist_mean=st_cam_dist, 
+                  proj_mtx_mean=st_proj_mtx, 
+                  proj_dist_mean=st_proj_dist,
+                  st_rmat_mean=st_cam_proj_rmat, 
+                  st_tvec_mean=st_cam_proj_tvec,
+                  cam_h_mtx_mean=cam_h_mtx,
+                  proj_h_mtx_mean=proj_h_mtx)
         np.savez(os.path.join(self.path, '{}_cam_rot_tvecs.npz'.format(self.type_unwrap)), cam_rvecs, cam_tvecs)
         return unwrapv_lst, unwraph_lst, white_lst, mask_lst, mod_lst, proj_img_lst, cam_objpts, cam_imgpts, proj_imgpts, euler_angles, cam_mean_error, cam_delta, proj_mean_error, proj_delta
     
@@ -526,9 +526,9 @@ class Calibration:
         for x in tqdm(acquisition_index_list,
                       desc='generating unwrapped phases map for {} poses'.format(len(acquisition_index_list))):
 
-            if self.data_type == 'jpeg':
-                if os.path.exists(os.path.join(self.path, 'capt_%03d_000000.jpg' % x)):
-                    img_path = sorted(glob.glob(os.path.join(self.path, 'capt_%03d*.jpg' % x)), key=os.path.getmtime)
+            if self.data_type == 'tiff':
+                if os.path.exists(os.path.join(self.path, 'capt_%03d_000000.tiff' % x)):
+                    img_path = sorted(glob.glob(os.path.join(self.path, 'capt_%03d*.tiff' % x)), key=os.path.getmtime)
                     images_arr = np.array([cv2.imread(file, 0) for file in img_path]).astype(np.float64)
                 else:
                     print("ERROR: path is not exist! None item appended to the result")
@@ -540,7 +540,7 @@ class Calibration:
                     print("ERROR: path is not exist! None item appended to the result")
                     images_arr = None
             else:
-                print("ERROR: data type is not supported, must be '.jpeg' or '.npy'.")
+                print("ERROR: data type is not supported, must be '.tiff' or '.npy'.")
                 images_arr = None
 
             if images_arr is not None:
@@ -612,8 +612,8 @@ class Calibration:
         all_img_paths = sorted(glob.glob(os.path.join(self.path, 'capt_*')), key=os.path.getmtime)
         acquisition_index_list = [int(i[-14:-11]) for i in all_img_paths]
         for x in tqdm(acquisition_index_list, desc='generating unwrapped phases map for {} images'.format(len(acquisition_index_list))):
-            if os.path.exists(os.path.join(self.path, 'capt_%03d_000000.jpg' % x)):
-                img_path = sorted(glob.glob(os.path.join(self.path, 'capt_%3d*.jpg' % x)), key=os.path.getmtime)
+            if os.path.exists(os.path.join(self.path, 'capt_%03d_000000.tiff' % x)):
+                img_path = sorted(glob.glob(os.path.join(self.path, 'capt_%3d*.tiff' % x)), key=os.path.getmtime)
                 images_arr = np.array([cv2.imread(file, 0) for file in img_path]).astype(np.float64)
                 multi_mod_v3, multi_white_v3, multi_phase_v3, flagv3 = nstep.phase_cal(images_arr[0: N_arr[0]],
                                                                              self.limit)
@@ -1451,9 +1451,9 @@ class Calibration:
         unwraph_lst = []
         for x in tqdm(sample_index,
                       desc='generating unwrapped phases map for {} poses'.format(len(sample_index))):
-            if self.data_type == 'jpeg':
-                if os.path.exists(os.path.join(self.path, 'capt_%03d_000000.jpg' % x)):
-                    img_path = sorted(glob.glob(os.path.join(self.path, 'capt_%03d*.jpg' % x)), key=os.path.getmtime)
+            if self.data_type == 'tiff':
+                if os.path.exists(os.path.join(self.path, 'capt_%03d_000000.tiff' % x)):
+                    img_path = sorted(glob.glob(os.path.join(self.path, 'capt_%03d*.tiff' % x)), key=os.path.getmtime)
                     images_arr = np.array([cv2.imread(file, 0) for file in img_path]).astype(np.float64)
                 else:
                     print("ERROR: path is not exist! None item appended to the result")
@@ -1465,7 +1465,7 @@ class Calibration:
                     print("ERROR: path is not exist! None item appended to the result")
                     images_arr = None
             else:
-                print("ERROR: data type is not supported, must be '.jpeg' or '.npy'.")
+                print("ERROR: data type is not supported, must be '.tiff' or '.npy'.")
                 images_arr = None
 
             if images_arr is not None:
