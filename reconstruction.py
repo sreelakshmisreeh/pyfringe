@@ -455,18 +455,18 @@ class Reconstruction:
                    Color (texture/ intensity) at each point.
     
         """
-        if self.data_type == 'jpeg':
-            if os.path.exists(os.path.join(self.object_path, 'capt_000_000000.jpeg')):
+        if self.data_type == 'tiff':
+            if os.path.exists(os.path.join(self.object_path, 'capt_000_000000.tiff')):
                 img_path = sorted(glob.glob(os.path.join(self.object_path, 'capt_*')), key=lambda x:int(os.path.basename(x)[-11:-5]))
                 images_arr = np.array([cv2.imread(file, 0) for file in img_path])
             else:
                 print("ERROR:Data path does not exist!")
                 return
             if self.temp:
-                if not os.path.exists(os.path.join(self.object_path, 'temperature.jpeg')):
-                    print("ERROR: Temperature data path %s does not exist"% (os.path.join(self.object_path, 'temperature.jpeg')))
+                if not os.path.exists(os.path.join(self.object_path, 'temperature.tiff')):
+                    print("ERROR: Temperature data path %s does not exist"% (os.path.join(self.object_path, 'temperature.tiff')))
                 else:
-                    temperature_image = np.load(os.path.join(self.object_path, 'temperature.jpeg'))
+                    temperature_image = np.load(os.path.join(self.object_path, 'temperature.tiff'))
             else:
                 temperature_image = None
         elif self.data_type == 'npy':
@@ -483,7 +483,7 @@ class Reconstruction:
             else:
                 temperature_image = None
         else:
-            print("ERROR: data type is not supported, must be '.jpeg' or '.npy'.")
+            print("ERROR: data type is not supported, must be '.tiff' or '.npy'.")
             images_arr = None
         
         if self.type_unwrap == 'multifreq':
@@ -542,8 +542,8 @@ class Reconstruction:
                                                       self.cam_width,
                                                       self.cam_height)
             self.mask = mask
-        if os.path.exists(os.path.join(self.object_path, 'white.jpg')):
-            inte_img = cv2.imread(os.path.join(self.object_path, 'white.jpg'))
+        if os.path.exists(os.path.join(self.object_path, 'white.tiff')):
+            inte_img = cv2.imread(os.path.join(self.object_path, 'white.tiff'))
             inte_rgb_image = inte_img[..., ::-1].copy()
         else:
             inte_rgb_image = orig_img
@@ -687,7 +687,7 @@ def main():
                                   pitch_list=pitch_list,
                                   fringe_direc='v',
                                   kernel=7,
-                                  data_type='jpeg',
+                                  data_type='tiff',
                                   processing='cpu',
                                   calib_path=calib_path,
                                   object_path=obj_path,
