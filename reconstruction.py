@@ -39,12 +39,13 @@ class Reconstruction:
                  kernel,
                  data_type,
                  processing,
+                 dark_bias_path,
                  calib_path,
                  object_path,
-                 model_path,
-                 temp,
-                 save_ply,
-                 probability):
+                 model_path=None,
+                 temp=False,
+                 save_ply=True,
+                 probability=False):
         self.proj_width = proj_width
         self.proj_height = proj_height
         self.cam_width = cam_width
@@ -77,12 +78,19 @@ class Reconstruction:
         else:
             self.object_path = object_path
             
-        if not os.path.exists(model_path):
-            print('ERROR:Path for noise error  %s does not exist' % self.calib_path)
+        if not os.path.exists(dark_bias_path):
+             print('ERROR:Path for dark bias  %s does not exist' % self.calib_path)
         else:
-            with open(model_path, "rb") as tt:
-                model_dict = pickle.load(tt)
-            self.model_list = [model_dict[pitch_list[-2]], model_dict[pitch_list[-1]]]
+            self.dark_bias = np.load(dark_bias_path)
+        if self.probability:    
+            if not os.path.exists(model_path):
+                 print('ERROR:Path for noise error  %s does not exist' % self.calib_path)
+            else:
+                 with open(model_path, "rb") as tt:
+                     self.model = pickle.load(tt)
+        else:
+            self.model = None
+             
     
         if processing == 'cpu':
             self.processing = processing
@@ -401,11 +409,13 @@ class Reconstruction:
             ]).write(os.path.join(self.object_path, 'obj.ply'))
         print("\n Point cloud saved at %s"% (os.path.join(self.object_path, 'obj.ply')))
         return
+    
 
     def complete_recon(self,
                        unwrap_vector, 
                        inte_rgb_image,  
-                       temperature_image):
+                       temperature_image,
+                       sigma_sq_phi):
         """
         Function to completely reconstruct object applying modulation mask to saving point cloud.
     
@@ -415,8 +425,6 @@ class Reconstruction:
                        Unwrapped phase map vector of object.
         inte_rgb_image: np.ndarray/cp.ndarray.
                          Object texture image.
-        sigma_sq_high_phi: np.ndarray/cp.ndarray.
-                           Variance of lowest pitch.
         temperature_image: np.ndarray/cp.ndarray.
                             Temperature data of object.
         Returns
@@ -432,7 +440,7 @@ class Reconstruction:
         inte_img = inte_rgb_image[self.mask] / np.nanmax(inte_rgb_image[self.mask])
         inte_rgb = np.stack((inte_img, inte_img, inte_img), axis=-1)
         if self.probability:
-            sigma_sq_low_phi_vect = None # TODO: To be fixed once the final phase error model is ready
+            sigma_sq_low_phi_vect = sigma_sq_phi[self.mask]
             sigmasq_x, sigmasq_y, sigmasq_z, derv_x, derv_y, derv_z = self.sigma_random(sigma_sq_low_phi_vect, uc, vc, up)
             sigma_x = np.sqrt(sigmasq_x)
             sigma_y = np.sqrt(sigmasq_y)
@@ -458,7 +466,7 @@ class Reconstruction:
         if self.data_type == 'tiff':
             if os.path.exists(os.path.join(self.object_path, 'capt_000_000000.tiff')):
                 img_path = sorted(glob.glob(os.path.join(self.object_path, 'capt_*')), key=lambda x:int(os.path.basename(x)[-11:-5]))
-                images_arr = np.array([cv2.imread(file, 0) for file in img_path])
+                images_arr = np.array([cv2.imread(file, 0) for file in img_path])- self.dark_bias
             else:
                 print("ERROR:Data path does not exist!")
                 return
@@ -471,7 +479,7 @@ class Reconstruction:
                 temperature_image = None
         elif self.data_type == 'npy':
             if os.path.exists(os.path.join(self.object_path, 'capt_000_000000.npy')):
-                images_arr = np.load(os.path.join(self.object_path, 'capt_000_000000.npy')).astype(np.float64)
+                images_arr = np.load(os.path.join(self.object_path, 'capt_000_000000.npy')).astype(np.float64) - self.dark_bias
             else:
                 print("ERROR:Data path does not exist!")
                 images_arr = None
@@ -502,7 +510,14 @@ class Reconstruction:
                                                               self.cam_width,
                                                               self.cam_height)
                 orig_img = orig_img[-1] 
-                
+                if self.probability:
+                    cov_arr,_ = nstep.pred_var_fn(images_arr[-self.N_list[-1]:], self.model)
+                    sigma_sq_phi = nstep.var_func(images_arr[-self.N_list[-1]:],
+                                                  self.mask,
+                                                  self.N_list[-1],
+                                                  cov_arr)
+                else:
+                    sigma_sq_phi = None
             elif self.processing == 'gpu':
                 images_arr = cp.asarray(images_arr)
                 modulation_vector, orig_img, phase_map, mask = nstep_cp.phase_cal_cp(images_arr,
@@ -519,6 +534,14 @@ class Reconstruction:
                                                                     self.cam_width,
                                                                     self.cam_height)
                 orig_img = cp.asnumpy(orig_img[-1])
+                if self.probability:
+                    cov_arr,_ = nstep_cp.pred_var_fn(images_arr[-self.N_list[-1]:], self.model)
+                    sigma_sq_phi = nstep_cp.var_func(images_arr[-self.N_list[-1]:],
+                                                     self.mask,
+                                                     self.N_list[-1],
+                                                     cov_arr)
+                else:
+                    sigma_sq_phi = None
                 
         elif self.type_unwrap == 'multiwave':
             eq_wav12 = (self.pitch_list[-1] * self.pitch_list[1]) / (self.pitch_list[1] - self.pitch_list[-1])
@@ -542,6 +565,14 @@ class Reconstruction:
                                                       self.cam_width,
                                                       self.cam_height)
             self.mask = mask
+            if self.probability:
+                cov_arr,_ = nstep.pred_var_fn(images_arr[-self.N_list[-1]:], self.model)
+                sigma_sq_phi = nstep.var_func(images_arr[-self.N_list[-1]:],
+                                              self.mask,
+                                              self.N_list[-1],
+                                              cov_arr)
+            else:
+                sigma_sq_phi = None
         if os.path.exists(os.path.join(self.object_path, 'white.tiff')):
             inte_img = cv2.imread(os.path.join(self.object_path, 'white.tiff'))
             inte_rgb_image = inte_img[..., ::-1].copy()
@@ -550,7 +581,8 @@ class Reconstruction:
         
         obj_cordi, obj_color, cordi_sigma, = self.complete_recon(unwrap_vector,                                                
                                                                  inte_rgb_image,
-                                                                 temperature_image)
+                                                                 temperature_image,
+                                                                 sigma_sq_phi)
         
         return obj_cordi, obj_color, cordi_sigma, self.mask 
     
@@ -674,9 +706,10 @@ def main():
     cam_width = 1920 
     cam_height = 1200
     type_unwrap = 'multifreq'
+    dark_bias_path = r"C:\Users\kl001\Documents\pyfringe_test\mean_pixel_std\exp_30_fp_42_retake\black_bias\avg_dark.npy"
     obj_path = r'C:\Users\kl001\Documents\grasshopper3_python\images'
     calib_path = r'C:\Users\kl001\Documents\pyfringe_test\multifreq_calib_images'
-    model_path = r"E:\result_lut_calib\lut_models_pitch_dict.pkl"
+    model_path = r"C:\Users\kl001\Documents\pyfringe_test\mean_pixel_std\exp_30_fp_42_retake\lut_models.pkl"
     reconst_inst = Reconstruction(proj_width=proj_width,
                                   proj_height=proj_height,
                                   cam_width=cam_width,
@@ -689,6 +722,7 @@ def main():
                                   kernel=7,
                                   data_type='tiff',
                                   processing='cpu',
+                                  dark_bias_path=dark_bias_path,
                                   calib_path=calib_path,
                                   object_path=obj_path,
                                   model_path=model_path,
