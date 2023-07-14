@@ -256,29 +256,48 @@ def recon_generate(width: int,
         delta_deck_list = None
     np.save(os.path.join(path, '{}_fringes.npy'.format(type_unwrap)), fringe_arr) 
     return fringe_arr, delta_deck_list
-#TODO: to be removed
-def B_cutoff_limit(sigma: float,
-                   quantile_limit: float,
-                   N_list: list,
-                   pitch_list: list) -> float:
-    """
-    Function to calculate modulation minimum based on success rate.
-    :param sigma:  value of sigma
-    :param quantile_limit:  Sigma level upto which all pixels can be successfully unwrapped.
-    :param N_list:  Number of images taken for each level.
-    :param pitch_list: Number of pixels per fringe period in each level
-    :type sigma_path:str
-    :type quantile_limit:float
-    :type N_list:list
-    :type pitch_list:list
-    :return Lower limit of modulation. Pixels above this value is used for reconstruction.
-    :rtype:float
 
+def pred_var_fn(images, model):
     """
-    sigma_sq_delta_phi = (np.pi / quantile_limit)**2
-    modulation_limit_sq = ((pitch_list[-1]**2 / pitch_list[-2]**2) + 1) * (2 * sigma**2) / (N_list[-1] * sigma_sq_delta_phi)
-    return np.sqrt(modulation_limit_sq)
+    Function predicting variances based on pixel intensity and  create the variance covariance matrix for phase variance calculations.
+    """
+    img_vect = images.reshape(images.shape[0],images.shape[-2]*images.shape[-1])
+    pred_var =np.array([model.predict(img_vect[j]) for j in range(img_vect.shape[0])])
+    pred_var_map = pred_var.reshape(pred_var.shape[0],images.shape[-2], images.shape[-1])
+    var_cov_mtx = np.zeros((images.shape[-2]*images.shape[-1], images.shape[0],images.shape[0]))
+    for i in range(pred_var.shape[0]):
+        var_cov_mtx[:,i,i] = pred_var[i]
+    return var_cov_mtx, pred_var_map 
 
+def var_func(images: np.ndarray,
+             mask: np.ndarray,
+             N:int,
+             cov_arr: np.ndarray)->np.ndarray:
+    """
+    Function calculating phase variance based on the equation:
+        phase var = J varcov J.T
+     Parameters
+     ----------
+     images: Fringe images of the level.
+     mask: bool
+           Mask applied to image.
+     N : Number of patterns
+     cov_arr: variance covariance array for each pixel
+     
+    """
+    back_mask = mask.astype(float)
+    back_mask[back_mask == 0] = np.nan
+    images = np.einsum("ijk,jk->ijk", images, back_mask)
+    sin_lst_k =  np.sin(2*np.pi*(np.tile(np.arange(1,N+1),N)-np.repeat(np.arange(1,N+1),N))/N)
+    sin_lst =  np.sin(2*np.pi*np.arange(1,N+1)/N)
+    cos_lst =  np.cos(2*np.pi*np.arange(1,N+1)/N)
+    denominator_cs = (np.einsum("i,ikl->kl",sin_lst, images))**2 + (np.einsum("i,ikl->kl",cos_lst, images))**2 
+    each_int = np.array([np.einsum("i,ikl->kl",sin_lst_k[i*N: (i+1)*N], images)/(denominator_cs)for i in range(N)]) 
+    each_int_reshape = each_int.reshape(each_int.shape[0],each_int.shape[-2]*each_int.shape[-1])
+    sigmasq_phi = np.einsum("ij,jik->jk", each_int_reshape, cov_arr)
+    final_sigmasq_phi = np.einsum("ij,ji->i",sigmasq_phi,each_int_reshape).reshape(images.shape[-2],images.shape[-1])
+    return final_sigmasq_phi 
+  
 def level_process(image_stack: np.ndarray,
                   n: int)->Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
@@ -300,34 +319,6 @@ def level_process(image_stack: np.ndarray,
     modulation_deck = 2 * np.sqrt(sin_deck ** 2 + cos_deck ** 2) / n
     average_deck = np.sum(image_stack, axis=1) / n
     return sin_deck, cos_deck, modulation_deck, average_deck
-
-def mask_creation(sin_deck_last2levels: np.ndarray, 
-                  cos_deck_last2levels: np.ndarray, 
-                  images_last2levels: np.ndarray, 
-                  N_last2levels: list, 
-                  model_list: list, 
-                  pitch_last2levels: list):
-    """
-     Mask based on pixel quality. Quality is computed with local pixel variance in intensity for last two levels.
-     
-    """
-    images_shap = [images_last2levels[0].shape, images_last2levels[1].shape]
-    single_ik_var1 = (model_list[0].predict(images_last2levels[0].ravel()).reshape(images_shap[0]))**2
-    single_ik_var2 = (model_list[1].predict(images_last2levels[1].ravel()).reshape(images_shap[1]))**2
-    denominator_cs = sin_deck_last2levels**2 + cos_deck_last2levels**2
-    sin_lst_k1 =  np.sin(2*np.pi*(np.tile(np.arange(1,N_last2levels[0] + 1), N_last2levels[0])
-                                  -np.repeat(np.arange(1, N_last2levels[0] + 1), N_last2levels[0]))/ N_last2levels[0])
-    sin_lst_k2 =  np.sin(2*np.pi*(np.tile(np.arange(1,N_last2levels[1] + 1), N_last2levels[1])
-                                  -np.repeat(np.arange(1, N_last2levels[1] + 1), N_last2levels[1]))/ N_last2levels[1])
-    
-    sigmasq_phi_highpitch = (np.sum(np.array([np.einsum("i,ijk->jk",sin_lst_k1[i*N_last2levels[0]:(i+1)*N_last2levels[0]], images_last2levels[0])**2 
-                                     *single_ik_var1[i]/(denominator_cs[0]**2) for i in range(N_last2levels[0])]),axis=0))
-    sigmasq_phi_lowpitch = (np.sum(np.array([np.einsum("i,ijk->jk",sin_lst_k2[i*N_last2levels[1]:(i+1)*N_last2levels[1]], images_last2levels[1])**2 
-                                     *single_ik_var2[i]/(denominator_cs[1]**2) for i in range(N_last2levels[1])]),axis=0))
-    sigmasq_delta = ((pitch_last2levels[1]**2/pitch_last2levels[0]**2) * sigmasq_phi_highpitch) + sigmasq_phi_lowpitch
-    mask = np.full((sigmasq_delta.shape), False)
-    mask = sigmasq_delta < (np.pi/6.5)**2
-    return mask, sigmasq_phi_lowpitch
 
 def mask_application(mask: np.ndarray,
                      mod_stack: np.ndarray,
