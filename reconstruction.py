@@ -353,7 +353,7 @@ class Reconstruction:
         sigmasq_hp_34 = self.proj_h_mtx_std[2, 3]**2
         
         det = (hc_11 * hc_22 * hp_13 - up * hc_11 * hc_22 * hp_33 - hc_13 * hc_22 * hp_11 + up * hc_13 *hc_22 * hp_31 + uc * hc_22 * hc_33 * hp_11
-               - uc * up * hc_22 * hc_33 * hp_31 - hc_11 * hc_23 * hp_12 + up * hc_11 * hc_23 * hp_32 + vc * hc_11 * hc_33 * hp_12 - vc * up * hc_11 * hc_33 * hp_32)
+                - uc * up * hc_22 * hc_33 * hp_31 - hc_11 * hc_23 * hp_12 + up * hc_11 * hc_23 * hp_32 + vc * hc_11 * hc_33 * hp_12 - vc * up * hc_11 * hc_33 * hp_32)
                
         
         x_num = -up * hc_13 * hc_22 * hp_34 + hc_13 * hc_22 * hp_14 + uc * up * hc_22 * hc_33 * hp_34 - uc * hc_22 * hc_33 * hp_14
@@ -384,7 +384,45 @@ class Reconstruction:
             derv_z = cp.asnumpy(derv_z)
             
         return sigmasq_x, sigmasq_y, sigmasq_z, derv_x, derv_y, derv_z
-    
+
+    def sigma_random_up(self, sigma_sq_phi, uc, vc, up):
+        sigma_sq_up = sigma_sq_phi * self.pitch_list[-1]**2 / (4 * np.pi**2)
+        
+        hc_11 = self.cam_h_mtx[0, 0]
+        hc_13 = self.cam_h_mtx[0, 2]
+        
+        hc_22 = self.cam_h_mtx[1, 1]
+        hc_23 = self.cam_h_mtx[1, 2]
+        
+        hc_33 = self.cam_h_mtx[2, 2]
+        
+        hp_11 = self.proj_h_mtx[0, 0]
+        hp_12 = self.proj_h_mtx[0, 1]
+        hp_13 = self.proj_h_mtx[0, 2]
+        hp_14 = self.proj_h_mtx[0, 3]
+        
+        hp_31 = self.proj_h_mtx[2, 0]
+        hp_32 = self.proj_h_mtx[2, 1]
+        hp_33 = self.proj_h_mtx[2, 2]
+        hp_34 = self.proj_h_mtx[2, 3]
+        
+        det = (hc_11 * hc_22 * hp_13 - up * hc_11 * hc_22 * hp_33 - hc_13 * hc_22 * hp_11 + up * hc_13 *hc_22 * hp_31 + uc * hc_22 * hc_33 * hp_11
+               - uc * up * hc_22 * hc_33 * hp_31 - hc_11 * hc_23 * hp_12 + up * hc_11 * hc_23 * hp_32 + vc * hc_11 * hc_33 * hp_12 - vc * up * hc_11 * hc_33 * hp_32)
+        x_num = -up * hc_13 * hc_22 * hp_34 + hc_13 * hc_22 * hp_14 + uc * up * hc_22 * hc_33 * hp_34 - uc * hc_22 * hc_33 * hp_14
+        df_dup_x, df_dhc_11_x, df_dhc_13_x, df_dhc_22_x, df_dhc_23_x, df_dhc_33_x, df_dhp_11_x, df_dhp_12_x, df_dhp_13_x, df_dhp_14_x, df_dhp_31_x, df_dhp_32_x, df_dhp_33_x, df_dhp_34_x = Reconstruction.diff_funs_x(hc_11, hc_13, hc_22, hc_23, hc_33, hp_11, hp_12, hp_13, hp_14, hp_31, hp_32, hp_33, hp_34, det, x_num, uc, vc, up)
+        sigmasq_x = (df_dup_x**2 * sigma_sq_up)
+        derv_x = np.stack((df_dup_x, df_dhc_11_x, df_dhc_13_x, df_dhc_22_x, df_dhc_23_x, df_dhc_33_x, df_dhp_11_x, df_dhp_12_x, df_dhp_13_x, df_dhp_14_x, df_dhp_31_x, df_dhp_32_x, df_dhp_33_x, df_dhp_34_x))
+        y_num = -up * hc_11 * hc_23 * hp_34 + hc_11 * hc_23 * hp_14 + vc * up * hc_11 * hc_33 * hp_34 - vc * hc_11 * hc_33 * hp_14
+        #y_num = (-hc_11 * (hc_23 - hc_33)*(up * hp_34 - hp_14))
+        df_dup_y, df_dhc_11_y, df_dhc_13_y, df_dhc_22_y, df_dhc_23_y, df_dhc_33_y, df_dhp_11_y, df_dhp_12_y, df_dhp_13_y, df_dhp_14_y, df_dhp_31_y, df_dhp_32_y, df_dhp_33_y, df_dhp_34_y = Reconstruction.diff_funs_y(hc_11, hc_13, hc_22, hc_23, hc_33, hp_11, hp_12, hp_13, hp_14, hp_31, hp_32, hp_33, hp_34, det, y_num, uc, vc, up)
+        sigmasq_y = df_dup_y**2 * sigma_sq_up
+        derv_y = np.stack((df_dup_y, df_dhc_11_y, df_dhc_13_y, df_dhc_22_y, df_dhc_23_y, df_dhc_33_y, df_dhp_11_y, df_dhp_12_y, df_dhp_13_y, df_dhp_14_y, df_dhp_31_y, df_dhp_32_y, df_dhp_33_y, df_dhp_34_y))
+        z_num = up * hc_11 * hc_22 * hp_34 - hc_11 * hc_22 * hp_14 
+        df_dup_z, df_dhc_11_z, df_dhc_13_z, df_dhc_22_z, df_dhc_23_z, df_dhc_33_z, df_dhp_11_z, df_dhp_12_z, df_dhp_13_z, df_dhp_14_z, df_dhp_31_z, df_dhp_32_z, df_dhp_33_z, df_dhp_34_z = Reconstruction.diff_funs_z(hc_11, hc_13, hc_22, hc_23, hc_33, hp_11, hp_12, hp_13, hp_14, hp_31, hp_32, hp_33, hp_34, det, z_num, uc, vc, up)
+        sigmasq_z = df_dup_z**2 * sigma_sq_up
+        derv_z = np.stack((df_dup_z, df_dhc_11_z, df_dhc_13_z, df_dhc_22_z, df_dhc_23_z, df_dhc_33_z, df_dhp_11_z, df_dhp_12_z, df_dhp_13_z, df_dhp_14_z, df_dhp_31_z, df_dhp_32_z, df_dhp_33_z, df_dhp_34_z))
+        return sigmasq_x, sigmasq_y, sigmasq_z, derv_x, derv_y, derv_z             
+        
     # This will be optional once instant display is setup
     def cloud_save(self, coords, inte_rgb, cordi_sigma, temperature_image):
         
@@ -415,7 +453,8 @@ class Reconstruction:
                        unwrap_vector, 
                        inte_rgb_image,  
                        temperature_image,
-                       sigma_sq_phi):
+                       sigma_sq_phi,
+                       prob_up=False):
         """
         Function to completely reconstruct object applying modulation mask to saving point cloud.
     
@@ -427,6 +466,10 @@ class Reconstruction:
                          Object texture image.
         temperature_image: np.ndarray/cp.ndarray.
                             Temperature data of object.
+        sigma_sq_phi: np.ndarray/cp.ndarray.
+                        Phase variance map.
+        prob_up: bool.
+                  When probability is true, if prob_up is true consider only up standard deviation for calculating coordinate standard deviation
         Returns
         -------
         coords: np.ndarray/cp.ndarray.
@@ -441,7 +484,10 @@ class Reconstruction:
         inte_rgb = np.stack((inte_img, inte_img, inte_img), axis=-1)
         if self.probability:
             sigma_sq_low_phi_vect = sigma_sq_phi[self.mask]
-            sigmasq_x, sigmasq_y, sigmasq_z, derv_x, derv_y, derv_z = self.sigma_random(sigma_sq_low_phi_vect, uc, vc, up)
+            if prob_up:
+                sigmasq_x, sigmasq_y, sigmasq_z, derv_x, derv_y, derv_z = self.sigma_random_up(sigma_sq_low_phi_vect, uc, vc, up)
+            else:
+                sigmasq_x, sigmasq_y, sigmasq_z, derv_x, derv_y, derv_z = self.sigma_random(sigma_sq_low_phi_vect, uc, vc, up)
             sigma_x = np.sqrt(sigmasq_x)
             sigma_y = np.sqrt(sigmasq_y)
             sigma_z = np.sqrt(sigmasq_z)
@@ -452,9 +498,13 @@ class Reconstruction:
             self.cloud_save(coords, inte_rgb, cordi_sigma, temperature_image)  
         return coords, inte_rgb, cordi_sigma
 
-    def obj_reconst_wrapper(self):
+    def obj_reconst_wrapper(self, prob_up=False):
         """
         Function for 3D reconstruction of object based on different unwrapping method.
+        Parameters
+        ----------
+        prob_up: bool.
+                 When probability is true, if prob_up is true consider only up standard deviation for calculating coordinate standard deviation
         Returns
         -------
         obj_cordi: np.ndarray.
@@ -512,10 +562,12 @@ class Reconstruction:
                 orig_img = orig_img[-1] 
                 if self.probability:
                     cov_arr,_ = nstep.pred_var_fn(images_arr[-self.N_list[-1]:], self.model)
-                    sigma_sq_phi = nstep.var_func(images_arr[-self.N_list[-1]:],
+                    sigma_sq_phi_dist = nstep.var_func(images_arr[-self.N_list[-1]:],
                                                   self.mask,
                                                   self.N_list[-1],
                                                   cov_arr)
+                    sigma_sq_phi = nstep.undistort(sigma_sq_phi_dist, self.cam_mtx, self.cam_dist)
+                    
                 else:
                     sigma_sq_phi = None
             elif self.processing == 'gpu':
@@ -536,10 +588,11 @@ class Reconstruction:
                 orig_img = cp.asnumpy(orig_img[-1])
                 if self.probability:
                     cov_arr,_ = nstep_cp.pred_var_fn(images_arr[-self.N_list[-1]:], self.model)
-                    sigma_sq_phi = nstep_cp.var_func(images_arr[-self.N_list[-1]:],
+                    sigma_sq_phi_dist = nstep_cp.var_func(images_arr[-self.N_list[-1]:],
                                                      self.mask,
                                                      self.N_list[-1],
                                                      cov_arr)
+                    sigma_sq_phi = nstep.undistort(sigma_sq_phi_dist, self.cam_mtx, self.cam_dist)
                 else:
                     sigma_sq_phi = None
                 
@@ -567,10 +620,11 @@ class Reconstruction:
             self.mask = mask
             if self.probability:
                 cov_arr,_ = nstep.pred_var_fn(images_arr[-self.N_list[-1]:], self.model)
-                sigma_sq_phi = nstep.var_func(images_arr[-self.N_list[-1]:],
+                sigma_sq_phi_dist = nstep.var_func(images_arr[-self.N_list[-1]:],
                                               self.mask,
                                               self.N_list[-1],
                                               cov_arr)
+                sigma_sq_phi = nstep.undistort(sigma_sq_phi_dist, self.cam_mtx, self.cam_dist)
             else:
                 sigma_sq_phi = None
         if os.path.exists(os.path.join(self.object_path, 'white.tiff')):
@@ -582,7 +636,8 @@ class Reconstruction:
         obj_cordi, obj_color, cordi_sigma, = self.complete_recon(unwrap_vector,                                                
                                                                  inte_rgb_image,
                                                                  temperature_image,
-                                                                 sigma_sq_phi)
+                                                                 sigma_sq_phi,
+                                                                 prob_up)
         
         return obj_cordi, obj_color, cordi_sigma, self.mask 
     
