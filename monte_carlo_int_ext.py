@@ -35,7 +35,7 @@ def random_ext_intinsics(calibration_mean, calibration_std):
     camera_h_mtx = np.dot(camera_mtx, np.hstack((np.identity(3), np.zeros((3, 1)))))
     return camera_mtx, camera_dist, proj_mtx, camera_proj_rot_mtx, camera_proj_trans, proj_h_mtx, camera_h_mtx
 
-def subsample_mean_std(cord_list, intensity_list, sample_size):
+def subsample_mean_std(cord_list, intensity_list):
     """
     Helper function to calculate sub sample statistics.
     """
@@ -106,6 +106,7 @@ def virtual_scan_int_ext(no_drop_scans,
     initial_data = no_drop_scans * sum(N_list)
     data_size =  int((len(path)/sum(N_list)) - no_drop_scans)
     path = np.reshape(path[initial_data:], (data_size,sum(N_list)))
+    sample_size =int(data_size/batch_size)
     calibration_mean = np.load(os.path.join(calib_path,'{}_mean_calibration_param.npz'.format(type_unwrap)))
     calibration_std = np.load(os.path.join(calib_path,'{}_std_calibration_param.npz'.format(type_unwrap)))
     reconst_inst = rc.Reconstruction(proj_width=proj_width,
@@ -130,14 +131,15 @@ def virtual_scan_int_ext(no_drop_scans,
     full_coords = []
     full_inte = []
     mask_list = np.full((cam_height, cam_width), True)
+    pool_mean_lst=[];pool_std_lst=[];pool_inten_mean_lst=[]
     for i in tqdm(range(path.shape[0]), desc="virtual scan"):
         
         images = np.array([cv2.imread(file,0) for file in path[i]])
         camera_mtx, camera_dist, proj_mtx, camera_proj_rot_mtx, camera_proj_trans, proj_h_mtx, camera_h_mtx = random_ext_intinsics(calibration_mean, 
-                                                                                                                               calibration_std)
+                                                                                                                                   calibration_std)
         random_calib_param = [camera_mtx, camera_dist, proj_mtx, camera_proj_rot_mtx, camera_proj_trans, camera_h_mtx, proj_h_mtx]
         
-        coords, inte, mask = random_reconst_int_ext(random_img=images,
+        coords, inte, mask = random_reconst_int_ext(images_arr=images,
                                                     random_calib_param=random_calib_param,
                                                     reconst_inst=reconst_inst)
         mask_list &=mask
@@ -146,19 +148,24 @@ def virtual_scan_int_ext(no_drop_scans,
         full_coords.append(retrived_cord)
         full_inte.append(retrived_int)
         mask_list &= mask
-    sample_size =int(data_size/batch_size)
-    pool_means, pool_std, pool_inten_mean = map(np.array,zip(*[subsample_mean_std(full_coords[i*sample_size:(i+1)*sample_size], full_inte[i*sample_size:(i+1)*sample_size],
-                                                                  sample_size) for i in tqdm(range(batch_size),desc="Mean and std of coords")]))
+        if len(full_coords) == data_size:
+            print(len(full_coords))
+            pool_means, pool_std, pool_inten_mean = subsample_mean_std(full_coords, full_inte)
+            pool_mean_lst.append(pool_means)
+            pool_std_lst.append(pool_std)
+            pool_inten_mean_lst.append(pool_inten_mean)
+            full_coords=[];full_inte=[];
+                                                                  
     
-    mean_cords = np.sum(pool_means, axis=0)/batch_size
-    std_cords = np.sum(pool_std, axis=0)/batch_size
-    mean_intensity = np.sum(pool_inten_mean, axis=0)/batch_size
+    mean_cords = np.sum(pool_mean_lst, axis=0)/batch_size
+    std_cords = np.sum(pool_std_lst, axis=0)/batch_size
+    mean_intensity = np.sum(pool_inten_mean_lst, axis=0)/batch_size
     mean_cords_vector = np.array([mean_cords[i][mask_list] for i in range(0,mean_cords.shape[0])])
     std_cords_vector = np.array([std_cords[i][mask_list] for i in range(0,std_cords.shape[0])])
     mean_intensity_vector = np.array([mean_intensity[i][mask_list] for i in range(0,mean_intensity.shape[0])])
     
     return mean_cords, std_cords, mean_cords_vector, std_cords_vector, mask_list, mean_intensity_vector
-#%%
+
 def main():
     
     
