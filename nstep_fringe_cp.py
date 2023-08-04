@@ -6,33 +6,6 @@ from typing import Tuple
 from cupyx.scipy import ndimage
 import pickle
 
-def var_func(images: cp.ndarray, 
-             mask: cp.ndarray,
-             N: int,
-             cov_arr: cp.ndarray)->cp.ndarray:
-    """
-    Function calculating phase variance based on the equation:
-        phase var = J varcov J.T
-     Parameters
-     ----------
-     images: Fringe images of the level.
-     mask: bool
-           Mask applied to image.
-     N : Number of patterns
-     cov_arr: variance covariance array for each pixel
-    """
-    back_mask = mask.astype(float)
-    back_mask[back_mask == 0] = cp.nan
-    images = cp.einsum("ijk,jk->ijk", images, back_mask)
-    sin_lst_k =  cp.sin(2 * cp.pi * (cp.tile(cp.arange(1, N+1), N)-cp.repeat(cp.arange(1, N+1), N))/N)
-    sin_lst =  cp.sin(2*cp.pi*cp.arange(1,N+1)/N)
-    cos_lst =  cp.cos(2*cp.pi*cp.arange(1,N+1)/N)
-    denominator_cs = (cp.einsum("i,ikl->kl",sin_lst, images))**2 + (cp.einsum("i,ikl->kl",cos_lst, images))**2 
-    each_int = cp.array([cp.einsum("i,ikl->kl",sin_lst_k[i*N: (i+1)*N], images)/(denominator_cs)for i in range(N)]) 
-    each_int_reshape = each_int.reshape(each_int.shape[0],each_int.shape[-2]*each_int.shape[-1])
-    sigmasq_phi = cp.einsum("ij,jik->jk", each_int_reshape, cov_arr)
-    final_sigmasq_phi = cp.einsum("ij,ji->i",sigmasq_phi,each_int_reshape).reshape(images.shape[-2],images.shape[-1])
-    return final_sigmasq_phi 
 
 def pred_var_fn(images, model):
     """
