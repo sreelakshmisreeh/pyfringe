@@ -543,7 +543,9 @@ class Reconstruction:
         else:
             print("ERROR: data type is not supported, must be '.tiff' or '.npy'.")
             images_arr = None
-        
+        if self.probability:
+            cov_arr,_ = nstep.pred_var_fn(images_arr[-self.N_list[-1]:], self.model)
+            
         if self.type_unwrap == 'multifreq':
             if self.processing == 'cpu':
                 modulation_vector, orig_img, phase_map, mask = nstep.phase_cal(images_arr,
@@ -560,19 +562,10 @@ class Reconstruction:
                                                               self.cam_width,
                                                               self.cam_height)
                 orig_img = orig_img[-1] 
-                if self.probability:
-                    cov_arr,_ = nstep.pred_var_fn(images_arr[-self.N_list[-1]:], self.model)
-                    sigma_sq_phi_dist = nstep.var_func(images_arr[-self.N_list[-1]:],
-                                                  self.mask,
-                                                  self.N_list[-1],
-                                                  cov_arr)
-                    sigma_sq_phi = nstep.undistort(sigma_sq_phi_dist, self.cam_mtx, self.cam_dist)
-                    
-                else:
-                    sigma_sq_phi = None
+                
             elif self.processing == 'gpu':
-                images_arr = cp.asarray(images_arr)
-                modulation_vector, orig_img, phase_map, mask = nstep_cp.phase_cal_cp(images_arr,
+                images_arr_cp = cp.asarray(images_arr)
+                modulation_vector, orig_img, phase_map, mask = nstep_cp.phase_cal_cp(images_arr_cp,
                                                                                      self.limit,
                                                                                      self.N_list,
                                                                                      False)
@@ -586,15 +579,7 @@ class Reconstruction:
                                                                     self.cam_width,
                                                                     self.cam_height)
                 orig_img = cp.asnumpy(orig_img[-1])
-                if self.probability:
-                    cov_arr,_ = nstep_cp.pred_var_fn(images_arr[-self.N_list[-1]:], self.model)
-                    sigma_sq_phi_dist = nstep_cp.var_func(images_arr[-self.N_list[-1]:],
-                                                     self.mask,
-                                                     self.N_list[-1],
-                                                     cov_arr)
-                    sigma_sq_phi = nstep.undistort(sigma_sq_phi_dist, self.cam_mtx, self.cam_dist)
-                else:
-                    sigma_sq_phi = None
+                
                 
         elif self.type_unwrap == 'multiwave':
             eq_wav12 = (self.pitch_list[-1] * self.pitch_list[1]) / (self.pitch_list[1] - self.pitch_list[-1])
@@ -618,21 +603,24 @@ class Reconstruction:
                                                       self.cam_width,
                                                       self.cam_height)
             self.mask = mask
-            if self.probability:
-                cov_arr,_ = nstep.pred_var_fn(images_arr[-self.N_list[-1]:], self.model)
-                sigma_sq_phi_dist = nstep.var_func(images_arr[-self.N_list[-1]:],
-                                              self.mask,
-                                              self.N_list[-1],
-                                              cov_arr)
-                sigma_sq_phi = nstep.undistort(sigma_sq_phi_dist, self.cam_mtx, self.cam_dist)
-            else:
-                sigma_sq_phi = None
+            
         if os.path.exists(os.path.join(self.object_path, 'white.tiff')):
             inte_img = cv2.imread(os.path.join(self.object_path, 'white.tiff'))
             inte_rgb_image = inte_img[..., ::-1].copy()
         else:
             inte_rgb_image = orig_img
-        
+            
+        if self.probability:
+            cov_arr,_ = nstep.pred_var_fn(images_arr[-self.N_list[-1]:], self.model)
+            sigma_sq_phi_dist = nstep.var_func(images_arr[-self.N_list[-1]:],
+                                          self.mask,
+                                          self.N_list[-1],
+                                          cov_arr)
+            sigma_sq_phi = nstep.undistort(sigma_sq_phi_dist, self.cam_mtx, self.cam_dist)
+        else:
+            sigma_sq_phi = None
+        if self.processing == 'gpu':
+            sigma_sq_phi = cp.asarray(sigma_sq_phi)
         obj_cordi, obj_color, cordi_sigma, = self.complete_recon(unwrap_vector,                                                
                                                                  inte_rgb_image,
                                                                  temperature_image,
