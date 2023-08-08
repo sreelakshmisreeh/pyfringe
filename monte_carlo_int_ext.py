@@ -47,20 +47,11 @@ def subsample_mean_std(cord_list, intensity_list):
     return pool_mean, pool_std, pool_inten_mean
 
 def random_reconst_int_ext(images_arr,
-                           random_calib_param,
                            reconst_inst):
     """
     Sub function to do reconstruction based on generated images.
 
     """
-    if random_calib_param != None:
-        reconst_inst.cam_mtx = random_calib_param[0]
-        reconst_inst.cam_dist = random_calib_param[1]
-        reconst_inst.proj_mtx = random_calib_param[2]
-        reconst_inst.camproj_rot_mtx = random_calib_param[3]
-        reconst_inst.camproj_trans_mtx = random_calib_param[4]
-        reconst_inst.cam_h_mtx = random_calib_param[5]
-        reconst_inst.proj_h_mtx = random_calib_param[6]
     modulation_vector, orig_img, phase_map, mask = nstep.phase_cal(images_arr,
                                                                    reconst_inst.limit,
                                                                    reconst_inst.N_list,
@@ -137,10 +128,15 @@ def virtual_scan_int_ext(no_drop_scans,
         images = np.array([cv2.imread(file,0) for file in path[i]])
         camera_mtx, camera_dist, proj_mtx, camera_proj_rot_mtx, camera_proj_trans, proj_h_mtx, camera_h_mtx = random_ext_intinsics(calibration_mean, 
                                                                                                                                    calibration_std)
-        random_calib_param = [camera_mtx, camera_dist, proj_mtx, camera_proj_rot_mtx, camera_proj_trans, camera_h_mtx, proj_h_mtx]
+        reconst_inst.cam_mtx = camera_mtx
+        reconst_inst.cam_dist = camera_dist
+        reconst_inst.proj_mtx = proj_mtx
+        reconst_inst.camproj_rot_mtx = camera_proj_rot_mtx
+        reconst_inst.camproj_trans_mtx = camera_proj_trans
+        reconst_inst.cam_h_mtx = camera_h_mtx
+        reconst_inst.proj_h_mtx = proj_h_mtx
         
         coords, inte, mask = random_reconst_int_ext(images_arr=images,
-                                                    random_calib_param=random_calib_param,
                                                     reconst_inst=reconst_inst)
         mask_list &=mask
         retrived_cord = np.array([nstep.recover_image(coords[:,i], mask, cam_height, cam_width) for i in range(coords.shape[-1])])
@@ -148,7 +144,7 @@ def virtual_scan_int_ext(no_drop_scans,
         full_coords.append(retrived_cord)
         full_inte.append(retrived_int)
         mask_list &= mask
-        if len(full_coords) == data_size:
+        if len(full_coords) == sample_size:
             print(len(full_coords))
             pool_means, pool_std, pool_inten_mean = subsample_mean_std(full_coords, full_inte)
             pool_mean_lst.append(pool_means)
@@ -156,7 +152,6 @@ def virtual_scan_int_ext(no_drop_scans,
             pool_inten_mean_lst.append(pool_inten_mean)
             full_coords=[];full_inte=[];
                                                                   
-    
     mean_cords = np.sum(pool_mean_lst, axis=0)/batch_size
     std_cords = np.sum(pool_std_lst, axis=0)/batch_size
     mean_intensity = np.sum(pool_inten_mean_lst, axis=0)/batch_size
@@ -178,12 +173,12 @@ def main():
     model_path = r"C:\Users\kl001\Documents\pyfringe_test\mean_pixel_std\exp_30_fp_42_retake\lut_models.pkl"
     dark_bias_path = r"C:\Users\kl001\Documents\pyfringe_test\mean_pixel_std\exp_30_fp_42_retake\black_bias\avg_dark.npy"
     calib_path = r"C:\Users\kl001\Documents\pyfringe_test\multifreq_calib_images"
-    limit = 20
+    limit = 60
     no_drop_scans = 200
     batch_size = 8
     pitch_list = [1200, 18]
     N_list = [3,3]
-    data_path = r"E:\green_concrete"
+    data_path = r"E:\concrete3"
     mean_cords, std_cords, mean_cords_vector, std_cords_vector, mask, mean_inten = virtual_scan_int_ext(no_drop_scans,
                                                                                                         batch_size,
                                                                                                         proj_width,
