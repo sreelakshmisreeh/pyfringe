@@ -830,14 +830,16 @@ def calib_capture(image_index_list,
                                     cam_capt_timeout=10,
                                     cam_black_level=0,
                                     cam_ExposureCompensation=0,
-                                    proj_exposure_period=25000,
-                                    proj_frame_period=34000,#66668,#33334,
+                                    proj_exposure_period=30000,
+                                    proj_frame_period=40000,#66668,#33334,
                                     do_insert_black=True,
                                     led_select=2,
-                                    preview_image_index=21,
+                                    preview_image_index=20,
                                     focus_image_index=None,
+                                    image_section_size=None,
                                     pprint_status=True,
-                                    save_npy=True)
+                                    save_npy=True,
+                                    save_tiff=False)
     return result
 def meanpixel_var(savedir,
                   image_index,
@@ -989,7 +991,7 @@ def main():
                       acquisition_index=acquisition_index)
         
     elif option == '5':
-        image_index_list = np.repeat(np.arange(17, 29), 3).tolist()
+        image_index_list = np.repeat(np.arange(0, 12), 3).tolist()
         pattern_num_list = [0, 1, 2] * len(set(image_index_list))
         savedir = r'C:\Users\kl001\Documents\pyfringe_test\multifreq_calib_images'
         number_scan = int(input("\nEnter number of scans"))
@@ -1003,13 +1005,13 @@ def main():
         no_of_levels =input("\nNo. of levels 2,3,4:")
         number_scan = int(input("\nEnter number of scans"))
         if no_of_levels == "2":
-            image_index_list = np.repeat([52,58], 3).tolist()#np.repeat([30,35], 3).tolist()
+            image_index_list = np.repeat([18,19], 3).tolist()#np.repeat([30,35], 3).tolist()
             pattern_num_list = [0, 1, 2] * len(set(image_index_list))
         elif no_of_levels == "3":
             image_index_list = np.repeat(np.arange(30, 35), 3).tolist()
             pattern_num_list = [0, 1, 2] * len(set(image_index_list))
         elif no_of_levels == "4" :
-            image_index_list = np.repeat(np.array([17,19,21,23,24,25]),3).tolist()
+            image_index_list = np.repeat(np.array([12,13,14,15,16,17]),3).tolist()
             pattern_num_list = [0, 1, 2] * len(set(image_index_list))
         savedir = r'C:\Users\kl001\Documents\grasshopper3_python\images'
         result &= run_proj_single_camera(savedir=savedir,
@@ -1023,12 +1025,12 @@ def main():
                                          cam_capt_timeout=10,
                                          cam_black_level=0,
                                          cam_ExposureCompensation=0,
-                                         proj_exposure_period=20000,#27084,Check option 2 for recomended value
-                                         proj_frame_period=30000,#34000,#33334,
+                                         proj_exposure_period=30000,#27084,Check option 2 for recomended value
+                                         proj_frame_period=40000,#34000,#33334,
                                          do_insert_black=True,
                                          led_select=2,
-                                         preview_image_index=16,
-                                         focus_image_index=29,
+                                         preview_image_index=20,
+                                         focus_image_index=None,
                                          image_section_size=None,
                                          pprint_status=True,
                                          save_npy=False,
