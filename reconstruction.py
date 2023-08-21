@@ -314,7 +314,7 @@ class Reconstruction:
         
         return df_dup, df_dhc_11, df_dhc_13, df_dhc_22, df_dhc_23, df_dhc_33, df_dhp_11, df_dhp_12, df_dhp_13, df_dhp_14, df_dhp_31, df_dhp_32, df_dhp_33, df_dhp_34
 
-    def sigma_random(self, sigma_sq_phi, uc, vc, up):
+    def sigma_random(self, sigma_sq_phi, uc, vc, up, prob_up):
         """
         Function to calculate variance of x,y,z coordinates
         """
@@ -358,23 +358,30 @@ class Reconstruction:
         
         x_num = -up * hc_13 * hc_22 * hp_34 + hc_13 * hc_22 * hp_14 + uc * up * hc_22 * hc_33 * hp_34 - uc * hc_22 * hc_33 * hp_14
         df_dup_x, df_dhc_11_x, df_dhc_13_x, df_dhc_22_x, df_dhc_23_x, df_dhc_33_x, df_dhp_11_x, df_dhp_12_x, df_dhp_13_x, df_dhp_14_x, df_dhp_31_x, df_dhp_32_x, df_dhp_33_x, df_dhp_34_x = Reconstruction.diff_funs_x(hc_11, hc_13, hc_22, hc_23, hc_33, hp_11, hp_12, hp_13, hp_14, hp_31, hp_32, hp_33, hp_34, det, x_num, uc, vc, up)
-        sigmasq_x = ((df_dup_x**2 * sigma_sq_up) + (df_dhc_11_x**2 * sigmasq_hc_11) + (df_dhc_13_x**2 * sigmasq_hc_13) + (df_dhc_22_x**2 * sigmasq_hc_22) + (df_dhc_23_x**2 * sigmasq_hc_23) + (df_dhc_33_x**2 * sigmasq_hc_33)
-                    + (df_dhp_11_x**2 * sigmasq_hp_11) + (df_dhp_12_x**2 * sigmasq_hp_12) + (df_dhp_13_x**2 * sigmasq_hp_13) + (df_dhp_14_x**2 * sigmasq_hp_14) + (df_dhp_31_x**2 * sigmasq_hp_31) + (df_dhp_32_x**2 * sigmasq_hp_32) + (df_dhp_33_x**2 * sigmasq_hp_33) + (df_dhp_34_x**2 * sigmasq_hp_34))
+        
         derv_x = np.stack((df_dup_x, df_dhc_11_x, df_dhc_13_x, df_dhc_22_x, df_dhc_23_x, df_dhc_33_x, df_dhp_11_x, df_dhp_12_x, df_dhp_13_x, df_dhp_14_x, df_dhp_31_x, df_dhp_32_x, df_dhp_33_x, df_dhp_34_x))
         
         y_num = -up * hc_11 * hc_23 * hp_34 + hc_11 * hc_23 * hp_14 + vc * up * hc_11 * hc_33 * hp_34 - vc * hc_11 * hc_33 * hp_14
         #y_num = (-hc_11 * (hc_23 - hc_33)*(up * hp_34 - hp_14))
         df_dup_y, df_dhc_11_y, df_dhc_13_y, df_dhc_22_y, df_dhc_23_y, df_dhc_33_y, df_dhp_11_y, df_dhp_12_y, df_dhp_13_y, df_dhp_14_y, df_dhp_31_y, df_dhp_32_y, df_dhp_33_y, df_dhp_34_y = Reconstruction.diff_funs_y(hc_11, hc_13, hc_22, hc_23, hc_33, hp_11, hp_12, hp_13, hp_14, hp_31, hp_32, hp_33, hp_34, det, y_num, uc, vc, up)
-        sigmasq_y = ((df_dup_y**2 * sigma_sq_up) + (df_dhc_11_y**2 * sigmasq_hc_11) + (df_dhc_13_y**2 * sigmasq_hc_13) + (df_dhc_22_y**2 * sigmasq_hc_22) + (df_dhc_23_y**2 * sigmasq_hc_23) + (df_dhc_33_y**2 * sigmasq_hc_33)
-                    + (df_dhp_11_y**2 * sigmasq_hp_11) + (df_dhp_12_y**2 * sigmasq_hp_12) + (df_dhp_13_y**2 * sigmasq_hp_13) + (df_dhp_14_y**2 * sigmasq_hp_14) + (df_dhp_31_y**2 * sigmasq_hp_31) + (df_dhp_32_y**2 * sigmasq_hp_32) + (df_dhp_33_y**2 * sigmasq_hp_33) + (df_dhp_34_y**2 * sigmasq_hp_34))
+       
         derv_y = np.stack((df_dup_y, df_dhc_11_y, df_dhc_13_y, df_dhc_22_y, df_dhc_23_y, df_dhc_33_y, df_dhp_11_y, df_dhp_12_y, df_dhp_13_y, df_dhp_14_y, df_dhp_31_y, df_dhp_32_y, df_dhp_33_y, df_dhp_34_y))
         
         z_num = up * hc_11 * hc_22 * hp_34 - hc_11 * hc_22 * hp_14 
         df_dup_z, df_dhc_11_z, df_dhc_13_z, df_dhc_22_z, df_dhc_23_z, df_dhc_33_z, df_dhp_11_z, df_dhp_12_z, df_dhp_13_z, df_dhp_14_z, df_dhp_31_z, df_dhp_32_z, df_dhp_33_z, df_dhp_34_z = Reconstruction.diff_funs_z(hc_11, hc_13, hc_22, hc_23, hc_33, hp_11, hp_12, hp_13, hp_14, hp_31, hp_32, hp_33, hp_34, det, z_num, uc, vc, up)
-        sigmasq_z = ((df_dup_z**2 * sigma_sq_up) + (df_dhc_11_z**2 * sigmasq_hc_11) + (df_dhc_13_z**2 * sigmasq_hc_13) + (df_dhc_22_z**2 * sigmasq_hc_22) + (df_dhc_23_z**2 * sigmasq_hc_23) + (df_dhc_33_z**2 * sigmasq_hc_33)
-                    + (df_dhp_11_z**2 * sigmasq_hp_11) + (df_dhp_12_z**2 * sigmasq_hp_12) + (df_dhp_13_z**2 * sigmasq_hp_13) + (df_dhp_14_z**2 * sigmasq_hp_14) + (df_dhp_31_z**2 * sigmasq_hp_31) + (df_dhp_32_z**2 * sigmasq_hp_32) + (df_dhp_33_z**2 * sigmasq_hp_33) + (df_dhp_34_z**2 * sigmasq_hp_34))
-        derv_z = np.stack((df_dup_z, df_dhc_11_z, df_dhc_13_z, df_dhc_22_z, df_dhc_23_z, df_dhc_33_z, df_dhp_11_z, df_dhp_12_z, df_dhp_13_z, df_dhp_14_z, df_dhp_31_z, df_dhp_32_z, df_dhp_33_z, df_dhp_34_z))
         
+        derv_z = np.stack((df_dup_z, df_dhc_11_z, df_dhc_13_z, df_dhc_22_z, df_dhc_23_z, df_dhc_33_z, df_dhp_11_z, df_dhp_12_z, df_dhp_13_z, df_dhp_14_z, df_dhp_31_z, df_dhp_32_z, df_dhp_33_z, df_dhp_34_z))
+        if prob_up:
+            sigmasq_x = (df_dup_x**2 * sigma_sq_up)
+            sigmasq_y = df_dup_y**2 * sigma_sq_up
+            sigmasq_z = df_dup_z**2 * sigma_sq_up
+        else:
+            sigmasq_x = ((df_dup_x**2 * sigma_sq_up) + (df_dhc_11_x**2 * sigmasq_hc_11) + (df_dhc_13_x**2 * sigmasq_hc_13) + (df_dhc_22_x**2 * sigmasq_hc_22) + (df_dhc_23_x**2 * sigmasq_hc_23) + (df_dhc_33_x**2 * sigmasq_hc_33)
+                        + (df_dhp_11_x**2 * sigmasq_hp_11) + (df_dhp_12_x**2 * sigmasq_hp_12) + (df_dhp_13_x**2 * sigmasq_hp_13) + (df_dhp_14_x**2 * sigmasq_hp_14) + (df_dhp_31_x**2 * sigmasq_hp_31) + (df_dhp_32_x**2 * sigmasq_hp_32) + (df_dhp_33_x**2 * sigmasq_hp_33) + (df_dhp_34_x**2 * sigmasq_hp_34))
+            sigmasq_y = ((df_dup_y**2 * sigma_sq_up) + (df_dhc_11_y**2 * sigmasq_hc_11) + (df_dhc_13_y**2 * sigmasq_hc_13) + (df_dhc_22_y**2 * sigmasq_hc_22) + (df_dhc_23_y**2 * sigmasq_hc_23) + (df_dhc_33_y**2 * sigmasq_hc_33)
+                        + (df_dhp_11_y**2 * sigmasq_hp_11) + (df_dhp_12_y**2 * sigmasq_hp_12) + (df_dhp_13_y**2 * sigmasq_hp_13) + (df_dhp_14_y**2 * sigmasq_hp_14) + (df_dhp_31_y**2 * sigmasq_hp_31) + (df_dhp_32_y**2 * sigmasq_hp_32) + (df_dhp_33_y**2 * sigmasq_hp_33) + (df_dhp_34_y**2 * sigmasq_hp_34))
+            sigmasq_z = ((df_dup_z**2 * sigma_sq_up) + (df_dhc_11_z**2 * sigmasq_hc_11) + (df_dhc_13_z**2 * sigmasq_hc_13) + (df_dhc_22_z**2 * sigmasq_hc_22) + (df_dhc_23_z**2 * sigmasq_hc_23) + (df_dhc_33_z**2 * sigmasq_hc_33)
+                        + (df_dhp_11_z**2 * sigmasq_hp_11) + (df_dhp_12_z**2 * sigmasq_hp_12) + (df_dhp_13_z**2 * sigmasq_hp_13) + (df_dhp_14_z**2 * sigmasq_hp_14) + (df_dhp_31_z**2 * sigmasq_hp_31) + (df_dhp_32_z**2 * sigmasq_hp_32) + (df_dhp_33_z**2 * sigmasq_hp_33) + (df_dhp_34_z**2 * sigmasq_hp_34))
         if self.processing == 'gpu':
             sigmasq_x = cp.asnumpy(sigmasq_x)
             sigmasq_y = cp.asnumpy(sigmasq_y)
@@ -383,45 +390,7 @@ class Reconstruction:
             derv_y = cp.asnumpy(derv_y)
             derv_z = cp.asnumpy(derv_z)
             
-        return sigmasq_x, sigmasq_y, sigmasq_z, derv_x, derv_y, derv_z
-
-    def sigma_random_up(self, sigma_sq_phi, uc, vc, up):
-        sigma_sq_up = sigma_sq_phi * self.pitch_list[-1]**2 / (4 * np.pi**2)
-        
-        hc_11 = self.cam_h_mtx[0, 0]
-        hc_13 = self.cam_h_mtx[0, 2]
-        
-        hc_22 = self.cam_h_mtx[1, 1]
-        hc_23 = self.cam_h_mtx[1, 2]
-        
-        hc_33 = self.cam_h_mtx[2, 2]
-        
-        hp_11 = self.proj_h_mtx[0, 0]
-        hp_12 = self.proj_h_mtx[0, 1]
-        hp_13 = self.proj_h_mtx[0, 2]
-        hp_14 = self.proj_h_mtx[0, 3]
-        
-        hp_31 = self.proj_h_mtx[2, 0]
-        hp_32 = self.proj_h_mtx[2, 1]
-        hp_33 = self.proj_h_mtx[2, 2]
-        hp_34 = self.proj_h_mtx[2, 3]
-        
-        det = (hc_11 * hc_22 * hp_13 - up * hc_11 * hc_22 * hp_33 - hc_13 * hc_22 * hp_11 + up * hc_13 *hc_22 * hp_31 + uc * hc_22 * hc_33 * hp_11
-               - uc * up * hc_22 * hc_33 * hp_31 - hc_11 * hc_23 * hp_12 + up * hc_11 * hc_23 * hp_32 + vc * hc_11 * hc_33 * hp_12 - vc * up * hc_11 * hc_33 * hp_32)
-        x_num = -up * hc_13 * hc_22 * hp_34 + hc_13 * hc_22 * hp_14 + uc * up * hc_22 * hc_33 * hp_34 - uc * hc_22 * hc_33 * hp_14
-        df_dup_x, df_dhc_11_x, df_dhc_13_x, df_dhc_22_x, df_dhc_23_x, df_dhc_33_x, df_dhp_11_x, df_dhp_12_x, df_dhp_13_x, df_dhp_14_x, df_dhp_31_x, df_dhp_32_x, df_dhp_33_x, df_dhp_34_x = Reconstruction.diff_funs_x(hc_11, hc_13, hc_22, hc_23, hc_33, hp_11, hp_12, hp_13, hp_14, hp_31, hp_32, hp_33, hp_34, det, x_num, uc, vc, up)
-        sigmasq_x = (df_dup_x**2 * sigma_sq_up)
-        derv_x = np.stack((df_dup_x, df_dhc_11_x, df_dhc_13_x, df_dhc_22_x, df_dhc_23_x, df_dhc_33_x, df_dhp_11_x, df_dhp_12_x, df_dhp_13_x, df_dhp_14_x, df_dhp_31_x, df_dhp_32_x, df_dhp_33_x, df_dhp_34_x))
-        y_num = -up * hc_11 * hc_23 * hp_34 + hc_11 * hc_23 * hp_14 + vc * up * hc_11 * hc_33 * hp_34 - vc * hc_11 * hc_33 * hp_14
-        #y_num = (-hc_11 * (hc_23 - hc_33)*(up * hp_34 - hp_14))
-        df_dup_y, df_dhc_11_y, df_dhc_13_y, df_dhc_22_y, df_dhc_23_y, df_dhc_33_y, df_dhp_11_y, df_dhp_12_y, df_dhp_13_y, df_dhp_14_y, df_dhp_31_y, df_dhp_32_y, df_dhp_33_y, df_dhp_34_y = Reconstruction.diff_funs_y(hc_11, hc_13, hc_22, hc_23, hc_33, hp_11, hp_12, hp_13, hp_14, hp_31, hp_32, hp_33, hp_34, det, y_num, uc, vc, up)
-        sigmasq_y = df_dup_y**2 * sigma_sq_up
-        derv_y = np.stack((df_dup_y, df_dhc_11_y, df_dhc_13_y, df_dhc_22_y, df_dhc_23_y, df_dhc_33_y, df_dhp_11_y, df_dhp_12_y, df_dhp_13_y, df_dhp_14_y, df_dhp_31_y, df_dhp_32_y, df_dhp_33_y, df_dhp_34_y))
-        z_num = up * hc_11 * hc_22 * hp_34 - hc_11 * hc_22 * hp_14 
-        df_dup_z, df_dhc_11_z, df_dhc_13_z, df_dhc_22_z, df_dhc_23_z, df_dhc_33_z, df_dhp_11_z, df_dhp_12_z, df_dhp_13_z, df_dhp_14_z, df_dhp_31_z, df_dhp_32_z, df_dhp_33_z, df_dhp_34_z = Reconstruction.diff_funs_z(hc_11, hc_13, hc_22, hc_23, hc_33, hp_11, hp_12, hp_13, hp_14, hp_31, hp_32, hp_33, hp_34, det, z_num, uc, vc, up)
-        sigmasq_z = df_dup_z**2 * sigma_sq_up
-        derv_z = np.stack((df_dup_z, df_dhc_11_z, df_dhc_13_z, df_dhc_22_z, df_dhc_23_z, df_dhc_33_z, df_dhp_11_z, df_dhp_12_z, df_dhp_13_z, df_dhp_14_z, df_dhp_31_z, df_dhp_32_z, df_dhp_33_z, df_dhp_34_z))
-        return sigmasq_x, sigmasq_y, sigmasq_z, derv_x, derv_y, derv_z             
+        return sigmasq_x, sigmasq_y, sigmasq_z, derv_x, derv_y, derv_z    
         
     # This will be optional once instant display is setup
     def cloud_save(self, coords, inte_rgb, cordi_sigma, temperature_image):
@@ -484,10 +453,7 @@ class Reconstruction:
         inte_rgb = np.stack((inte_img, inte_img, inte_img), axis=-1)
         if self.probability:
             sigma_sq_low_phi_vect = sigma_sq_phi[self.mask]
-            if prob_up:
-                sigmasq_x, sigmasq_y, sigmasq_z, derv_x, derv_y, derv_z = self.sigma_random_up(sigma_sq_low_phi_vect, uc, vc, up)
-            else:
-                sigmasq_x, sigmasq_y, sigmasq_z, derv_x, derv_y, derv_z = self.sigma_random(sigma_sq_low_phi_vect, uc, vc, up)
+            sigmasq_x, sigmasq_y, sigmasq_z, derv_x, derv_y, derv_z = self.sigma_random(sigma_sq_low_phi_vect, uc, vc, up, prob_up)
             sigma_x = np.sqrt(sigmasq_x)
             sigma_y = np.sqrt(sigmasq_y)
             sigma_z = np.sqrt(sigmasq_z)
@@ -728,9 +694,15 @@ def main():
     else:
         print("\n ERROR: Invalid entry")
         return
-    prob = input("Do you need a model with pixel uncertainity?(y/n):")
+    prob = input("Do you need a model with pixel uncertainty?(y/n):")
+    prob_up = False
     if prob =="y":
         probability = True
+        pup = input("1:Aleatoric uncertainty \n2: Full uncertainty:")
+        if pup == "1":
+            prob_up = True
+        else:
+            prob_up = False
     elif prob == "n":
         probability = False
     else:
@@ -773,7 +745,7 @@ def main():
                                   save_ply=save_ply,
                                   probability=probability)
     
-    obj_cordi, obj_color, cordi_sigma, mask = reconst_inst.obj_reconst_wrapper()
+    obj_cordi, obj_color, cordi_sigma, mask = reconst_inst.obj_reconst_wrapper(prob_up=prob_up)
     return
 
 
