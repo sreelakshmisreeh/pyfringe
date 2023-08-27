@@ -214,26 +214,26 @@ class Reconstruction:
         Sub function to reconstruct object from phase map
         """
         if self.processing == 'cpu':
-            unwrap_image = nstep.recover_image(unwrap_vector, self.mask, self.cam_height, self.cam_width)
-            unwrap_dist = nstep.undistort(unwrap_image, self.cam_mtx, self.cam_dist)
-            self.mask = ~np.isnan(unwrap_dist)
-            u = np.arange(0, unwrap_dist.shape[1])
-            v = np.arange(0, unwrap_dist.shape[0])
+            #unwrap_image = nstep.recover_image(unwrap_vector, self.mask, self.cam_height, self.cam_width)
+            #unwrap_dist = nstep.undistort(unwrap_image, self.cam_mtx, self.cam_dist)
+            #self.mask = ~np.isnan(unwrap_dist)
+            u = np.arange(0, self.cam_width)
+            v = np.arange(0, self.cam_height)
             uc, vc = np.meshgrid(u, v)
             uc = uc[self.mask]
             vc = vc[self.mask]
-            up = (unwrap_dist - self.phase_st) * self.pitch_list[-1] / (2 * np.pi)
+            up = (unwrap_vector - self.phase_st) * self.pitch_list[-1] / (2 * np.pi)
             up = up[self.mask]
         else:
-            unwrap_image = nstep_cp.recover_image_cp(unwrap_vector, self.mask, self.cam_height, self.cam_width)
-            unwrap_dist = nstep_cp.undistort_cp(unwrap_image, self.cam_mtx, self.cam_dist)
-            self.mask = ~cp.isnan(unwrap_dist)
-            u = cp.arange(0, unwrap_dist.shape[1])
-            v = cp.arange(0, unwrap_dist.shape[0])
+            #unwrap_image = nstep_cp.recover_image_cp(unwrap_vector, self.mask, self.cam_height, self.cam_width)
+           # unwrap_dist = nstep_cp.undistort_cp(unwrap_image, self.cam_mtx, self.cam_dist)
+            #self.mask = ~cp.isnan(unwrap_dist)
+            u = cp.arange(0,self.cam_width)
+            v = cp.arange(0, self.cam_height)
             uc, vc = cp.meshgrid(u, v)
             uc = uc[self.mask]
             vc = vc[self.mask]
-            up = (unwrap_dist - self.phase_st) * self.pitch_list[-1] / (2 * cp.pi)
+            up = (unwrap_vector - self.phase_st) * self.pitch_list[-1] / (2 * cp.pi)
             up = up[self.mask]
             self.mask = cp.asnumpy(self.mask)
         
@@ -484,7 +484,9 @@ class Reconstruction:
         if self.data_type == 'tiff':
             if os.path.exists(os.path.join(self.object_path, 'capt_000_000000.tiff')):
                 img_path = sorted(glob.glob(os.path.join(self.object_path, 'capt_*')), key=lambda x:int(os.path.basename(x)[-11:-5]))
-                images_arr = np.array([cv2.imread(file, 0) for file in img_path])- self.dark_bias
+                images_arr_dist = np.array([cv2.imread(file, 0) for file in img_path])- self.dark_bias
+                images_arr = nstep.undistort(images_arr_dist,self.cam_mtx, self.cam_dist)
+                
             else:
                 print("ERROR:Data path does not exist!")
                 return
