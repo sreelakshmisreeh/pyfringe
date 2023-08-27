@@ -7,6 +7,7 @@ import scipy.ndimage
 import os
 from typing import Tuple
 import pickle
+import cv2
 
 def delta_deck_gen(N: int,
                    height: int,
@@ -41,7 +42,10 @@ def cos_func(inte_rang: list,
              pitch: int,
              direc: str,
              phase_st: float,
-             delta_deck: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+             delta_deck: np.ndarray,
+             dist_fr: bool=False,
+             proj_mtx: np.ndarray=None,
+             proj_dist: np.ndarray=None) -> Tuple[np.ndarray, np.ndarray]:
     """
     Function creates cosine fringe pattern according to N step phase shifting algorithm.
     The intensity of the kth images with a phase shift of δ_k can be represented as
@@ -56,7 +60,9 @@ def cos_func(inte_rang: list,
                             phase should be zero. Whereas for phase coding temporal unwrapping starting phase
                             should be -π.
     delta_deck =  type: np.ndarray. Delta values at each pixel for each N step pattern.
-    
+    dist_fr = type: bool. If set True the true fringe patterns will be predistorted.
+    proj_mtx= type:numpy.ndarray. Projector intrinsic matrix. If dist_fr is set True the projector intrinsic matrix will be used to predistort the fringe patterns.
+    proj_dist= type:numpy.ndarray. Projector distortion matrix. If dist_fr is set True the projector distortion matrix will be used to predistort the fringe patterns.
     Returns
     -------
     inte = type:numpy.ndarray.  N intensity patterns.
@@ -73,9 +79,13 @@ def cos_func(inte_rang: list,
 
     if direc == 'v':  # vertical fringe pattern
         array = np.ones((height, 1)) * np.arange(0, width)
+        if dist_fr:
+            array = cv2.undistort(array, proj_mtx, proj_dist, None, proj_mtx)
     elif direc == 'h':  # horizontal fringe pattern
         array = np.ones((width, 1)) * np.arange(0, height)
         array = np.rot90(array, 3)
+        if dist_fr:
+            array = cv2.undistort(array, proj_mtx, proj_dist, None, proj_mtx)
     else:
         array = None
         print("ERROR: direction parameter is invalid, must be one of {'v', 'h'}.")
@@ -132,7 +142,10 @@ def calib_generate(width: int,
                    pitch_list: list,
                    phase_st: float,
                    inte_rang: list,
-                   path: str) -> Tuple[np.ndarray, np.ndarray]:
+                   path: str,
+                   dist_fr: bool=False,
+                   proj_mtx: np.ndarray=None,
+                   proj_dist: np.ndarray=None) -> Tuple[np.ndarray, np.ndarray]:
     """
     Function to generate fringe patterns based on type of unwrapping. 
     This function generates both vertically and horizontally varying fringe patterns which is usually required for system calibration.
@@ -152,6 +165,9 @@ def calib_generate(width: int,
                             Whereas for phase coding temporal unwrapping starting phase should be -π.
     inte_rang = type:list. Operating intensity range or projector's linear operation region.
     path = type: string. Path to which the generated pattern is to be saved.
+    dist_fr = type: bool. If set True the true fringe patterns will be predistorted.
+    proj_mtx= type:numpy.ndarray. Projector intrinsic matrix. If dist_fr is set True the projector intrinsic matrix will be used to predistort the fringe patterns.
+    proj_dist= type:numpy.ndarray. Projector distortion matrix. If dist_fr is set True the projector distortion matrix will be used to predistort the fringe patterns.
 
     Returns
     -------
@@ -164,8 +180,10 @@ def calib_generate(width: int,
         delta_deck_list = delta_deck_gen(N_list[0], height, width)
         step_v = step_func(inte_rang, pitch_list[0], 'v', delta_deck_list)
         step_h = step_func(inte_rang, pitch_list[0], 'h', delta_deck_list)
-        cos_v, absolute_phi_v = cos_func(inte_rang, pitch_list[0], 'v', phase_st, delta_deck_list)
-        cos_h, absolute_phi_h = cos_func(inte_rang, pitch_list[0], 'h', phase_st, delta_deck_list)
+        cos_v, absolute_phi_v = cos_func(inte_rang, pitch_list[0], 'v', phase_st, 
+                                         delta_deck_list, dist_fr,proj_mtx, proj_dist)
+        cos_h, absolute_phi_h = cos_func(inte_rang, pitch_list[0], 'h', phase_st,
+                                         delta_deck_list, dist_fr, proj_mtx, proj_dist)
         fringe_lst = np.concatenate((cos_v, cos_h, step_v, step_h), axis=0)
         fringe_arr = np.ceil(fringe_lst).astype('uint8')  # for rounding to the next int number to avoid phase ambiguity
         
@@ -174,8 +192,10 @@ def calib_generate(width: int,
         delta_deck_list = []
         for p, n in zip(pitch_list, N_list): 
             delta_deck = delta_deck_gen(n, height, width)
-            cos_v, absolute_phi_v = cos_func(inte_rang, p, 'v', phase_st, delta_deck)
-            cos_h, absolute_phi_h = cos_func(inte_rang, p, 'h', phase_st, delta_deck)
+            cos_v, absolute_phi_v = cos_func(inte_rang, p, 'v', phase_st, 
+                                             delta_deck, dist_fr, proj_mtx, proj_dist)
+            cos_h, absolute_phi_h = cos_func(inte_rang, p, 'h', phase_st, 
+                                             delta_deck, dist_fr, proj_mtx, proj_dist)
             fringe_lst.append(cos_v)
             fringe_lst.append(cos_h)
             delta_deck_list.append(delta_deck)
@@ -196,7 +216,10 @@ def recon_generate(width: int,
                    phase_st: float,
                    inte_rang: list,
                    direc: str,
-                   path: str) -> Tuple[np.ndarray, np.ndarray]:
+                   path: str,
+                   dist_fr: bool=False,
+                   proj_mtx: np.ndarray=None,
+                   proj_dist: np.ndarray=None) -> Tuple[np.ndarray, np.ndarray]:
     """
     Function is used to generate fringe pattern in a specified direction.
 
@@ -214,6 +237,9 @@ def recon_generate(width: int,
     inte_rang = type: list. Operating intensity range or projector's linear operation region.
     direc = type: string. Visually vertical (v) or horizontal(h) pattern.
     path = type: string. Path to which the generated pattern is to be saved.
+    dist_fr = type: bool. If set True the true fringe patterns will be predistorted.
+    proj_mtx= type:numpy.ndarray. Projector intrinsic matrix. If dist_fr is set True the projector intrinsic matrix will be used to predistort the fringe patterns.
+    proj_dist= type:numpy.ndarray. Projector distortion matrix. If dist_fr is set True the projector distortion matrix will be used to predistort the fringe patterns.
 
     Returns
     -------
@@ -227,10 +253,12 @@ def recon_generate(width: int,
         delta_deck_list = delta_deck_gen(N_list[0], height, width)
         if direc == 'v':
             step = step_func(inte_rang, pitch_list[0], 'v', delta_deck_list)
-            cos, absolute_phi_v = cos_func(inte_rang, pitch_list[0], 'v', phase_st, delta_deck_list)
+            cos, absolute_phi_v = cos_func(inte_rang, pitch_list[0], 'v', phase_st, 
+                                           delta_deck_list, dist_fr, proj_mtx, proj_dist)
         elif direc == 'h':    
             step = step_func(inte_rang, pitch_list[0], 'h', delta_deck_list)
-            cos, absolute_phi_h = cos_func(inte_rang, pitch_list[0], 'h', phase_st, delta_deck_list)
+            cos, absolute_phi_h = cos_func(inte_rang, pitch_list[0], 'h', phase_st, 
+                                           delta_deck_list, dist_fr, proj_mtx, proj_dist)
         else:
             print('ERROR:Invalid direction. Directions should be \'v\'for vertical fringes and \'h\'for horizontal fringes')
             cos = None
@@ -241,9 +269,9 @@ def recon_generate(width: int,
         for p, n in zip(pitch_list, N_list): 
             delta_deck = delta_deck_gen(n, height, width)
             if direc == 'v':
-                cos, absolute_phi = cos_func(inte_rang, p, 'v', phase_st, delta_deck)
+                cos, absolute_phi = cos_func(inte_rang, p, 'v', phase_st, delta_deck, proj_mtx, proj_dist)
             elif direc == 'h':
-                cos, absolute_phi = cos_func(inte_rang, p, 'h', phase_st, delta_deck)
+                cos, absolute_phi = cos_func(inte_rang, p, 'h', phase_st, delta_deck, proj_mtx, proj_dist)
             else:
                 print('ERROR:Invalid direction. Directions should be \'v\'for vertical fringes and \'h\'for horizontal fringes')
                 cos = None
@@ -736,9 +764,12 @@ def bilinear_interpolate(unwrap, x, y):
     return wa*unwrap_a + wb*unwrap_b + wc*unwrap_c + wd*unwrap_d
 
 def undistort(image, camera_mtx, camera_dist): # image with nan values after undistorting and applying interpolation creates nan values
-    u = np.arange(0, image.shape[1])
-    v = np.arange(0, image.shape[0])
+    no_img = image.shape[0]
+    u = np.arange(0, image.shape[2])
+    v = np.arange(0, image.shape[1])
     uc, vc = np.meshgrid(u, v)
+    uc = np.repeat(uc[np.newaxis,:,:],no_img,axis=0)
+    vc = np.repeat(vc[np.newaxis,:,:],no_img,axis=0)
     x = (uc - camera_mtx[0, 2])/camera_mtx[0, 0]
     y = (vc - camera_mtx[1, 2])/camera_mtx[1, 1]
     r_sq = x**2 + y**2
@@ -746,7 +777,7 @@ def undistort(image, camera_mtx, camera_dist): # image with nan values after und
     y_double_dash = y*(1 + camera_dist[0, 0] * r_sq + camera_dist[0, 1] * r_sq**2)
     map_x = x_double_dash * camera_mtx[0, 0] + camera_mtx[0, 2]
     map_y = y_double_dash * camera_mtx[1, 1] + camera_mtx[1, 2]
-    undist_image = bilinear_interpolate(image, map_x, map_y)
+    undist_image = np.array([bilinear_interpolate(i, mx, my) for i,mx,my in zip(image, map_x, map_y)])
     return undist_image
 # =====================================================
 # For diagnosis
