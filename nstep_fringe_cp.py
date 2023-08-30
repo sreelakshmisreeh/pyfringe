@@ -268,8 +268,9 @@ def multifreq_unwrap_cp(wavelength_arr_cp: list,
         absolute_ph_cp, k_array_cp = multi_kunwrap_cp(wavelength_arr_cp[i:i + 2], [absolute_ph_cp, phase_arr_cp[i + 1]])
     absolute_ph_cp = recover_image_cp(absolute_ph_cp, mask, cam_height, cam_width)
     absolute_ph_cp, k0 = filt_cp(absolute_ph_cp, kernel_size, direc)
+    mask =  ~cp.isnan(absolute_ph_cp)
     absolute_ph_cp = absolute_ph_cp[mask]
-    return absolute_ph_cp, k_array_cp
+    return absolute_ph_cp, k_array_cp, mask
 
 def bilinear_interpolate_cp(image: cp.ndarray,
                             x: cp.ndarray,
