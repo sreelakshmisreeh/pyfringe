@@ -33,7 +33,7 @@ def main():
     # reconstruction point clouds will also be saved in the same path
     
     path = r'C:\Users\kl001\Documents\pyfringe_test\multifreq_calib_images'
-    data_type = 'npy'
+    data_type = "npy"
     processing = 'gpu'
     sigma_path = r'C:\Users\kl001\Documents\pyfringe_test\mean_pixel_std\mean_std_pixel.npy'
     #multifrequency unwrapping parameters
@@ -42,7 +42,7 @@ def main():
         N_list = [3, 3, 3, 9]
         kernel_v = 7; kernel_h= 7
         quantile_limit = 4.5
-        limit = nstep.B_cutoff_limit(sigma_path, quantile_limit, N_list, pitch_list)
+        limit = 10
         
     # multiwavelength unwrapping parameters
     if type_unwrap == 'multiwave':
@@ -50,7 +50,7 @@ def main():
         N_list =[5,5,9]
         kernel_v = 9; kernel_h= 9  
         quantile_limit =3
-        limit = nstep.B_cutoff_limit(sigma_path, quantile_limit, N_list, pitch_list)
+        limit = 10
     
     # phase coding unwrapping parameters
     if type_unwrap == 'phase':
@@ -79,14 +79,14 @@ def main():
                                    processing=processing)
     
     delta_pose=25   # number of samples in each direction
-    pool_size_list =np.arange(10,55,1) # number of poses 
+    pool_size_list =np.arange(40,41,1) # number of poses 
     no_sample_sets =100 # no of iterations
     cam_mtx_sample, cam_dist_sample, proj_mtx_sample, proj_dist_sample, st_rmat_sample, st_tvec_sample, cam_h_mtx_sample, proj_h_mtx_sample = calib_inst.bootstrap_intrinsics_extrinsics(delta_pose,
                                                                                                                                                                                          pool_size_list, 
                                                                                                                                                                                          no_sample_sets)
     return
 def analysis():  
-    pool_size_list =np.arange(10,55,1)
+    pool_size_list =np.arange(40,41,1)
     type_unwrap =  'multifreq'
     path = r'C:\Users\kl001\Documents\pyfringe_test\multifreq_calib_images'
     calibration_std = np.load(os.path.join(path, '{}_std_calibration_param.npz'.format(type_unwrap)))
