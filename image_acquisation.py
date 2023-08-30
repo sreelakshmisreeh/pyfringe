@@ -992,8 +992,12 @@ def main():
         
     elif option == '5':
         image_index_list = np.repeat(np.arange(0, 12), 3).tolist()
+        #predistorted
+        #image_index_list = np.repeat(np.arange(21, 33), 3).tolist()
         pattern_num_list = [0, 1, 2] * len(set(image_index_list))
-        savedir = r'C:\Users\kl001\Documents\pyfringe_test\multifreq_calib_images'
+        #savedir = r'C:\Users\kl001\Documents\pyfringe_test\multifreq_calib_images'
+        #savedir = r'C:\Users\kl001\Documents\pyfringe_test\multifreq_calib_images_test\before_dist'
+        savedir = r'C:\Users\kl001\Documents\pyfringe_test\multifreq_calib_images_test\after_dist'
         number_scan = int(input("\nEnter number of scans"))
         acquisition_index = int(input("\nEnter acquisition index"))
         result &= calib_capture(image_index_list=image_index_list,
