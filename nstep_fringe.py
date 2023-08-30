@@ -669,8 +669,9 @@ def multifreq_unwrap(wavelength_arr: np.array,
         absolute_ph, k = multi_kunwrap(wavelength_arr[i:i+2], [absolute_ph, phase_arr[i+1]]) 
     absolute_ph = recover_image(absolute_ph, mask, cam_height, cam_width)
     absolute_ph, k0 = filt(absolute_ph, kernel_size, direc)  # correction of unwrapped phase map image with nan using median filter creates nan values.
+    mask =  ~np.isnan(absolute_ph)
     absolute_ph = absolute_ph[mask]
-    return absolute_ph, k
+    return absolute_ph, k, mask
 
 def multiwave_unwrap(wavelength_arr: np.ndarray,
                      phase_arr: np.array,
