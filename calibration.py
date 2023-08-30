@@ -332,6 +332,17 @@ class Calibration:
                                                                                                                                     white_lst[0].shape[::-1],
                                                                                                                                     flags=stereocalibration_flags,
                                                                                                                                     criteria=criteria)
+        u = np.arange(0, self.cam_width)
+        v = np.arange(0, self.cam_height)
+        uc_grid, vc_grid = np.meshgrid(u, v)
+        cordinates = np.stack((vc_grid.ravel(),uc_grid.ravel()),axis=1).astype("float64")
+        uv = cv2.undistortPoints(cordinates, st_cam_mtx, st_cam_dist, None, cam_mtx).reshape((self.cam_width * self.cam_height,2))
+        uc = uv[:,1]
+        vc = uv[:,0]
+        uc = uc.reshape(self.cam_height, self.cam_width)
+        vc = vc.reshape(self.cam_height, self.cam_width)
+        np.save(os.path.join(self.path,"uc_img.npy"), uc)
+        np.save(os.path.join(self.path,"vc_img.npy"), vc)
         project_mat = np.hstack((st_cam_proj_rmat, st_cam_proj_tvec))
         _, _, _, _, _, _, euler_angles = cv2.decomposeProjectionMatrix(project_mat)
         proj_h_mtx = np.dot(st_proj_mtx, np.hstack((st_cam_proj_rmat, st_cam_proj_tvec)))
@@ -821,7 +832,7 @@ class Calibration:
         if not all(ret_lst):
             print('Warning: Centers are not detected for some poses. Modify bobdetect_areamin and bobdetect_areamin parameter')
         # set flags to have tangential distortion = 0, k4 = 0, k5 = 0, k6 = 0
-        flags = cv2.CALIB_ZERO_TANGENT_DIST + cv2.CALIB_FIX_K3 + cv2.CALIB_FIX_K4 + cv2.CALIB_FIX_K5 + cv2.CALIB_FIX_K6
+        flags =  cv2.CALIB_FIX_K3 + cv2.CALIB_FIX_K4 + cv2.CALIB_FIX_K5 + cv2.CALIB_FIX_K6
         # camera calibration
         cam_ret, cam_mtx, cam_dist, cam_rvecs, cam_tvecs = cv2.calibrateCamera(objpoints,
                                                                                cam_imgpoints,
@@ -898,7 +909,7 @@ class Calibration:
                 cv2.waitKey(200)
         cv2.destroyAllWindows()
         # Set all distortion = 0. linear model assumption
-        flags = cv2.CALIB_ZERO_TANGENT_DIST + cv2.CALIB_FIX_K1 + cv2.CALIB_FIX_K2 + cv2.CALIB_FIX_K3 + cv2.CALIB_FIX_K4 + cv2.CALIB_FIX_K5 + cv2.CALIB_FIX_K6
+        flags =  cv2.CALIB_FIX_K3 + cv2.CALIB_FIX_K4 + cv2.CALIB_FIX_K5 + cv2.CALIB_FIX_K6
        
         # Projector calibration
         proj_ret, proj_mtx, proj_dist, proj_rvecs, proj_tvecs = cv2.calibrateCamera(cam_objpts,
@@ -1573,6 +1584,17 @@ class Calibration:
         st_tvec_mean, st_tvec_std, st_tvec_sample = Calibration.sample_statistics(np.array(st_tvec_sample), len(pool_size_list))
         proj_h_mtx_mean, proj_h_mtx_std, proj_h_mtx_sample = Calibration.sample_statistics(np.array(proj_h_mtx_sample), len(pool_size_list))
         cam_h_mtx_mean, cam_h_mtx_std, cam_h_mtx_sample = Calibration.sample_statistics(np.array(cam_h_mtx_sample), len(pool_size_list))
+        u = np.arange(0, self.cam_width)
+        v = np.arange(0, self.cam_height)
+        uc_grid, vc_grid = np.meshgrid(u, v)
+        cordinates = np.stack((vc_grid.ravel(),uc_grid.ravel()),axis=1).astype("float64")
+        uv = cv2.undistortPoints(cordinates, cam_mtx_mean, cam_dist_mean, None, cam_mtx_mean).reshape((self.cam_width * self.cam_height,2))
+        uc = uv[:,1]
+        vc = uv[:,0]
+        uc = uc.reshape(self.cam_height, self.cam_width)
+        vc = vc.reshape(self.cam_height, self.cam_width)
+        np.save(os.path.join(self.path,"uc_img.npy"), uc)
+        np.save(os.path.join(self.path,"vc_img.npy"), vc)
         np.savez(os.path.join(self.path, '{}_sample_calibration_param.npz'.format(self.type_unwrap)), 
                  cam_mtx_sample=cam_mtx_sample, 
                  cam_dist_sample=cam_dist_sample, 
