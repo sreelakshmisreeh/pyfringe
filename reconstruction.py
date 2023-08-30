@@ -103,6 +103,8 @@ class Reconstruction:
             self.camproj_trans_mtx = calibration_mean["st_tvec_mean"]
             self.cam_h_mtx = calibration_mean["cam_h_mtx_mean"]
             self.proj_h_mtx = calibration_mean["proj_h_mtx_mean"]
+            self.uc_img = np.load(os.path.join(self.calib_path,"uc_img.npy"))
+            self.vc_img = np.load(os.path.join(self.calib_path,"vc_img.npy"))
             if probability:
                 calibration_std = np.load(os.path.join(self.calib_path, '{}_std_calibration_param.npz'.format(self.type_unwrap)))
                 self.cam_h_mtx_std = calibration_std["cam_h_mtx_std"]
@@ -121,6 +123,8 @@ class Reconstruction:
             self.camproj_trans_mtx = cp.asarray(calibration_mean["st_tvec_mean"])
             self.cam_h_mtx = cp.asarray(calibration_mean["cam_h_mtx_mean"])
             self.proj_h_mtx = cp.asarray(calibration_mean["proj_h_mtx_mean"])
+            self.uc_img = cp.load(os.path.join(self.calib_path,"uc_img.npy"))
+            self.vc_img = cp.load(os.path.join(self.calib_path,"vc_img.npy"))
             if probability:
                 calibration_std = cp.load(os.path.join(self.calib_path, '{}_std_calibration_param.npz'.format(self.type_unwrap)))
                 self.cam_h_mtx_std = cp.asarray(calibration_std["cam_h_mtx_std"])
@@ -217,24 +221,30 @@ class Reconstruction:
             #unwrap_image = nstep.recover_image(unwrap_vector, self.mask, self.cam_height, self.cam_width)
             #unwrap_dist = nstep.undistort(unwrap_image, self.cam_mtx, self.cam_dist)
             #self.mask = ~np.isnan(unwrap_dist)
-            u = np.arange(0, self.cam_width)
-            v = np.arange(0, self.cam_height)
-            uc, vc = np.meshgrid(u, v)
-            uc = uc[self.mask]
-            vc = vc[self.mask]
+            # u = np.arange(0, self.cam_width)
+            # v = np.arange(0, self.cam_height)
+            # uc_grid, vc_grid = np.meshgrid(u, v)
+            # cordinates = np.stack((vc_grid.ravel(),uc_grid.ravel()),axis=1).astype("float64")
+            # uv = cv2.undistortPoints(cordinates, self.cam_mtx, self.cam_dist, None, self.cam_mtx).reshape((self.cam_width*self.cam_height,2))
+            # uc = uv[:,1]
+            # vc = uv[:,0]
+            # uc = uc.reshape(self.cam_height, self.cam_width)[self.mask]
+            # vc = vc.reshape(self.cam_height, self.cam_width)[self.mask]
+            uc = self.uc_img[self.mask]
+            vc = self.vc_img[self.mask]
             up = (unwrap_vector - self.phase_st) * self.pitch_list[-1] / (2 * np.pi)
-            up = up[self.mask]
+            #up = up[self.mask]
         else:
             #unwrap_image = nstep_cp.recover_image_cp(unwrap_vector, self.mask, self.cam_height, self.cam_width)
            # unwrap_dist = nstep_cp.undistort_cp(unwrap_image, self.cam_mtx, self.cam_dist)
             #self.mask = ~cp.isnan(unwrap_dist)
-            u = cp.arange(0,self.cam_width)
-            v = cp.arange(0, self.cam_height)
-            uc, vc = cp.meshgrid(u, v)
-            uc = uc[self.mask]
-            vc = vc[self.mask]
+            # u = cp.arange(0,self.cam_width)
+            # v = cp.arange(0, self.cam_height)
+            # uc, vc = cp.meshgrid(u, v)
+            uc = self.uc_img[self.mask]
+            vc = self.vc_img[self.mask]
             up = (unwrap_vector - self.phase_st) * self.pitch_list[-1] / (2 * cp.pi)
-            up = up[self.mask]
+            #up = up[self.mask]
             self.mask = cp.asnumpy(self.mask)
         
         coords = self.triangulation(uc, vc, up) #return is numpy
@@ -453,7 +463,6 @@ class Reconstruction:
         inte_img = inte_rgb_image[self.mask] / np.nanmax(inte_rgb_image[self.mask])
         inte_rgb = np.stack((inte_img, inte_img, inte_img), axis=-1)
         if self.probability:
-            sigma_sq_phi = nstep.undistort(sigma_sq_phi, self.cam_mtx, self.cam_dist)
             sigma_sq_low_phi_vect = sigma_sq_phi[self.mask]
             sigmasq_x, sigmasq_y, sigmasq_z, derv_x, derv_y, derv_z = self.sigma_random(sigma_sq_low_phi_vect, uc, vc, up, prob_up)
             sigma_x = np.sqrt(sigmasq_x)
@@ -484,8 +493,8 @@ class Reconstruction:
         if self.data_type == 'tiff':
             if os.path.exists(os.path.join(self.object_path, 'capt_000_000000.tiff')):
                 img_path = sorted(glob.glob(os.path.join(self.object_path, 'capt_*')), key=lambda x:int(os.path.basename(x)[-11:-5]))
-                images_arr_dist = np.array([cv2.imread(file, 0) for file in img_path])- self.dark_bias
-                images_arr = nstep.undistort(images_arr_dist,self.cam_mtx, self.cam_dist)
+                images_arr = np.array([cv2.imread(file, 0) for file in img_path])- self.dark_bias
+                
                 
             else:
                 print("ERROR:Data path does not exist!")
@@ -500,6 +509,7 @@ class Reconstruction:
         elif self.data_type == 'npy':
             if os.path.exists(os.path.join(self.object_path, 'capt_000_000000.npy')):
                 images_arr = np.load(os.path.join(self.object_path, 'capt_000_000000.npy')).astype(np.float64) - self.dark_bias
+                
             else:
                 print("ERROR:Data path does not exist!")
                 images_arr = None
@@ -524,7 +534,7 @@ class Reconstruction:
                                                                                False)
                 self.mask = mask
                 phase_map[0][phase_map[0] < EPSILON] = phase_map[0][phase_map[0] < EPSILON] + 2 * np.pi
-                unwrap_vector, k_arr = nstep.multifreq_unwrap(self.pitch_list,
+                unwrap_vector, k_arr, mask = nstep.multifreq_unwrap(self.pitch_list,
                                                               phase_map,
                                                               self.kernel,
                                                               self.fringe_direc,
@@ -532,7 +542,7 @@ class Reconstruction:
                                                               self.cam_width,
                                                               self.cam_height)
                 orig_img = orig_img[-1] 
-                
+                self.mask = mask
             elif self.processing == 'gpu':
                 images_arr_cp = cp.asarray(images_arr)
                 modulation_vector, orig_img, phase_map, mask = nstep_cp.phase_cal_cp(images_arr_cp,
@@ -541,7 +551,7 @@ class Reconstruction:
                                                                                      False)
                 phase_map[0][phase_map[0] < EPSILON] = phase_map[0][phase_map[0] < EPSILON] + 2 * np.pi
                 self.mask = mask
-                unwrap_vector, k_arr = nstep_cp.multifreq_unwrap_cp(self.pitch_list,
+                unwrap_vector, k_arr, mask = nstep_cp.multifreq_unwrap_cp(self.pitch_list,
                                                                     phase_map,
                                                                     self.kernel,
                                                                     self.fringe_direc,
@@ -549,7 +559,7 @@ class Reconstruction:
                                                                     self.cam_width,
                                                                     self.cam_height)
                 orig_img = cp.asnumpy(orig_img[-1])
-                
+                self.mask = mask
                 
         elif self.type_unwrap == 'multiwave':
             eq_wav12 = (self.pitch_list[-1] * self.pitch_list[1]) / (self.pitch_list[1] - self.pitch_list[-1])
@@ -582,11 +592,10 @@ class Reconstruction:
             
         if self.probability:
             cov_arr,_ = nstep.pred_var_fn(images_arr[-self.N_list[-1]:], self.model)
-            sigma_sq_phi_dist = nstep.var_func(images_arr[-self.N_list[-1]:],
+            sigma_sq_phi = nstep.var_func(images_arr[-self.N_list[-1]:],
                                           self.mask,
                                           self.N_list[-1],
                                           cov_arr)
-            sigma_sq_phi = nstep.undistort(sigma_sq_phi_dist, self.cam_mtx, self.cam_dist)
         else:
             sigma_sq_phi = None
         if self.processing == 'gpu':
@@ -597,7 +606,7 @@ class Reconstruction:
                                                                  sigma_sq_phi,
                                                                  prob_up)
         
-        return obj_cordi, obj_color, cordi_sigma, self.mask 
+        return obj_cordi, obj_color, cordi_sigma
     
 def undistort_point(xc_yc, camera_dist):
     r_sq = xc_yc[0]**2 + xc_yc[1]**2
@@ -749,7 +758,7 @@ def main():
                                   save_ply=save_ply,
                                   probability=probability)
     
-    obj_cordi, obj_color, cordi_sigma, mask = reconst_inst.obj_reconst_wrapper(prob_up=prob_up)
+    obj_cordi, obj_color, cordi_sigma = reconst_inst.obj_reconst_wrapper(prob_up=prob_up)
     return
 
 
