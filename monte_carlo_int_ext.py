@@ -172,13 +172,13 @@ def main():
     scan_object = "concrete"
     model_path = r"C:\Users\kl001\Documents\pyfringe_test\mean_pixel_std\exp_30_fp_42_retake\lut_models.pkl"
     dark_bias_path = r"C:\Users\kl001\Documents\pyfringe_test\mean_pixel_std\exp_30_fp_42_retake\black_bias\avg_dark.npy"
-    calib_path = r"C:\Users\kl001\Documents\pyfringe_test\multifreq_calib_images"
-    limit = 60
+    calib_path = r"C:\Users\kl001\Documents\pyfringe_test\multifreq_calib_images_bk"
+    limit = 20
     no_drop_scans = 200
     batch_size = 8
     pitch_list = [1200, 18]
     N_list = [3,3]
-    data_path = r"E:\concrete3"
+    data_path = r"E:\green_freq_white\pitch_18"
     mean_cords, std_cords, mean_cords_vector, std_cords_vector, mask, mean_inten = virtual_scan_int_ext(no_drop_scans,
                                                                                                         batch_size,
                                                                                                         proj_width,
