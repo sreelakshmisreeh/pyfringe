@@ -598,11 +598,20 @@ class Reconstruction:
                 orig_img = cp.asnumpy(orig_img[-1])
                 self.mask = mask
                 if self.probability:
-                    cov_arr,_ = nstep_cp.pred_var_fn(images_arr_cp[-self.N_list[-1]:], self.model)
+                    cov_arr_l,_ = nstep_cp.pred_var_fn(images_arr_cp[-(self.N_list[-2]+self.N_list[-1]): self.N_list[-1]], self.model)
+                    
+                    sigma_sq_phi_l = nstep_cp.var_func(images_arr_cp[-(self.N_list[-2]+self.N_list[-1]): self.N_list[-1]],
+                                                  self.mask,
+                                                  self.N_list[-2],
+                                                  cov_arr_l)
+                    cov_arr_h,_ = nstep_cp.pred_var_fn(images_arr_cp[-self.N_list[-1]:], self.model)
                     sigma_sq_phi = nstep_cp.var_func(images_arr_cp[-self.N_list[-1]:],
                                                   self.mask,
                                                   self.N_list[-1],
-                                                  cov_arr)
+                                                  cov_arr_h)
+                    sigma_sq_delta_phi = ((self.pitch_list[-2]/self.pitch_list[-1])**2 * sigma_sq_phi_l) + sigma_sq_phi
+                    quality = np.pi/np.sqrt(sigma_sq_delta_phi)
+                    quality = cp.asnumpy(quality)
                 else:
                     sigma_sq_phi = None
                     quality = None
@@ -785,7 +794,7 @@ def main():
                                   fringe_direc='v',
                                   kernel=7,
                                   data_type='tiff',
-                                  processing='cpu',
+                                  processing='gpu',
                                   dark_bias_path=dark_bias_path,
                                   calib_path=calib_path,
                                   object_path=obj_path,
