@@ -36,6 +36,7 @@ def main():
     data_type = "npy"
     processing = 'gpu'
     sigma_path = r'C:\Users\kl001\Documents\pyfringe_test\mean_pixel_std\mean_std_pixel.npy'
+    dark_bias_path =  r"C:\Users\kl001\Documents\pyfringe_test\mean_pixel_std\exp_30_fp_42_retake\black_bias\avg_dark.npy"
     #multifrequency unwrapping parameters
     if type_unwrap == 'multifreq':
         pitch_list =[1375, 275, 55, 11] 
@@ -76,11 +77,12 @@ def main():
                                    kernel_h=kernel_h,
                                    path=path,
                                    data_type=data_type,
-                                   processing=processing)
+                                   processing=processing,
+                                   dark_bias_path=dark_bias_path)
     
-    delta_pose=25   # number of samples in each direction
-    pool_size_list =np.arange(40,41,1) # number of poses 
-    no_sample_sets =100 # no of iterations
+    delta_pose=10   # number of samples in each direction
+    pool_size_list =np.arange(25,26,1) # number of poses 
+    no_sample_sets =50 # no of iterations
     cam_mtx_sample, cam_dist_sample, proj_mtx_sample, proj_dist_sample, st_rmat_sample, st_tvec_sample, cam_h_mtx_sample, proj_h_mtx_sample = calib_inst.bootstrap_intrinsics_extrinsics(delta_pose,
                                                                                                                                                                                          pool_size_list, 
                                                                                                                                                                                          no_sample_sets)
