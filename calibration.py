@@ -45,7 +45,8 @@ class Calibration:
                  kernel_h,
                  path,
                  data_type,
-                 processing):
+                 processing,
+                 dark_bias_path):
         """
         Parameters
         ----------
@@ -103,6 +104,7 @@ class Calibration:
         self.bobdetect_convexity = bobdetect_convexity
         self.kernel_v = kernel_v
         self.kernel_h = kernel_h
+        
         if (self.type_unwrap == 'multifreq') or (self.type_unwrap == 'multiwave'):
             self.phase_st = 0
         else:
@@ -118,6 +120,10 @@ class Calibration:
             print('ERROR: Invalid processing type. Processing type should be \'cpu\' or \'gpu\'')
         else:
             self.processing = processing
+        if not os.path.exists(dark_bias_path):
+             print('ERROR:Path for dark bias  %s does not exist' % self.calib_path)
+        else:
+            self.dark_bias = np.load(dark_bias_path)
         
     def calib(self, fx, fy):
         """
@@ -163,11 +169,11 @@ class Calibration:
         else:
             if self.type_unwrap != 'multifreq':
                 print("phase unwrapping type is not recognized, use 'multifreq'")
-            unwrapv_lst, unwraph_lst, white_lst, mod_lst, wrapped_phase_lst, mask_lst = self.projcam_calib_img_multifreq()
+            unwrapv_lst, unwraph_lst, white_lst, mod_lst, wrapped_phase_lst, maskv_lst, maskh_lst = self.projcam_calib_img_multifreq()
         
             
-        unwrapv_lst = [nstep.recover_image(u, mask_lst[i], self.cam_height, self.cam_width) for i,u in enumerate(unwrapv_lst)]
-        unwraph_lst = [nstep.recover_image(u, mask_lst[i], self.cam_height, self.cam_width) for i,u in enumerate(unwraph_lst)]
+        unwrapv_lst = [nstep.recover_image(u, maskv_lst[i], self.cam_height, self.cam_width) for i,u in enumerate(unwrapv_lst)]
+        unwraph_lst = [nstep.recover_image(u, maskh_lst[i], self.cam_height, self.cam_width) for i,u in enumerate(unwraph_lst)]
             
         # Projector images
         proj_img_lst = self.projector_img(unwrapv_lst, unwraph_lst, white_lst, fx, fy)
@@ -182,18 +188,18 @@ class Calibration:
                                                                                              proj_img_lst)
         # Camera calibration error analysis
         cam_mean_error, cam_delta = self.intrinsic_error_analysis(cam_objpts, 
-                                                                           cam_imgpts, 
-                                                                           cam_mtx, 
-                                                                           cam_dist, 
-                                                                           cam_rvecs, 
-                                                                           cam_tvecs)
+                                                                  cam_imgpts, 
+                                                                  cam_mtx, 
+                                                                  cam_dist, 
+                                                                  cam_rvecs, 
+                                                                  cam_tvecs)
         # Projector calibration error analysis
         proj_mean_error, proj_delta = self.intrinsic_error_analysis(cam_objpts,
-                                                                              proj_imgpts,
-                                                                              proj_mtx,
-                                                                              proj_dist,
-                                                                              proj_rvecs,
-                                                                              proj_tvecs)
+                                                                    proj_imgpts,
+                                                                    proj_mtx,
+                                                                    proj_dist,
+                                                                    proj_rvecs,
+                                                                    proj_tvecs)
         # Stereo calibration
         criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 40, 0.0001)
         stereocalibration_flags = cv2.CALIB_FIX_INTRINSIC+cv2.CALIB_ZERO_TANGENT_DIST+cv2.CALIB_FIX_K3+cv2.CALIB_FIX_K4+cv2.CALIB_FIX_K5+cv2.CALIB_FIX_K6
@@ -212,6 +218,17 @@ class Calibration:
         _, _, _, _, _, _, euler_angles = cv2.decomposeProjectionMatrix(project_mat)
         proj_h_mtx = np.dot(st_proj_mtx, np.hstack((st_cam_proj_rmat, st_cam_proj_tvec)))
         cam_h_mtx = np.dot(st_cam_mtx, np.hstack((np.identity(3), np.zeros((3, 1)))))
+        u = np.arange(0, self.cam_width)
+        v = np.arange(0, self.cam_height)
+        uc_grid, vc_grid = np.meshgrid(u, v)
+        cordinates = np.stack((vc_grid.ravel(),uc_grid.ravel()),axis=1).astype("float64")
+        uv = cv2.undistortPoints(cordinates, st_cam_mtx, st_cam_dist, None, cam_mtx).reshape((self.cam_width * self.cam_height,2))
+        uc = uv[:,1]
+        vc = uv[:,0]
+        uc = uc.reshape(self.cam_height, self.cam_width)
+        vc = vc.reshape(self.cam_height, self.cam_width)
+        np.save(os.path.join(self.path,"uc_img.npy"), uc)
+        np.save(os.path.join(self.path,"vc_img.npy"), vc)
         np.savez(os.path.join(self.path, '{}_mean_calibration_param.npz'.format(self.type_unwrap)), 
                   cam_mtx_mean=st_cam_mtx, 
                   cam_dist_mean=st_cam_dist, 
@@ -222,7 +239,7 @@ class Calibration:
                   cam_h_mtx_mean=cam_h_mtx,
                   proj_h_mtx_mean=proj_h_mtx)
         np.savez(os.path.join(self.path, '{}_cam_rot_tvecs.npz'.format(self.type_unwrap)), cam_rvecs, cam_tvecs)
-        return unwrapv_lst, unwraph_lst, white_lst, mask_lst, mod_lst, proj_img_lst, cam_objpts, cam_imgpts, proj_imgpts, euler_angles, cam_mean_error, cam_delta, proj_mean_error, proj_delta
+        return unwrapv_lst, unwraph_lst, white_lst, maskv_lst, maskh_lst, mod_lst, proj_img_lst, cam_objpts, cam_imgpts, proj_imgpts, euler_angles, cam_mean_error, cam_delta, proj_mean_error, proj_delta
     
     def update_list_calib(self, proj_df1, unwrapv_lst, unwraph_lst, white_lst, mod_lst, proj_img_lst, reproj_criteria):
         """
@@ -359,7 +376,7 @@ class Calibration:
         np.savez(os.path.join(self.path, '{}_cam_rot_tvecs.npz'.format(self.type_unwrap)), cam_rvecs, cam_tvecs)
         return up_unwrapv_lst, up_unwraph_lst, up_white_lst, up_mod_lst, up_proj_img_lst, cam_objpts, cam_imgpts, proj_imgpts, euler_angles, cam_mean_error, cam_delta, proj_mean_error, proj_delta 
 
-    def calib_center_reconstruction(self, cam_imgpts, unwrap_phase, mask_lst, sigma_path):
+    def calib_center_reconstruction(self, cam_imgpts, unwrap_phase, mask_lst,  dark_bias_path, model_path):
         """
         This function is a wrapper function to reconstruct circle centers for each camera pose and compute error 
         with computed world projective coordinates in camera coordinate system.
@@ -387,8 +404,9 @@ class Calibration:
         # Function call to get all circle center x,y,z coordinates
         center_cordi_lst = self.center_xyz(cam_imgpts, 
                                            unwrap_phase,
-                                           mask_lst, 
-                                           sigma_path)
+                                           mask_lst,
+                                           dark_bias_path, 
+                                           model_path)
         true_coordinates = self.world_points()
         
         # Function call to get projective xyz for each pose
@@ -443,14 +461,14 @@ class Calibration:
         phase_h = phase_map[1::2]
         phase_v[0][phase_v[0] < EPSILON] = phase_v[0][phase_v[0] < EPSILON] + 2 * np.pi
         phase_h[0][phase_h[0] < EPSILON] = phase_h[0][phase_h[0] < EPSILON] + 2 * np.pi
-        unwrap_v, k_arr_v = nstep.multifreq_unwrap(self.pitch, 
+        unwrap_v, k_arr_v, mask_v = nstep.multifreq_unwrap(self.pitch, 
                                                    phase_v, 
                                                    self.kernel_v, 
                                                    'v', 
                                                    mask, 
                                                    self.cam_width, 
                                                    self.cam_height)
-        unwrap_h, k_arr_h = nstep.multifreq_unwrap(self.pitch, 
+        unwrap_h, k_arr_h, mask_h = nstep.multifreq_unwrap(self.pitch, 
                                                    phase_h, 
                                                    self.kernel_h, 
                                                    'h', 
@@ -458,7 +476,7 @@ class Calibration:
                                                    self.cam_width, 
                                                    self.cam_height)
         
-        return unwrap_v, unwrap_h, phase_v, phase_h, orig_img[-1], modulation, mask
+        return unwrap_v, unwrap_h, phase_v, phase_h, orig_img[-1], modulation, mask_v, mask_h
     
     def multifreq_analysis_cupy(self, data_array):
         """
@@ -490,21 +508,21 @@ class Calibration:
         phase_h = phase_map[1::2]
         phase_v[0][phase_v[0] < EPSILON] = phase_v[0][phase_v[0] < EPSILON] + 2 * np.pi
         phase_h[0][phase_h[0] < EPSILON] = phase_h[0][phase_h[0] < EPSILON] + 2 * np.pi
-        unwrap_v, k_arr_v = nstep_cp.multifreq_unwrap_cp(self.pitch, 
+        unwrap_v, k_arr_v,mask_v = nstep_cp.multifreq_unwrap_cp(self.pitch, 
                                                          phase_v, 
                                                          self.kernel_v, 
                                                          'v',
                                                          mask, 
                                                          self.cam_width, 
                                                          self.cam_height)
-        unwrap_h, k_arr_h = nstep_cp.multifreq_unwrap_cp(self.pitch, 
+        unwrap_h, k_arr_h,mask_h = nstep_cp.multifreq_unwrap_cp(self.pitch, 
                                                          phase_h, 
                                                          self.kernel_h, 
                                                          'h',
                                                          mask, 
                                                          self.cam_width, 
                                                          self.cam_height)
-        return cp.asnumpy(unwrap_v), cp.asnumpy(unwrap_h), cp.asnumpy(phase_v), cp.asnumpy(phase_h), cp.asnumpy(orig_img[-1]), cp.asnumpy(modulation), cp.asnumpy(mask)
+        return cp.asnumpy(unwrap_v), cp.asnumpy(unwrap_h), cp.asnumpy(phase_v), cp.asnumpy(phase_h), cp.asnumpy(orig_img[-1]), cp.asnumpy(modulation), cp.asnumpy(mask_v), cp.asnumpy(mask_h)
 
     def projcam_calib_img_multifreq(self):
         """
@@ -525,7 +543,8 @@ class Calibration:
                            List of vertical and horizontal phase maps
 
         """
-        mask_lst = []
+        maskv_lst = []
+        maskh_lst = []
         mod_lst = []
         white_lst = []
         wrapv_lst = []
@@ -540,13 +559,13 @@ class Calibration:
             if self.data_type == 'tiff':
                 if os.path.exists(os.path.join(self.path, 'capt_%03d_000000.tiff' % x)):
                     img_path = sorted(glob.glob(os.path.join(self.path, 'capt_%03d*.tiff' % x)), key=os.path.getmtime)
-                    images_arr = np.array([cv2.imread(file, 0) for file in img_path]).astype(np.float64)
+                    images_arr = np.array([cv2.imread(file, 0) for file in img_path]).astype(np.float64) - self.dark_bias
                 else:
                     print("ERROR: path is not exist! None item appended to the result")
                     images_arr = None
             elif self.data_type == 'npy':
                 if os.path.exists(os.path.join(self.path, 'capt_%03d_000000.npy' % x)):
-                    images_arr = np.load(os.path.join(self.path, 'capt_%03d_000000.npy' % x)).astype(np.float64)
+                    images_arr = np.load(os.path.join(self.path, 'capt_%03d_000000.npy' % x)).astype(np.float64) - self.dark_bias
                 else:
                     print("ERROR: path is not exist! None item appended to the result")
                     images_arr = None
@@ -556,12 +575,12 @@ class Calibration:
 
             if images_arr is not None:
                 if self.processing == 'cpu':
-                   unwrap_v, unwrap_h, phase_v, phase_h, orig_img, modulation, mask = self.multifreq_analysis(images_arr)
+                   unwrap_v, unwrap_h, phase_v, phase_h, orig_img, modulation, mask_v, mask_h = self.multifreq_analysis(images_arr)
                 else:
                     if self.processing != 'gpu':
                         print("WARNING: processing type is not recognized, use 'gpu'")
                     images_arr = cp.asarray(images_arr)
-                    unwrap_v, unwrap_h, phase_v, phase_h, orig_img, modulation, mask = self.multifreq_analysis_cupy(images_arr)
+                    unwrap_v, unwrap_h, phase_v, phase_h, orig_img, modulation, mask_v, mask_h = self.multifreq_analysis_cupy(images_arr)
                     cp._default_memory_pool.free_all_blocks()
                     
             else:
@@ -571,8 +590,10 @@ class Calibration:
                 phase_h = None
                 orig_img = None
                 modulation = None
-                mask = None
-            mask_lst.append(mask)
+                mask_v = None
+                mask_h = None
+            maskv_lst.append(mask_v)
+            maskh_lst.append(mask_h)
             mod_lst.append(modulation)
             white_lst.append(orig_img)
             wrapv_lst.append(phase_v)
@@ -582,7 +603,7 @@ class Calibration:
 
         wrapped_phase_lst = {"wrapv": wrapv_lst,
                              "wraph": wraph_lst}
-        return unwrapv_lst, unwraph_lst, white_lst, mod_lst, wrapped_phase_lst, mask_lst
+        return unwrapv_lst, unwraph_lst, white_lst, mod_lst, wrapped_phase_lst, maskv_lst, maskh_lst
 
     def projcam_calib_img_multiwave(self):
         """
@@ -832,7 +853,7 @@ class Calibration:
         if not all(ret_lst):
             print('Warning: Centers are not detected for some poses. Modify bobdetect_areamin and bobdetect_areamin parameter')
         # set flags to have tangential distortion = 0, k4 = 0, k5 = 0, k6 = 0
-        flags =  cv2.CALIB_FIX_K3 + cv2.CALIB_FIX_K4 + cv2.CALIB_FIX_K5 + cv2.CALIB_FIX_K6
+        flags =   cv2.CALIB_ZERO_TANGENT_DIST + cv2.CALIB_FIX_K3 + cv2.CALIB_FIX_K4 + cv2.CALIB_FIX_K5 + cv2.CALIB_FIX_K6
         # camera calibration
         cam_ret, cam_mtx, cam_dist, cam_rvecs, cam_tvecs = cv2.calibrateCamera(objpoints,
                                                                                cam_imgpoints,
@@ -909,7 +930,7 @@ class Calibration:
                 cv2.waitKey(200)
         cv2.destroyAllWindows()
         # Set all distortion = 0. linear model assumption
-        flags =  cv2.CALIB_FIX_K3 + cv2.CALIB_FIX_K4 + cv2.CALIB_FIX_K5 + cv2.CALIB_FIX_K6
+        flags = cv2.CALIB_ZERO_TANGENT_DIST + cv2.CALIB_FIX_K1 + cv2.CALIB_FIX_K2 + cv2.CALIB_FIX_K3 + cv2.CALIB_FIX_K4 + cv2.CALIB_FIX_K5 + cv2.CALIB_FIX_K6
        
         # Projector calibration
         proj_ret, proj_mtx, proj_dist, proj_rvecs, proj_tvecs = cv2.calibrateCamera(cam_objpts,
@@ -1085,7 +1106,7 @@ class Calibration:
         return
 
     # center reconstruction
-    def center_xyz(self, center_pts, unwrap_phase, mask_lst, sigma_path):
+    def center_xyz(self, center_pts, unwrap_phase, mask_lst, dark_bias_path, model_path):
         """
         Function to obtain 3d coordinates of detected circle centers.
 
@@ -1113,25 +1134,29 @@ class Calibration:
         """
         center_cordi_lst = []
         reconst_instance = rc.Reconstruction(proj_width=self.proj_width,
-                                             proj_height=self.proj_height,
-                                             cam_width=self.cam_width,
-                                             cam_height=self.cam_height,
-                                             type_unwrap=self.type_unwrap,
-                                             limit=self.limit,
-                                             N_list=self.N,
-                                             pitch_list=self.pitch,
-                                             fringe_direc='v',
-                                             kernel=self.kernel_v,
-                                             data_type=self.data_type,
-                                             processing=self.processing,
-                                             calib_path=self.path,
-                                             sigma_path=sigma_path,
-                                             object_path=self.path,
-                                             temp=False,
-                                             probability=False)
+                                              proj_height=self.proj_height,
+                                              cam_width=self.cam_width,
+                                              cam_height=self.cam_height,
+                                              type_unwrap=self.type_unwrap,
+                                              limit=self.limit,
+                                              N_list=self.N,
+                                              pitch_list=self.pitch,
+                                              fringe_direc='v',
+                                              kernel=7,
+                                              data_type='tiff',
+                                              processing='gpu',
+                                              dark_bias_path=dark_bias_path,
+                                              calib_path=self.path,
+                                              object_path=self.path,
+                                              model_path=model_path,
+                                              temp=False,
+                                              save_ply=True,
+                                              probability=False)
         for i in tqdm(range(0, len(center_pts)), desc='building camera centers 3d coordinates'):
             # undistort points
-            cordi = reconst_instance.reconstruction_pts(center_pts[i], unwrap_phase[i], mask_lst[i])
+            reconst_instance.mask = mask_lst[i]
+            unwrap_vect = unwrap_phase[i][mask_lst[i]]
+            cordi = reconst_instance.reconstruction_pts(center_pts[i], unwrap_vect)
             center_cordi_lst.append(cordi)
         return np.array(center_cordi_lst)
 
@@ -1258,8 +1283,7 @@ class Calibration:
     def recon_xyz(self,
                   unwrap_phase,  
                   white_imgs,
-                  mask_lst, 
-                  sigma_path,
+                  mask_lst,
                   int_limit=None,
                   resid_outlier_limit=None):
         """
@@ -1283,7 +1307,7 @@ class Calibration:
                     List of color for each 3d point.
 
         """
-        print(sigma_path)
+        
         cordi_lst = []
         color_lst = []
         reconstruct = rc.Reconstruction(self.proj_width,
@@ -1299,7 +1323,6 @@ class Calibration:
                                         self.data_type,
                                         self.processing,
                                         self.path,
-                                        sigma_path,
                                         self.path,
                                         False,
                                         True,
@@ -1453,7 +1476,8 @@ class Calibration:
         std = np.std(sample, axis=1)
         return mean, std, sample
     def sub_phase_map_gen(self, sample_index):
-        mask_lst = []
+        maskv_lst = []
+        maskh_lst = []
         mod_lst = []
         white_lst = []
         wrapv_lst = []
@@ -1465,13 +1489,13 @@ class Calibration:
             if self.data_type == 'tiff':
                 if os.path.exists(os.path.join(self.path, 'capt_%03d_000000.tiff' % x)):
                     img_path = sorted(glob.glob(os.path.join(self.path, 'capt_%03d*.tiff' % x)), key=os.path.getmtime)
-                    images_arr = np.array([cv2.imread(file, 0) for file in img_path]).astype(np.float64)
+                    images_arr = np.array([cv2.imread(file, 0) for file in img_path]).astype(np.float64) - self.dark_bias
                 else:
                     print("ERROR: path is not exist! None item appended to the result")
                     images_arr = None
             elif self.data_type == 'npy':
                 if os.path.exists(os.path.join(self.path, 'capt_%03d_000000.npy' % x)):
-                    images_arr = np.load(os.path.join(self.path, 'capt_%03d_000000.npy' % x)).astype(np.float64)
+                    images_arr = np.load(os.path.join(self.path, 'capt_%03d_000000.npy' % x)).astype(np.float64)- self.dark_bias
                 else:
                     print("ERROR: path is not exist! None item appended to the result")
                     images_arr = None
@@ -1481,12 +1505,12 @@ class Calibration:
 
             if images_arr is not None:
                 if self.processing == 'cpu':
-                   unwrap_v, unwrap_h, phase_v, phase_h, orig_img, modulation, mask = self.multifreq_analysis(images_arr)
+                   unwrap_v, unwrap_h, phase_v, phase_h, orig_img, modulation, mask_v, mask_h = self.multifreq_analysis(images_arr)
                 else:
                     if self.processing != 'gpu':
                         print("WARNING: processing type is not recognized, use 'gpu'")
                     images_arr = cp.asarray(images_arr)
-                    unwrap_v, unwrap_h, phase_v, phase_h, orig_img, modulation, mask = self.multifreq_analysis_cupy(images_arr)
+                    unwrap_v, unwrap_h, phase_v, phase_h, orig_img, modulation, mask_v, mask_h = self.multifreq_analysis_cupy(images_arr)
                     cp._default_memory_pool.free_all_blocks()
             else:
                 unwrap_v = None
@@ -1495,8 +1519,10 @@ class Calibration:
                 phase_h = None
                 orig_img = None
                 modulation = None
-                mask = None
-            mask_lst.append(mask)
+                mask_v = None
+                mask_h = None
+            maskv_lst.append(mask_v)
+            maskh_lst.append(mask_h)
             mod_lst.append(modulation)
             white_lst.append(orig_img)
             wrapv_lst.append(phase_v)
@@ -1506,14 +1532,14 @@ class Calibration:
 
         wrapped_phase_lst = {"wrapv": wrapv_lst,
                              "wraph": wraph_lst}
-        return unwrapv_lst, unwraph_lst, white_lst, mod_lst, wrapped_phase_lst, mask_lst
+        return unwrapv_lst, unwraph_lst, white_lst, mod_lst, wrapped_phase_lst, maskv_lst, maskh_lst
             
    
     def sub_calibration(self,sample_index):
         
-        unwrapv_lst, unwraph_lst, white_lst, mod_lst, wrapped_phase_lst, mask_lst = self.sub_phase_map_gen(sample_index)
-        unwrapv_lst = [nstep.recover_image(u, mask_lst[i], self.cam_height, self.cam_width) for i,u in enumerate(unwrapv_lst)]
-        unwraph_lst = [nstep.recover_image(u, mask_lst[i], self.cam_height, self.cam_width) for i,u in enumerate(unwraph_lst)]
+        unwrapv_lst, unwraph_lst, white_lst, mod_lst, wrapped_phase_lst, maskv_lst, maskh_lst = self.sub_phase_map_gen(sample_index)
+        unwrapv_lst = [nstep.recover_image(u, maskv_lst[i], self.cam_height, self.cam_width) for i,u in enumerate(unwrapv_lst)]
+        unwraph_lst = [nstep.recover_image(u, maskh_lst[i], self.cam_height, self.cam_width) for i,u in enumerate(unwraph_lst)]
         objp = self.world_points()
         camr_error, cam_objpts, cam_imgpts, cam_mtx, cam_dist, cam_rvecs, cam_tvecs = self.camera_calib(objp, white_lst, display=False)
         # Projector calibration
@@ -1584,17 +1610,6 @@ class Calibration:
         st_tvec_mean, st_tvec_std, st_tvec_sample = Calibration.sample_statistics(np.array(st_tvec_sample), len(pool_size_list))
         proj_h_mtx_mean, proj_h_mtx_std, proj_h_mtx_sample = Calibration.sample_statistics(np.array(proj_h_mtx_sample), len(pool_size_list))
         cam_h_mtx_mean, cam_h_mtx_std, cam_h_mtx_sample = Calibration.sample_statistics(np.array(cam_h_mtx_sample), len(pool_size_list))
-        u = np.arange(0, self.cam_width)
-        v = np.arange(0, self.cam_height)
-        uc_grid, vc_grid = np.meshgrid(u, v)
-        cordinates = np.stack((vc_grid.ravel(),uc_grid.ravel()),axis=1).astype("float64")
-        uv = cv2.undistortPoints(cordinates, cam_mtx_mean, cam_dist_mean, None, cam_mtx_mean).reshape((self.cam_width * self.cam_height,2))
-        uc = uv[:,1]
-        vc = uv[:,0]
-        uc = uc.reshape(self.cam_height, self.cam_width)
-        vc = vc.reshape(self.cam_height, self.cam_width)
-        np.save(os.path.join(self.path,"uc_img.npy"), uc)
-        np.save(os.path.join(self.path,"vc_img.npy"), vc)
         np.savez(os.path.join(self.path, '{}_sample_calibration_param.npz'.format(self.type_unwrap)), 
                  cam_mtx_sample=cam_mtx_sample, 
                  cam_dist_sample=cam_dist_sample, 
@@ -1767,7 +1782,7 @@ def main():
     path = os.path.join(root_dir, '%s_calib_images' % type_unwrap)
     data_type = 'npy'
     processing = 'gpu'
-
+    dark_bias_path =  r"C:\Users\kl001\Documents\pyfringe_test\mean_pixel_std\exp_30_fp_42_retake\black_bias\avg_dark.npy"
     # multi wavelength unwrapping parameters
     if type_unwrap == 'multiwave':
         pitch_list = [139, 21, 18]
@@ -1784,9 +1799,7 @@ def main():
         kernel_v = 7
         kernel_h = 7
 
-    sigma_path = r'C:\Users\kl001\Documents\pyfringe_test\mean_pixel_std\mean_std_pixel.npy'
-    quantile_limit = 4.5
-    limit = nstep.B_cutoff_limit(sigma_path, quantile_limit, N_list, pitch_list)
+    limit =20
     # Instantiate calibration class
 
     calib_inst = Calibration(proj_width=proj_width, 
@@ -1806,8 +1819,9 @@ def main():
                              kernel_h=kernel_h,
                              path=path,
                              data_type=data_type,
-                             processing=processing)
-    unwrapv_lst, unwraph_lst, white_lst, mask_lst, mod_lst, proj_img_lst, cam_objpts, cam_imgpts, proj_imgpts, euler_angles, cam_mean_error, cam_delta, proj_mean_error, proj_delta = calib_inst.calib(fx, fy)
+                             processing=processing,
+                             dark_bias_path=dark_bias_path)
+    unwrapv_lst, unwraph_lst, white_lst, maskv_lst, maskh_lst,mod_lst, proj_img_lst, cam_objpts, cam_imgpts, proj_imgpts, euler_angles, cam_mean_error, cam_delta, proj_mean_error, proj_delta = calib_inst.calib(fx, fy)
     # Plot for re projection error analysis
     calib_inst.intrinsic_errors_plts( cam_mean_error, cam_delta, 'Camera', pixel_size = [1,1])
     calib_inst.intrinsic_errors_plts( proj_mean_error, proj_delta, 'Projector', pixel_size =[1,0.5]) 
