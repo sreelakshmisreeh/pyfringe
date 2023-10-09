@@ -995,9 +995,7 @@ def main():
         #predistorted
         #image_index_list = np.repeat(np.arange(21, 33), 3).tolist()
         pattern_num_list = [0, 1, 2] * len(set(image_index_list))
-        #savedir = r'C:\Users\kl001\Documents\pyfringe_test\multifreq_calib_images'
-        #savedir = r'C:\Users\kl001\Documents\pyfringe_test\multifreq_calib_images_test\before_dist'
-        savedir = r'C:\Users\kl001\Documents\pyfringe_test\multifreq_calib_images_test\after_dist'
+        savedir = r'C:\Users\kl001\Documents\pyfringe_test\multifreq_calib_images'
         number_scan = int(input("\nEnter number of scans"))
         acquisition_index = int(input("\nEnter acquisition index"))
         result &= calib_capture(image_index_list=image_index_list,
@@ -1018,6 +1016,7 @@ def main():
             image_index_list = np.repeat(np.array([12,13,14,15,16,17]),3).tolist()
             pattern_num_list = [0, 1, 2] * len(set(image_index_list))
         savedir = r'C:\Users\kl001\Documents\grasshopper3_python\images'
+       
         result &= run_proj_single_camera(savedir=savedir,
                                          preview_option='Once',
                                          number_scan=number_scan,
