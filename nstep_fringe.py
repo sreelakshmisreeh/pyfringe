@@ -289,9 +289,8 @@ def pred_var_fn(images, model):
     """
     Function predicting variances based on pixel intensity and  create the variance covariance matrix for phase variance calculations.
     """
-    img_vect = images.reshape(images.shape[0],images.shape[-2]*images.shape[-1])
-    pred_var =np.array([model.predict(img_vect[j]) for j in range(img_vect.shape[0])])
-    pred_var_map = pred_var.reshape(pred_var.shape[0],images.shape[-2], images.shape[-1])
+    pred_var_map = model[0] * images + model[1]
+    pred_var = pred_var_map.reshape(images.shape[0],images.shape[-2]*images.shape[-1])
     var_cov_mtx = np.zeros((images.shape[-2]*images.shape[-1], images.shape[0],images.shape[0]))
     for i in range(pred_var.shape[0]):
         var_cov_mtx[:,i,i] = pred_var[i]
@@ -765,12 +764,12 @@ def bilinear_interpolate(unwrap, x, y):
     return wa*unwrap_a + wb*unwrap_b + wc*unwrap_c + wd*unwrap_d
 
 def undistort(image, camera_mtx, camera_dist): # image with nan values after undistorting and applying interpolation creates nan values
-    no_img = image.shape[0]
-    u = np.arange(0, image.shape[2])
-    v = np.arange(0, image.shape[1])
+    # no_img = image.shape[0]
+    u = np.arange(0, image.shape[1])
+    v = np.arange(0, image.shape[0])
     uc, vc = np.meshgrid(u, v)
-    uc = np.repeat(uc[np.newaxis,:,:],no_img,axis=0)
-    vc = np.repeat(vc[np.newaxis,:,:],no_img,axis=0)
+    # uc = np.repeat(uc[np.newaxis,:,:],no_img,axis=0)
+    # vc = np.repeat(vc[np.newaxis,:,:],no_img,axis=0)
     x = (uc - camera_mtx[0, 2])/camera_mtx[0, 0]
     y = (vc - camera_mtx[1, 2])/camera_mtx[1, 1]
     r_sq = x**2 + y**2
@@ -778,7 +777,7 @@ def undistort(image, camera_mtx, camera_dist): # image with nan values after und
     y_double_dash = y*(1 + camera_dist[0, 0] * r_sq + camera_dist[0, 1] * r_sq**2)
     map_x = x_double_dash * camera_mtx[0, 0] + camera_mtx[0, 2]
     map_y = y_double_dash * camera_mtx[1, 1] + camera_mtx[1, 2]
-    undist_image = np.array([bilinear_interpolate(i, mx, my) for i,mx,my in zip(image, map_x, map_y)])
+    undist_image = bilinear_interpolate(image, map_x, map_y) 
     return undist_image
 # =====================================================
 # For diagnosis
