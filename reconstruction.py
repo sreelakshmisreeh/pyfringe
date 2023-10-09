@@ -82,15 +82,6 @@ class Reconstruction:
              print('ERROR:Path for dark bias  %s does not exist' % self.calib_path)
         else:
             self.dark_bias = np.load(dark_bias_path)
-        if self.probability:    
-            if not os.path.exists(model_path):
-                 print('ERROR:Path for noise error  %s does not exist' % self.calib_path)
-            else:
-                 with open(model_path, "rb") as tt:
-                     self.model = pickle.load(tt)
-        else:
-            self.model = None
-             
     
         if processing == 'cpu':
             self.processing = processing
@@ -109,9 +100,14 @@ class Reconstruction:
                 calibration_std = np.load(os.path.join(self.calib_path, '{}_std_calibration_param.npz'.format(self.type_unwrap)))
                 self.cam_h_mtx_std = calibration_std["cam_h_mtx_std"]
                 self.proj_h_mtx_std = calibration_std["proj_h_mtx_std"]
+                if not os.path.exists(model_path):
+                     print('ERROR:Path for noise error  %s does not exist' % self.calib_path)
+                else:
+                    self.model = np.load(model_path)
             else:
                 self.proj_h_mtx_std = None
                 self.cam_h_mtx_std = None
+                self.model = None
         elif processing == 'gpu':
             self.processing = processing
             calibration_mean = cp.load(os.path.join(self.calib_path, '{}_mean_calibration_param.npz'.format(self.type_unwrap)))
@@ -129,9 +125,14 @@ class Reconstruction:
                 calibration_std = cp.load(os.path.join(self.calib_path, '{}_std_calibration_param.npz'.format(self.type_unwrap)))
                 self.cam_h_mtx_std = cp.asarray(calibration_std["cam_h_mtx_std"])
                 self.proj_h_mtx_std = cp.asarray(calibration_std["proj_h_mtx_std"])
+                if not os.path.exists(model_path):
+                     print('ERROR:Path for noise error  %s does not exist' % self.calib_path)
+                else:
+                    self.model = cp.load(model_path)
             else:
                 self.proj_h_mtx_std = None
                 self.cam_h_mtx_std = None
+                self.model = None
         else:
             self.processing = None
             print("ERROR: Invalid processing type.")
@@ -197,7 +198,10 @@ class Reconstruction:
         """
         no_pts = uv_true.shape[0]
         unwrap_image = nstep.recover_image(unwrap_vector, self.mask, self.cam_height, self.cam_width)
-        uv = cv2.undistortPoints(uv_true, self.cam_mtx, self.cam_dist, None, self.cam_mtx)
+        if self.processing == "gpu":
+            c_mtx = cp.asnumpy(self.cam_mtx)
+            c_dist = cp.asnumpy(self.cam_dist)
+        uv = cv2.undistortPoints(uv_true, c_mtx, c_dist, None, c_mtx)
         uv = uv.reshape(uv.shape[0], 2)
         uv_true = uv_true.reshape(no_pts, 2)
         #  Extract x and y coordinate of each point as uc, vc
@@ -404,19 +408,21 @@ class Reconstruction:
         return sigmasq_x, sigmasq_y, sigmasq_z, derv_x, derv_y, derv_z    
         
     # This will be optional once instant display is setup
-    def cloud_save(self, coords, inte_rgb, cordi_sigma, temperature_image):
+    def cloud_save(self):
         
-        xyz = list(map(tuple, coords)) 
-        color = list(map(tuple, inte_rgb))
+        xyz = list(map(tuple, self.coords)) 
+        color = list(map(tuple, self.inte_rgb))
         if self.temp:
-            temperature_vector = temperature_image[self.mask]
-            temperature_vector = np.array(temperature_vector, dtype=[('temperature', 'f4')])
+            temperature_vector = np.array(self.temperature_vector, dtype=[('temperature', 'f4')])
         else:
             temperature_vector = [None]
+        
         if self.probability:
-            xyz_sigma = list(map(tuple, cordi_sigma))
+            xyz_sigma = list(map(tuple, self.cordi_sigma))
+            xyz_quality = np.array(self.quality_vector, dtype=[('quality', 'f4')])
         else:
             xyz_sigma = [None]
+            xyz_quality = [None]
             
         PlyData(
             [
@@ -424,6 +430,7 @@ class Reconstruction:
                 PlyElement.describe(np.array(color, dtype=[('r', 'f4'), ('g', 'f4'), ('b', 'f4')]), 'color'),
                 PlyElement.describe(np.array(xyz_sigma, dtype=[('dx', 'f4'), ('dy', 'f4'), ('dz', 'f4')]), 'std'),
                 PlyElement.describe(np.array(temperature_vector, dtype=[('temperature', 'f4')]), 'temperature'),
+                PlyElement.describe(np.array(xyz_quality, dtype=[('quality', 'f4')]), 'quality'),
             ]).write(os.path.join(self.object_path, 'obj.ply'))
         print("\n Point cloud saved at %s"% (os.path.join(self.object_path, 'obj.ply')))
         return
@@ -434,6 +441,7 @@ class Reconstruction:
                        inte_rgb_image,  
                        temperature_image,
                        sigma_sq_phi,
+                       quality,
                        prob_up=False):
         """
         Function to completely reconstruct object applying modulation mask to saving point cloud.
@@ -469,10 +477,23 @@ class Reconstruction:
             sigma_y = np.sqrt(sigmasq_y)
             sigma_z = np.sqrt(sigmasq_z)
             cordi_sigma = np.vstack((sigma_x, sigma_y, sigma_z)).T
+            quality_vector = quality[self.mask]
         else:
             cordi_sigma = None
+            quality_vector = None
+        
+        if self.temp:
+            temperature_vector = temperature_image[self.mask]
+        else:
+            temperature_vector = [None]
+        self.coords = coords
+        self.inte_rgb = inte_rgb
+        self.cordi_sigma = cordi_sigma
+        self.temperature_vector = temperature_vector
+        self.sigma_sq_low_phi_vect = sigma_sq_low_phi_vect
+        self.quality_vector = quality_vector
         if self.save_ply: 
-            self.cloud_save(coords, inte_rgb, cordi_sigma, temperature_image)  
+            self.cloud_save()  
         return coords, inte_rgb, cordi_sigma
 
     def obj_reconst_wrapper(self, prob_up=False):
@@ -523,8 +544,6 @@ class Reconstruction:
         else:
             print("ERROR: data type is not supported, must be '.tiff' or '.npy'.")
             images_arr = None
-        if self.probability:
-            cov_arr,_ = nstep.pred_var_fn(images_arr[-self.N_list[-1]:], self.model)
             
         if self.type_unwrap == 'multifreq':
             if self.processing == 'cpu':
@@ -543,6 +562,24 @@ class Reconstruction:
                                                               self.cam_height)
                 orig_img = orig_img[-1] 
                 self.mask = mask
+                if self.probability:
+                    cov_arr_l,_ = nstep.pred_var_fn(images_arr[-(self.N_list[-2]+self.N_list[-1]): self.N_list[-1]], self.model)
+                    
+                    sigma_sq_phi_l = nstep.var_func(images_arr[-(self.N_list[-2]+self.N_list[-1]): self.N_list[-1]],
+                                                  self.mask,
+                                                  self.N_list[-2],
+                                                  cov_arr_l)
+                    cov_arr_h,_ = nstep.pred_var_fn(images_arr[-self.N_list[-1]:], self.model)
+                    sigma_sq_phi = nstep.var_func(images_arr[-self.N_list[-1]:],
+                                                  self.mask,
+                                                  self.N_list[-1],
+                                                  cov_arr_h)
+                    sigma_sq_delta_phi = ((self.pitch_list[-2]/self.pitch_list[-1])**2 * sigma_sq_phi_l) + sigma_sq_phi
+                    quality = np.pi/np.sqrt(sigma_sq_delta_phi)
+                    
+                else:
+                    sigma_sq_phi = None
+                    quality = None
             elif self.processing == 'gpu':
                 images_arr_cp = cp.asarray(images_arr)
                 modulation_vector, orig_img, phase_map, mask = nstep_cp.phase_cal_cp(images_arr_cp,
@@ -560,7 +597,15 @@ class Reconstruction:
                                                                     self.cam_height)
                 orig_img = cp.asnumpy(orig_img[-1])
                 self.mask = mask
-                
+                if self.probability:
+                    cov_arr,_ = nstep_cp.pred_var_fn(images_arr_cp[-self.N_list[-1]:], self.model)
+                    sigma_sq_phi = nstep_cp.var_func(images_arr_cp[-self.N_list[-1]:],
+                                                  self.mask,
+                                                  self.N_list[-1],
+                                                  cov_arr)
+                else:
+                    sigma_sq_phi = None
+                    quality = None
         elif self.type_unwrap == 'multiwave':
             eq_wav12 = (self.pitch_list[-1] * self.pitch_list[1]) / (self.pitch_list[1] - self.pitch_list[-1])
             eq_wav123 = self.pitch_list[0] * eq_wav12 / (self.pitch_list[0] - eq_wav12)
@@ -589,21 +634,11 @@ class Reconstruction:
             inte_rgb_image = inte_img[..., ::-1].copy()
         else:
             inte_rgb_image = orig_img
-            
-        if self.probability:
-            cov_arr,_ = nstep.pred_var_fn(images_arr[-self.N_list[-1]:], self.model)
-            sigma_sq_phi = nstep.var_func(images_arr[-self.N_list[-1]:],
-                                          self.mask,
-                                          self.N_list[-1],
-                                          cov_arr)
-        else:
-            sigma_sq_phi = None
-        if self.processing == 'gpu':
-            sigma_sq_phi = cp.asarray(sigma_sq_phi)
         obj_cordi, obj_color, cordi_sigma, = self.complete_recon(unwrap_vector,                                                
                                                                  inte_rgb_image,
                                                                  temperature_image,
                                                                  sigma_sq_phi,
+                                                                 quality,
                                                                  prob_up)
         
         return obj_cordi, obj_color, cordi_sigma
@@ -735,9 +770,10 @@ def main():
     cam_height = 1200
     type_unwrap = 'multifreq'
     dark_bias_path = r"C:\Users\kl001\Documents\pyfringe_test\mean_pixel_std\exp_30_fp_42_retake\black_bias\avg_dark.npy"
-    obj_path = r'C:\Users\kl001\Documents\grasshopper3_python\images'
+    #obj_path = r'C:\Users\kl001\Documents\grasshopper3_python\images'
+    obj_path = r"E:\ud_tower\side8"
     calib_path = r'C:\Users\kl001\Documents\pyfringe_test\multifreq_calib_images'
-    model_path = r"C:\Users\kl001\Documents\pyfringe_test\mean_pixel_std\exp_30_fp_42_retake\lut_models.pkl"
+    model_path = r"C:\Users\kl001\Documents\pyfringe_test\mean_pixel_std\exp_30_fp_42_retake\const_tiff\calib_fringes\variance_model.npy"
     reconst_inst = Reconstruction(proj_width=proj_width,
                                   proj_height=proj_height,
                                   cam_width=cam_width,
@@ -759,6 +795,9 @@ def main():
                                   probability=probability)
     
     obj_cordi, obj_color, cordi_sigma = reconst_inst.obj_reconst_wrapper(prob_up=prob_up)
+    # np.save(os.path.join(obj_path,"accuracy_corrected_cord_std.npy"),cordi_sigma)
+    # np.save(os.path.join(obj_path,"accuracy_corrected_cord_mean.npy"),obj_cordi)
+    # np.save(os.path.join(obj_path,"accuracy_corrected_mask.npy"),reconst_inst.mask)
     return
 
 
