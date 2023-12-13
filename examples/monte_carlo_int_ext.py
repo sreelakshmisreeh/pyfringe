@@ -58,7 +58,7 @@ def random_reconst_int_ext(images_arr,
                                                                    False)
     phase_map[0][phase_map[0] < EPSILON] = phase_map[0][phase_map[0] < EPSILON] + 2 * np.pi
     reconst_inst.mask = mask
-    unwrap_vector, k_arr = nstep.multifreq_unwrap(reconst_inst.pitch_list,
+    unwrap_vector, k_arr, mask = nstep.multifreq_unwrap(reconst_inst.pitch_list,
                                                  phase_map,
                                                  reconst_inst.kernel,
                                                  reconst_inst.fringe_direc,
@@ -70,7 +70,9 @@ def random_reconst_int_ext(images_arr,
     coords, inte_rgb, cordi_sigma = reconst_inst.complete_recon(unwrap_vector,
                                                                 orig_img, 
                                                                 None,
-                                                                None)
+                                                                None,
+                                                                None,
+                                                                False)
         
     mask = reconst_inst.mask
     return coords, inte_rgb, mask
@@ -169,16 +171,16 @@ def main():
     cam_width = 1920
     cam_height = 1200
     type_unwrap = 'multifreq'
-    scan_object = "concrete"
-    model_path = r"C:\Users\kl001\Documents\pyfringe_test\mean_pixel_std\exp_30_fp_42_retake\lut_models.pkl"
+    scan_object = "sphere"
+    model_path = r"C:\Users\kl001\Documents\pyfringe_test\mean_pixel_std\exp_30_fp_42_retake\const_tiff\calib_fringes\variance_model.npy"
     dark_bias_path = r"C:\Users\kl001\Documents\pyfringe_test\mean_pixel_std\exp_30_fp_42_retake\black_bias\avg_dark.npy"
     calib_path = r"C:\Users\kl001\Documents\pyfringe_test\multifreq_calib_images_bk"
-    limit = 20
+    limit = 80
     no_drop_scans = 200
     batch_size = 8
     pitch_list = [1200, 18]
     N_list = [3,3]
-    data_path = r"E:\green_freq_white\pitch_18"
+    data_path = r"E:\green_freq_small_sphere\pitch_18"
     mean_cords, std_cords, mean_cords_vector, std_cords_vector, mask, mean_inten = virtual_scan_int_ext(no_drop_scans,
                                                                                                         batch_size,
                                                                                                         proj_width,
