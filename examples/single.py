@@ -69,13 +69,12 @@ def plot_sigmas(cord_sigma_image,
     relat_err = diff_cord/emp_std
     plt_lst = [emp_std[:,camy:(camy+deltay),camx:(camx+deltax)],
                cord_sigma_image[:, camy:(camy+deltay),camx:(camx+deltax)],
-               diff_cord[:, camy:(camy+deltay),camx:(camx+deltax)],
                relat_err[:, camy:(camy+deltay),camx:(camx+deltax)]*100]
-    cmap_lst = ["inferno", "inferno", "BrBG", "BrBG"]
-    extend_lst = ["max","max","both","both"]
-    unit_lst = ["mm","mm","mm","percentage %"]
-    formatter_lst = [True, True, True, False]
-    fig, ax = plt.subplots(3,4)
+    cmap_lst = ["inferno", "inferno", "BrBG"]
+    extend_lst = [None,None,"both"]
+    unit_lst = ["mm","mm","percentage %"]
+    formatter_lst = [True, True, False]
+    fig, ax = plt.subplots(3,3)
     fig.suptitle("%s"%fig_title, fontsize=20)
     if prob_up:
         cord_lst = ["xup","yup","zup"]
@@ -85,17 +84,14 @@ def plot_sigmas(cord_sigma_image,
     for j in range(3):
         norm_lst = [Normalize(vmin=np.nanquantile(emp_std[j],0.03), vmax=np.nanquantile(emp_std[j],0.97)),
                     Normalize(vmin=np.nanquantile(emp_std[j],0.03), vmax=np.nanquantile(emp_std[j],0.97)),
-                    Normalize(vmin=np.nanquantile(diff_cord[j],0.03), vmax=np.nanquantile(diff_cord[j],0.97)),
                     Normalize(vmin=-10,  vmax=10)]
         title_lst = ["Empirical %s \nfrom multiple scans"%title[j],
                      "Predicted %s \nfrom a single scan"%title[j],
-                     "Predicted - Emperical", 
                      r"$\frac{Predicted - Emperical}{Emperical}$ in %"]
         save_title = ["%s_emp_%s_std"%(object_name,cord_lst[j]), 
                       "%s_pred_%s_std"%(object_name,cord_lst[j]), 
-                      "%s_diff_%s_std"%(object_name,cord_lst[j]), 
                       "%s_rel_%s_std"%(object_name,cord_lst[j])]
-        for i in range(4):
+        for i in range(3):
             if save_indiv:
                 plot_indiv(plt_lst[i][j],
                            cmap_lst[i], 
@@ -108,9 +104,9 @@ def plot_sigmas(cord_sigma_image,
                            unit_lst[i],
                            True)
             cmap = plt.cm.get_cmap(cmap_lst[i]).copy()
-            cmap.set_over('red')
-            if extend_lst[i] == "both":
-                cmap.set_under('blue')
+            # cmap.set_over('red')
+            # if extend_lst[i] == "both":
+            #     cmap.set_under('blue')
             im = ax[j,i].imshow(plt_lst[i][j],cmap=cmap, norm=norm_lst[i])
             ax[j,i].tick_params(axis="both", which='major', labelsize=12)
             ax[j,i].set_title(title_lst[i], fontsize=20)
@@ -129,7 +125,7 @@ proj_width = 912
 proj_height = 1140 
 cam_width = 1920 
 cam_height = 1200
-limit = 150
+limit = 80
 camx = 750 #c3:450#c2:500#c550#s750 #w410;900
 camy = 420 #c3:200#c2:300#c300#s420 #w300;400
 deltax =390#c3:1000#c2:1020#c800 #s390 #w1000;200
@@ -146,7 +142,7 @@ N_list = [3, 3]
 save_indiv= False
 save_path= r"E:\paper_figures\%s"%object_name
 #%%
-prob_up=True
+prob_up=False
 reconst_inst = rc.Reconstruction(proj_width=proj_width,
                                   proj_height=proj_height,
                                   cam_width=cam_width,
@@ -172,18 +168,18 @@ obj_cordi, obj_color, cordi_sigma = reconst_inst.obj_reconst_wrapper(prob_up=pro
 if prob_up:
     cord_image = np.array([nstep.recover_image(obj_cordi[:,i],reconst_inst.mask,cam_height,cam_width) for i in range(3)])
     cord_sigma_image = np.array([nstep.recover_image(cordi_sigma[:,i], reconst_inst.mask,cam_height,cam_width) for i in range(3)])
-    np.save(os.path.join(obj_dir,'dist_single_cord_image.npy'), cord_image)
-    np.save(os.path.join(obj_dir,'dist_singlecord_sigma_image.npy'), cord_sigma_image)
-    np.save(os.path.join(obj_dir,'dist_single_cordi_std.npy'), cordi_sigma)
-    np.save(os.path.join(obj_dir,'dist_single_cordi.npy'), obj_cordi)
-    np.save(os.path.join(obj_dir,'dist_single_mask.npy'), reconst_inst.mask)
+    # np.save(os.path.join(obj_dir,'dist_single_cord_image.npy'), cord_image)
+    # np.save(os.path.join(obj_dir,'dist_singlecord_sigma_image.npy'), cord_sigma_image)
+    # np.save(os.path.join(obj_dir,'dist_single_cordi_std.npy'), cordi_sigma)
+    # np.save(os.path.join(obj_dir,'dist_single_cordi.npy'), obj_cordi)
+    # np.save(os.path.join(obj_dir,'dist_single_mask.npy'), reconst_inst.mask)
    
-    multi_img = np.load(os.path.join(obj_dir2,"dist_corrected_cord_mean.npy"))
-    multi_std = np.load(os.path.join(obj_dir2,"dist_corrected_cord_std.npy"))
-    multimask = np.load(os.path.join(obj_dir2,"dist_corrected_mask.npy"))
-    plot_sigmas(cord_sigma_image, multi_std, "Standard deviation with aleotry uncertainty",
-                camx, camy, deltax, deltay, object_name,prob_up,
-                save_indiv=save_indiv,save_path=save_path)
+    # multi_img = np.load(os.path.join(obj_dir2,"dist_corrected_cord_mean.npy"))
+    # multi_std = np.load(os.path.join(obj_dir2,"dist_corrected_cord_std.npy"))
+    # multimask = np.load(os.path.join(obj_dir2,"dist_corrected_mask.npy"))
+    # plot_sigmas(cord_sigma_image, multi_std, "Standard deviation with aleotry uncertainty",
+    #             camx, camy, deltax, deltay, object_name,prob_up,
+    #             save_indiv=save_indiv,save_path=save_path)
 else:
     cord_image = np.array([nstep.recover_image(obj_cordi[:,i],reconst_inst.mask,cam_height,cam_width) for i in range(3)])
     cord_sigma_image = np.array([nstep.recover_image(cordi_sigma[:,i], reconst_inst.mask,cam_height,cam_width) for i in range(3)])
@@ -192,9 +188,9 @@ else:
     np.save(os.path.join(obj_dir,'allparam_single_cordi_std.npy'), cordi_sigma)
     np.save(os.path.join(obj_dir,'allparam_single_cordi.npy'), obj_cordi)
     np.save(os.path.join(obj_dir,'allparam_single_mask.npy'), reconst_inst.mask)
-    monte_img = np.load(os.path.join(obj_dir2,"monte_mean_cords_int_ext_concrete.npy"))
-    monte_std = np.load(os.path.join(obj_dir2,"monte_std_cords_int_ext_concrete.npy"))
-    montemask = np.load(os.path.join(obj_dir2,"monte_mask_int_ext_concrete.npy"))
+    monte_img = np.load(os.path.join(obj_dir2,"monte_mean_cords_int_ext_{}.npy".format(object_name)))
+    monte_std = np.load(os.path.join(obj_dir2,"monte_std_cords_int_ext_{}.npy".format(object_name)))
+    montemask = np.load(os.path.join(obj_dir2,"monte_mask_int_ext_{}.npy".format(object_name)))
     plot_sigmas(cord_sigma_image, monte_std, "Standard deviation with aleotry and epistemic uncertainty",
                 camx, camy, deltax, deltay,
                 object_name,prob_up,
@@ -202,4 +198,7 @@ else:
 
 #%%
 
+plt.figure()
+sns.histplot(cordi_sigma[:,-1])
+sns.histplot(monte_std[-1][montemask])
 
