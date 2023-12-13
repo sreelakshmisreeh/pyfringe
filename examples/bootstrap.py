@@ -11,6 +11,7 @@ sys.path.append(r'C:\Users\kl001\pyfringe')
 import nstep_fringe as nstep
 import calibration as calib
 import numpy as np
+import cupy as cp
 import os
 import matplotlib.pyplot as plt
 
@@ -32,17 +33,17 @@ def main():
     # Define the path from which data is to be read. The calibration parameters will be saved in the same path. 
     # reconstruction point clouds will also be saved in the same path
     
-    path = r'C:\Users\kl001\Documents\pyfringe_test\multifreq_calib_images'
+    path = r'C:\Users\kl001\Documents\pyfringe_test\multifreq_calib_images_bk'
     data_type = "npy"
     processing = 'gpu'
-    sigma_path = r'C:\Users\kl001\Documents\pyfringe_test\mean_pixel_std\mean_std_pixel.npy'
     dark_bias_path =  r"C:\Users\kl001\Documents\pyfringe_test\mean_pixel_std\exp_30_fp_42_retake\black_bias\avg_dark.npy"
+    model_path = r"C:\Users\kl001\Documents\pyfringe_test\mean_pixel_std\exp_30_fp_42_retake\const_tiff\calib_fringes\variance_model.npy"
+    model = cp.load(model_path)
     #multifrequency unwrapping parameters
     if type_unwrap == 'multifreq':
         pitch_list =[1375, 275, 55, 11] 
         N_list = [3, 3, 3, 9]
         kernel_v = 7; kernel_h= 7
-        quantile_limit = 4.5
         limit = 10
         
     # multiwavelength unwrapping parameters
@@ -50,7 +51,6 @@ def main():
         pitch_list = [139,21,18]
         N_list =[5,5,9]
         kernel_v = 9; kernel_h= 9  
-        quantile_limit =3
         limit = 10
     
     # phase coding unwrapping parameters
@@ -80,12 +80,13 @@ def main():
                                    processing=processing,
                                    dark_bias_path=dark_bias_path)
     
-    delta_pose=10   # number of samples in each direction
-    pool_size_list =np.arange(25,26,1) # number of poses 
-    no_sample_sets =50 # no of iterations
+    delta_pose=25   # number of samples in each direction
+    pool_size_list =np.arange(20,21,1) # number of poses 
+    no_sample_sets = 200 # no of iterations
     cam_mtx_sample, cam_dist_sample, proj_mtx_sample, proj_dist_sample, st_rmat_sample, st_tvec_sample, cam_h_mtx_sample, proj_h_mtx_sample = calib_inst.bootstrap_intrinsics_extrinsics(delta_pose,
                                                                                                                                                                                          pool_size_list, 
-                                                                                                                                                                                         no_sample_sets)
+                                                                                                                                                                                         no_sample_sets,
+                                                                                                                                                                                         model)
     return
 def analysis():  
     pool_size_list =np.arange(40,41,1)
