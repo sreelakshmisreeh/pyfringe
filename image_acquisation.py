@@ -1015,8 +1015,8 @@ def main():
         elif no_of_levels == "4" :
             image_index_list = np.repeat(np.array([12,13,14,15,16,17]),3).tolist()
             pattern_num_list = [0, 1, 2] * len(set(image_index_list))
-        savedir = r'C:\Users\kl001\Documents\grasshopper3_python\images'
-       
+        #savedir = r'C:\Users\kl001\Documents\grasshopper3_python\images'
+        savedir = r"E:\demo_data"
         result &= run_proj_single_camera(savedir=savedir,
                                          preview_option='Once',
                                          number_scan=number_scan,
