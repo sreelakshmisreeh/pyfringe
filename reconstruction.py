@@ -263,12 +263,15 @@ class Reconstruction:
         Chapter 7 :Digital Fringe Projection System Calibration, section:7.3.6
     
         """
-        df_dup = (det * (-hc_13 * hc_22 * hp_34 + uc * hc_22 * hc_33 * hp_34) - x_num * (-hc_11 * hc_22 * hp_33 + hc_13 * hc_22 * hp_31 - uc * hc_22 * hc_33 * hp_31 + hc_11 * hc_23 * hp_32 - vc * hc_11 * hc_33 * hp_32))/det**2
+        df_dup = (det * (-hc_13 * hc_22 * hp_34 + uc * hc_22 * hc_33 * hp_34) - 
+                  x_num * (-hc_11 * hc_22 * hp_33 + hc_13 * hc_22 * hp_31 - uc * hc_22 * hc_33 * hp_31 + hc_11 * hc_23 * hp_32 - vc * hc_11 * hc_33 * hp_32))/det**2
         df_dhc_11 = (- x_num * (hc_22 * hp_13 - up * hc_22 * hp_33 - hc_23 * hp_12 + up * hc_23 * hp_32 + vc * hc_33 * hp_12 - vc * up * hc_33 * hp_32))/det**2
         df_dhc_13 = (det * (-up * hc_22 * hp_34 + hc_22 * hp_14) - x_num * (-hc_22 * hp_11 + up * hc_22 * hp_31))/det**2
-        df_dhc_22 = (det * (-up * hc_13 * hp_34 + hc_13 * hp_14 + uc * up * hc_33 * hp_34 - uc * hc_33 * hp_14) - x_num * (hc_11 * hp_13 - up * hc_11 * hp_33 - hc_13 * hp_11 + up * hc_13 * hp_31 + uc * hc_33 * hp_11 - uc * up * hc_33 * hp_31))/det**2
+        df_dhc_22 = (det * (-up * hc_13 * hp_34 + hc_13 * hp_14 + uc * up * hc_33 * hp_34 - uc * hc_33 * hp_14) - 
+                     x_num * (hc_11 * hp_13 - up * hc_11 * hp_33 - hc_13 * hp_11 + up * hc_13 * hp_31 + uc * hc_33 * hp_11 - uc * up * hc_33 * hp_31))/det**2
         df_dhc_23 = (- x_num * (-hc_11 * hp_12 + up * hc_11 * hp_32))/det**2
-        df_dhc_33 = (det * (uc* up * hc_22 * hp_34 - uc * hc_22 * hp_14) - x_num * (uc * hc_22 * hp_11 - uc* up * hc_22 * hp_31 + vc * hc_11 * hp_12 - vc * up * hc_11 * hp_32)) / det**2
+        df_dhc_33 = (det * (uc* up * hc_22 * hp_34 - uc * hc_22 * hp_14) - 
+                     x_num * (uc * hc_22 * hp_11 - uc* up * hc_22 * hp_31 + vc * hc_11 * hp_12 - vc * up * hc_11 * hp_32)) / det**2
         df_dhp_11 = (- x_num *(-hc_13 * hc_22 + uc * hc_22 * hc_33))/det**2
         df_dhp_12 = (- x_num * (-hc_11*hc_23 + vc * hc_11 * hc_33))/det**2
         df_dhp_13 = (- x_num * (hc_11 * hc_22))/det**2
@@ -287,8 +290,10 @@ class Reconstruction:
         Subfunction used to calculate y cordinate variance
     
         """
-        df_dup = (det * (-hc_11 * hc_23 * hp_34 + vc * hc_11 * hc_33 * hp_34) - y_num * (-hc_11 * hc_22 * hp_33 + hc_13 * hc_22 * hp_31 - uc * hc_22 * hc_33 * hp_31 + hc_11 * hc_23 * hp_32 - vc * hc_11 * hc_33 * hp_32))/det**2
-        df_dhc_11 = (det * (-up * hc_23 * hp_34 + hc_23 * hp_14 + vc * up * hc_33 * hp_34 - vc * hc_33 * hp_14) - y_num * (hc_22 * hp_13 - up * hc_22 * hp_33 - hc_23 * hp_12 + up * hc_23 * hp_32 + vc * hc_33 * hp_12 - vc * up * hc_33 * hp_32))/det**2
+        df_dup = (det * (-hc_11 * hc_23 * hp_34 + vc * hc_11 * hc_33 * hp_34) - 
+                  y_num * (-hc_11 * hc_22 * hp_33 + hc_13 * hc_22 * hp_31 - uc * hc_22 * hc_33 * hp_31 + hc_11 * hc_23 * hp_32 - vc * hc_11 * hc_33 * hp_32))/det**2
+        df_dhc_11 = (det * (-up * hc_23 * hp_34 + hc_23 * hp_14 + vc * up * hc_33 * hp_34 - vc * hc_33 * hp_14) -
+                     y_num * (hc_22 * hp_13 - up * hc_22 * hp_33 - hc_23 * hp_12 + up * hc_23 * hp_32 + vc * hc_33 * hp_12 - vc * up * hc_33 * hp_32))/det**2
         df_dhc_13 = (- y_num * (-hc_22 * hp_11 + up * hc_22 * hp_31))/det**2
         df_dhc_22 = (- y_num * (hc_11 * hp_13 - up * hc_11 * hp_33 - hc_13 * hp_11 + up * hc_13 * hp_31 + uc * hc_33 * hp_11 - uc * up * hc_33 * hp_31))/det**2
         df_dhc_23 = (det * (-up * hc_11 * hp_34 + hc_11 * hp_14) - y_num * (-hc_11 * hp_12 + up * hc_11 * hp_32))/det**2
@@ -382,18 +387,34 @@ class Reconstruction:
         df_dup_z, df_dhc_11_z, df_dhc_13_z, df_dhc_22_z, df_dhc_23_z, df_dhc_33_z, df_dhp_11_z, df_dhp_12_z, df_dhp_13_z, df_dhp_14_z, df_dhp_31_z, df_dhp_32_z, df_dhp_33_z, df_dhp_34_z = Reconstruction.diff_funs_z(hc_11, hc_13, hc_22, hc_23, hc_33, hp_11, hp_12, hp_13, hp_14, hp_31, hp_32, hp_33, hp_34, det, z_num, uc, vc, up)
         if prob_up:
             sigmasq_x = (df_dup_x**2 * sigma_sq_up)
-            sigmasq_y = df_dup_y**2 * sigma_sq_up
+            sigmasq_y = (df_dup_y**2 * sigma_sq_up)
             sigmasq_z = df_dup_z**2 * sigma_sq_up
             derv_x = df_dup_x
             derv_y = df_dup_y
             derv_z = df_dup_z
         else:
-            sigmasq_x = ((df_dup_x**2 * sigma_sq_up) + (df_dhc_11_x**2 * sigmasq_hc_11) + (df_dhc_13_x**2 * sigmasq_hc_13) + (df_dhc_22_x**2 * sigmasq_hc_22) + (df_dhc_23_x**2 * sigmasq_hc_23) + (df_dhc_33_x**2 * sigmasq_hc_33)
-                        + (df_dhp_11_x**2 * sigmasq_hp_11) + (df_dhp_12_x**2 * sigmasq_hp_12) + (df_dhp_13_x**2 * sigmasq_hp_13) + (df_dhp_14_x**2 * sigmasq_hp_14) + (df_dhp_31_x**2 * sigmasq_hp_31) + (df_dhp_32_x**2 * sigmasq_hp_32) + (df_dhp_33_x**2 * sigmasq_hp_33) + (df_dhp_34_x**2 * sigmasq_hp_34))
-            sigmasq_y = ((df_dup_y**2 * sigma_sq_up) + (df_dhc_11_y**2 * sigmasq_hc_11) + (df_dhc_13_y**2 * sigmasq_hc_13) + (df_dhc_22_y**2 * sigmasq_hc_22) + (df_dhc_23_y**2 * sigmasq_hc_23) + (df_dhc_33_y**2 * sigmasq_hc_33)
-                        + (df_dhp_11_y**2 * sigmasq_hp_11) + (df_dhp_12_y**2 * sigmasq_hp_12) + (df_dhp_13_y**2 * sigmasq_hp_13) + (df_dhp_14_y**2 * sigmasq_hp_14) + (df_dhp_31_y**2 * sigmasq_hp_31) + (df_dhp_32_y**2 * sigmasq_hp_32) + (df_dhp_33_y**2 * sigmasq_hp_33) + (df_dhp_34_y**2 * sigmasq_hp_34))
-            sigmasq_z = ((df_dup_z**2 * sigma_sq_up) + (df_dhc_11_z**2 * sigmasq_hc_11) + (df_dhc_13_z**2 * sigmasq_hc_13) + (df_dhc_22_z**2 * sigmasq_hc_22) + (df_dhc_23_z**2 * sigmasq_hc_23) + (df_dhc_33_z**2 * sigmasq_hc_33)
-                        + (df_dhp_11_z**2 * sigmasq_hp_11) + (df_dhp_12_z**2 * sigmasq_hp_12) + (df_dhp_13_z**2 * sigmasq_hp_13) + (df_dhp_14_z**2 * sigmasq_hp_14) + (df_dhp_31_z**2 * sigmasq_hp_31) + (df_dhp_32_z**2 * sigmasq_hp_32) + (df_dhp_33_z**2 * sigmasq_hp_33) + (df_dhp_34_z**2 * sigmasq_hp_34))
+            sigmasq_x = ((df_dup_x**2 * sigma_sq_up) + (df_dhc_11_x**2 * sigmasq_hc_11) + 
+                         (df_dhc_13_x**2 * sigmasq_hc_13) + (df_dhc_22_x**2 * sigmasq_hc_22) + 
+                         (df_dhc_23_x**2 * sigmasq_hc_23) + (df_dhc_33_x**2 * sigmasq_hc_33) +
+                         (df_dhp_11_x**2 * sigmasq_hp_11) + (df_dhp_12_x**2 * sigmasq_hp_12) + 
+                         (df_dhp_13_x**2 * sigmasq_hp_13) + (df_dhp_14_x**2 * sigmasq_hp_14) + 
+                         (df_dhp_31_x**2 * sigmasq_hp_31) + (df_dhp_32_x**2 * sigmasq_hp_32) + 
+                         (df_dhp_33_x**2 * sigmasq_hp_33) + (df_dhp_34_x**2 * sigmasq_hp_34))
+            sigmasq_y = ((df_dup_y**2 * sigma_sq_up) + (df_dhc_11_y**2 * sigmasq_hc_11) + 
+                         (df_dhc_13_y**2 * sigmasq_hc_13) + (df_dhc_22_y**2 * sigmasq_hc_22) + 
+                         (df_dhc_23_y**2 * sigmasq_hc_23) + (df_dhc_33_y**2 * sigmasq_hc_33) +
+                         (df_dhp_11_y**2 * sigmasq_hp_11) + (df_dhp_12_y**2 * sigmasq_hp_12) + 
+                         (df_dhp_13_y**2 * sigmasq_hp_13) + (df_dhp_14_y**2 * sigmasq_hp_14) + 
+                         (df_dhp_31_y**2 * sigmasq_hp_31) + (df_dhp_32_y**2 * sigmasq_hp_32) + 
+                         (df_dhp_33_y**2 * sigmasq_hp_33) + (df_dhp_34_y**2 * sigmasq_hp_34))
+            sigmasq_z = ((df_dup_z**2 * sigma_sq_up) + (df_dhc_11_z**2 * sigmasq_hc_11) + 
+                         (df_dhc_13_z**2 * sigmasq_hc_13) + (df_dhc_22_z**2 * sigmasq_hc_22) + 
+                         (df_dhc_23_z**2 * sigmasq_hc_23) + (df_dhc_33_z**2 * sigmasq_hc_33) +
+                         (df_dhp_11_z**2 * sigmasq_hp_11) + (df_dhp_12_z**2 * sigmasq_hp_12) + 
+                         (df_dhp_13_z**2 * sigmasq_hp_13) + (df_dhp_14_z**2 * sigmasq_hp_14) + 
+                         (df_dhp_31_z**2 * sigmasq_hp_31) + (df_dhp_32_z**2 * sigmasq_hp_32) + 
+                         (df_dhp_33_z**2 * sigmasq_hp_33) + (df_dhp_34_z**2 * sigmasq_hp_34))
+            
             derv_x = np.stack((df_dup_x, df_dhc_11_x, df_dhc_13_x, df_dhc_22_x, df_dhc_23_x, df_dhc_33_x, df_dhp_11_x, df_dhp_12_x, df_dhp_13_x, df_dhp_14_x, df_dhp_31_x, df_dhp_32_x, df_dhp_33_x, df_dhp_34_x))
             derv_y = np.stack((df_dup_y, df_dhc_11_y, df_dhc_13_y, df_dhc_22_y, df_dhc_23_y, df_dhc_33_y, df_dhp_11_y, df_dhp_12_y, df_dhp_13_y, df_dhp_14_y, df_dhp_31_y, df_dhp_32_y, df_dhp_33_y, df_dhp_34_y))
             derv_z = np.stack((df_dup_z, df_dhc_11_z, df_dhc_13_z, df_dhc_22_z, df_dhc_23_z, df_dhc_33_z, df_dhp_11_z, df_dhp_12_z, df_dhp_13_z, df_dhp_14_z, df_dhp_31_z, df_dhp_32_z, df_dhp_33_z, df_dhp_34_z))
@@ -481,6 +502,7 @@ class Reconstruction:
         else:
             cordi_sigma = None
             quality_vector = None
+            sigma_sq_low_phi_vect = None
         
         if self.temp:
             temperature_vector = temperature_image[self.mask]
