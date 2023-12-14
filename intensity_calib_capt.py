@@ -170,25 +170,3 @@ if __name__ == '__main__':
         sys.exit(1)
 
 #%%
-fig1, ax1 = plt.subplots()
-x_values = np.linspace(5,250, num=10000)
-slopes=[]; intercepts = []
-for i in range(len(full_var_h_lst_varmean)):
-    index1 = np.where(np.array(full_key_h_list[i])<246)
-    new_key1 = np.array(full_key_h_list[i])[index1]
-    new_var1 = np.array(full_var_h_lst_varmean[i])[index1]
-    slope1, intercept1 = np.polyfit(new_key1, new_var1,1)
-    new_yvalues1 = slope1 * x_values + intercept1
-    ax1.scatter(new_key1, new_var1, label="Pattern%d: $\sigma^2_{I_n} = %.3f I_n + %.3f$"%((i+1),slope1,intercept1))
-    ax1.plot(x_values, new_yvalues1)
-    ax1.tick_params(axis='both', which='major', labelsize=30)
-    ax1.legend(loc="upper left", fontsize=28, labelspacing=0.3)
-    ax1.set_xlabel("Intensity ($I_n$)", fontsize=30)
-    ax1.set_ylabel("Variance ($\sigma^2_{I_n}$)", fontsize=30)
-    slopes.append(slope1)
-    intercepts.append(intercept1)
-model = np.array([slopes[0],intercepts[0]])
-np.save(os.path.join(fringe_dir,"variance_model.npy"),model)   
-np.save(os.path.join(fringe_dir,"slopes.npy"),np.array(slopes))
-np.save(os.path.join(fringe_dir,"intercepts.npy"),np.array(intercepts))
-#%%
