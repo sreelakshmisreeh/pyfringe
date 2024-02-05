@@ -15,6 +15,7 @@ import glob
 import os
 import cv2
 from tqdm import tqdm
+#firmware: new_green_intensity_calib
 #fringe capture 2-level: #52-1200 #53-120 #54-60 # 55-35 #56-25 # 57-20 # 58-18 #59-16 #60-12 
 def inten_fr_calib():
     """
