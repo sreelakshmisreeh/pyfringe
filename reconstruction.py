@@ -802,9 +802,9 @@ def main():
     type_unwrap = 'multifreq'
     dark_bias_path = r"C:\Users\kl001\Documents\pyfringe_test\mean_pixel_std\exp_30_fp_42_retake\black_bias\avg_dark.npy"
     #obj_path = r'C:\Users\kl001\Documents\grasshopper3_python\images'
-    obj_path = r"E:\ud_tower\side8"
-    calib_path = r'C:\Users\kl001\Documents\pyfringe_test\multifreq_calib_images'
-    model_path = r"C:\Users\kl001\Documents\pyfringe_test\mean_pixel_std\exp_30_fp_42_retake\const_tiff\calib_fringes\variance_model.npy"
+    obj_path = r"E:\test\reconst"
+    calib_path = r'E:\test\calibration'
+    model_path = r"G:\.shortcut-targets-by-id\11ZFqyAr3JhvpSlWJ7UpG0kR4sVloyf83\structured_light\calibr_data\intensity_calib\pitch_18\variance_model.npy"
     reconst_inst = Reconstruction(proj_width=proj_width,
                                   proj_height=proj_height,
                                   cam_width=cam_width,
