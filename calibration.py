@@ -1615,6 +1615,7 @@ class Calibration:
         proj_h_mtx_sample = []
         cam_h_mtx_sample = []
         for no, s in enumerate(sample_indices_list):
+            print(no)
             cam_mtx, cam_dist, proj_mtx, proj_dist, st_cam_proj_rmat, st_cam_proj_tvec, cam_h_mtx, proj_h_mtx = self.sub_calibration(s, model, no)
             cam_mtx_sample.append(cam_mtx)
             cam_dist_sample.append(cam_dist)
@@ -1802,12 +1803,14 @@ def main():
 
     # Define the path from which data is to be read. The calibration parameters will be saved in the same path.
     # reconstruction point clouds will also be saved in the same path
-    root_dir = r'C:\Users\kl001\Documents\pyfringe_test'
-    path = os.path.join(root_dir, '%s_calib_images' % type_unwrap)
+    #root_dir = r'C:\Users\kl001\Documents\pyfringe_test'
+    #root_dir = r"G:\.shortcut-targets-by-id\11ZFqyAr3JhvpSlWJ7UpG0kR4sVloyf83\structured_light\calibr_data\geometric_calib"
+    path = r"E:\test\calibration"
     data_type = 'npy'
     processing = 'gpu'
     dark_bias_path =  r"C:\Users\kl001\Documents\pyfringe_test\mean_pixel_std\exp_30_fp_42_retake\black_bias\avg_dark.npy"
-    model_path = r"C:\Users\kl001\Documents\pyfringe_test\mean_pixel_std\exp_30_fp_42_retake\const_tiff\calib_fringes\variance_model.npy"
+    #model_path = r"C:\Users\kl001\Documents\pyfringe_test\mean_pixel_std\exp_30_fp_42_retake\const_tiff\calib_fringes\variance_model.npy"
+    model_path = r"G:\.shortcut-targets-by-id\11ZFqyAr3JhvpSlWJ7UpG0kR4sVloyf83\structured_light\calibr_data\intensity_calib\pitch_18\variance_model.npy"
     model = cp.load(model_path)
     # multi wavelength unwrapping parameters
     if type_unwrap == 'multiwave':
@@ -1847,7 +1850,7 @@ def main():
                              data_type=data_type,
                              processing=processing,
                              dark_bias_path=dark_bias_path)
-    unwrapv_lst, unwraph_lst, white_lst, maskv_lst, maskh_lst,mod_lst, proj_img_lst, cam_objpts, cam_imgpts, proj_imgpts, euler_angles, cam_mean_error, cam_delta, proj_mean_error, proj_delta = calib_inst.calib(fx, fy, model)
+    sigma_sqphi_lst,unwrapv_lst, unwraph_lst, white_lst, maskv_lst, maskh_lst,mod_lst, proj_img_lst, cam_objpts, cam_imgpts, proj_imgpts, euler_angles, cam_mean_error, cam_delta, proj_mean_error, proj_delta = calib_inst.calib(fx, fy, model)
     # Plot for re projection error analysis
     calib_inst.intrinsic_errors_plts( cam_mean_error, cam_delta, 'Camera', pixel_size = [1,1])
     calib_inst.intrinsic_errors_plts( proj_mean_error, proj_delta, 'Projector', pixel_size =[1,0.5]) 
