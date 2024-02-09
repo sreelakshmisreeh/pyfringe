@@ -33,11 +33,11 @@ def main():
     # Define the path from which data is to be read. The calibration parameters will be saved in the same path. 
     # reconstruction point clouds will also be saved in the same path
     
-    path = r'C:\Users\kl001\Documents\pyfringe_test\multifreq_calib_images_bk'
+    path =  r"G:\.shortcut-targets-by-id\11ZFqyAr3JhvpSlWJ7UpG0kR4sVloyf83\structured_light\calibr_data\geometric_calib"
     data_type = "npy"
     processing = 'gpu'
     dark_bias_path =  r"C:\Users\kl001\Documents\pyfringe_test\mean_pixel_std\exp_30_fp_42_retake\black_bias\avg_dark.npy"
-    model_path = r"C:\Users\kl001\Documents\pyfringe_test\mean_pixel_std\exp_30_fp_42_retake\const_tiff\calib_fringes\variance_model.npy"
+    model_path = r"G:\.shortcut-targets-by-id\11ZFqyAr3JhvpSlWJ7UpG0kR4sVloyf83\structured_light\calibr_data\intensity_calib\pitch_18\variance_model.npy"
     model = cp.load(model_path)
     #multifrequency unwrapping parameters
     if type_unwrap == 'multifreq':
@@ -81,15 +81,15 @@ def main():
                                    dark_bias_path=dark_bias_path)
     
     delta_pose=25   # number of samples in each direction
-    pool_size_list =np.arange(20,21,1) # number of poses 
-    no_sample_sets = 200 # no of iterations
+    pool_size_list =np.arange(30,31,1) # number of poses 
+    no_sample_sets = 100 # no of iterations
     cam_mtx_sample, cam_dist_sample, proj_mtx_sample, proj_dist_sample, st_rmat_sample, st_tvec_sample, cam_h_mtx_sample, proj_h_mtx_sample = calib_inst.bootstrap_intrinsics_extrinsics(delta_pose,
                                                                                                                                                                                          pool_size_list, 
                                                                                                                                                                                          no_sample_sets,
                                                                                                                                                                                          model)
     return
 def analysis():  
-    pool_size_list =np.arange(40,41,1)
+    pool_size_list =np.arange(30,31,1)
     type_unwrap =  'multifreq'
     path = r'C:\Users\kl001\Documents\pyfringe_test\multifreq_calib_images'
     calibration_std = np.load(os.path.join(path, '{}_std_calibration_param.npz'.format(type_unwrap)))
