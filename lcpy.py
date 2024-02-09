@@ -14,7 +14,7 @@ from usb.core import USBError
 from time import perf_counter_ns
 import nstep_fringe as nstep
 import cv2
-
+#TODO: Add a function to modify LED current
 
 def conv_len(a, l):
     """
