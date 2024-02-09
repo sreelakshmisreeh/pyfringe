@@ -17,6 +17,9 @@ import PySpin
 import matplotlib.pyplot as plt
 os.environ["KMP_DUPLICATE_LIB_OK"] = "True"  # needed when openCV and matplotlib used at the same time
 
+#TODO:Exposure time can be NONE. If none the default values to be read from firmware.
+# Fine tuning of over exposure to be done by tuning LED current. So preview options to be changed to LED current tunning.
+
 """    
 NOTE: Regarding projector, there are four key time durations: 
 1) 8-bit pattern frame period; 
@@ -29,6 +32,8 @@ NOTE: Regarding projector, there are four key time durations:
 Pattern exposure time is the duration of each pattern projected onto the object's surface and defines the camera triggering period (trigger width). 
 No specific requirement for the shortest exposure time while longest exposure time will be determined by the minimum black fill time, hence it should be 
 determined last (i.e., after the minimum back fill time and pattern frame period).
+
+Note: For 8-bit pattern exposure time is 8333 us (_1/120Hz) which becomes the minimum exposure time to project complete pattern. Pattern exposure time should be integeral multiple of 8333 to avoid systematic error.
 
 The minimum black fill time depends on the larger value of 
 1) the DMD pattern loading time (230 us from the TI document) and 
@@ -135,7 +140,7 @@ def proj_cam_preview(cam,
 
     # live view
     if result:
-        delta_time = 50
+        delta_time = 8333
         delta_cross = 100
         mean_lst = []
         max_int = 0
@@ -162,20 +167,20 @@ def proj_cam_preview(cam,
             cv2.line(img_show_color, (center_x - delta_cross, center_y), (center_x + delta_cross, center_y), (0, 255, 0), 5)
             font = cv2.FONT_HERSHEY_SIMPLEX
             cv2.putText(img_show_color,'Exposure time:%s'%str(proj_exposure_period),(0,50),font,1,(0,255,255),2)  #text,coordinate,font,size of text,color,thickness of font
-            cv2.putText(img_show_color,'Delta:%s'%str(delta_time),(0,100),font,1,(0,255,255),2)
-            cv2.putText(img_show_color,'Max intensity:%s'%str(max_int),(0,150),font,1,(0,255,255),2)
+            # cv2.putText(img_show_color,'Delta:%s'%str(delta_time),(0,100),font,1,(0,255,255),2)
+            # cv2.putText(img_show_color,'Max intensity:%s'%str(max_int),(0,150),font,1,(0,255,255),2)
             cv2.imshow("press q to quit", img_show_color)
             key = cv2.waitKey(1)
-            if key ==ord("+"):
+            if key ==ord("+"): # to be changed
                 proj_exposure_period +=delta_time
                 result &= gspy.setExposureTime(nodemap, exposureTime=proj_exposure_period)
             elif key == ord("-"):
                 proj_exposure_period -=delta_time
                 result &= gspy.setExposureTime(nodemap, exposureTime=proj_exposure_period)
             elif key == ord(">"):
-                delta_time +=5
+                delta_time +=1
             elif key == ord("<"):
-                delta_time -=5
+                delta_time -=1
             elif key == ord("q"):
                 break
         cam.EndAcquisition()
@@ -995,7 +1000,7 @@ def main():
         #predistorted
         #image_index_list = np.repeat(np.arange(21, 33), 3).tolist()
         pattern_num_list = [0, 1, 2] * len(set(image_index_list))
-        savedir = r'C:\Users\kl001\Documents\pyfringe_test\multifreq_calib_images'
+        savedir = r'E:\test\calibration'
         number_scan = int(input("\nEnter number of scans"))
         acquisition_index = int(input("\nEnter acquisition index"))
         result &= calib_capture(image_index_list=image_index_list,
@@ -1016,7 +1021,7 @@ def main():
             image_index_list = np.repeat(np.array([12,13,14,15,16,17]),3).tolist()
             pattern_num_list = [0, 1, 2] * len(set(image_index_list))
         #savedir = r'C:\Users\kl001\Documents\grasshopper3_python\images'
-        savedir = r"E:\demo_data"
+        savedir = r"E:\test\reconst"
         result &= run_proj_single_camera(savedir=savedir,
                                          preview_option='Once',
                                          number_scan=number_scan,
@@ -1028,10 +1033,10 @@ def main():
                                          cam_capt_timeout=10,
                                          cam_black_level=0,
                                          cam_ExposureCompensation=0,
-                                         proj_exposure_period=30000,#27084,Check option 2 for recomended value
+                                         proj_exposure_period=25000,#27084,Check option 2 for recomended value, default is 30000.
                                          proj_frame_period=40000,#34000,#33334,
                                          do_insert_black=True,
-                                         led_select=2,
+                                         led_select=4,
                                          preview_image_index=20,
                                          focus_image_index=None,
                                          image_section_size=None,
