@@ -30,10 +30,11 @@ NOTE: Regarding projector, there are four key time durations:
 8-bit pattern frame period = pattern exposure time + black fill time
 
 Pattern exposure time is the duration of each pattern projected onto the object's surface and defines the camera triggering period (trigger width). 
-No specific requirement for the shortest exposure time while longest exposure time will be determined by the minimum black fill time, hence it should be 
+Longest exposure time will be determined by the minimum black fill time, hence it should be 
 determined last (i.e., after the minimum back fill time and pattern frame period).
 
-Note: For 8-bit pattern exposure time is 8333 us (_1/120Hz) which becomes the minimum exposure time to project complete pattern. Pattern exposure time should be integeral multiple of 8333 to avoid systematic error.
+Note: For 8-bit pattern exposure time is 8333 us (_1/120Hz) which becomes the minimum exposure time to project complete pattern. 
+Pattern exposure time should be integeral multiple of 8333 to avoid systematic error.
 
 The minimum black fill time depends on the larger value of 
 1) the DMD pattern loading time (230 us from the TI document) and 
@@ -168,7 +169,7 @@ def proj_cam_preview(cam,
             font = cv2.FONT_HERSHEY_SIMPLEX
             cv2.putText(img_show_color,'Exposure time:%s'%str(proj_exposure_period),(0,50),font,1,(0,255,255),2)  #text,coordinate,font,size of text,color,thickness of font
             # cv2.putText(img_show_color,'Delta:%s'%str(delta_time),(0,100),font,1,(0,255,255),2)
-            # cv2.putText(img_show_color,'Max intensity:%s'%str(max_int),(0,150),font,1,(0,255,255),2)
+            cv2.putText(img_show_color,'Max intensity:%s'%str(max_int),(0,150),font,1,(0,255,255),2)
             cv2.imshow("press q to quit", img_show_color)
             key = cv2.waitKey(1)
             if key ==ord("+"): # to be changed
@@ -1036,7 +1037,7 @@ def main():
                                          proj_exposure_period=25000,#27084,Check option 2 for recomended value, default is 30000.
                                          proj_frame_period=40000,#34000,#33334,
                                          do_insert_black=True,
-                                         led_select=4,
+                                         led_select=2,
                                          preview_image_index=20,
                                          focus_image_index=None,
                                          image_section_size=None,
