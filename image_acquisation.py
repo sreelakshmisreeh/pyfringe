@@ -1001,7 +1001,7 @@ def main():
         #predistorted
         #image_index_list = np.repeat(np.arange(21, 33), 3).tolist()
         pattern_num_list = [0, 1, 2] * len(set(image_index_list))
-        savedir = r'E:\test\calibration'
+        savedir = r'E:\review_data\geom_calibration'
         number_scan = int(input("\nEnter number of scans"))
         acquisition_index = int(input("\nEnter acquisition index"))
         result &= calib_capture(image_index_list=image_index_list,
@@ -1013,8 +1013,11 @@ def main():
         no_of_levels =input("\nNo. of levels 2,3,4:")
         number_scan = int(input("\nEnter number of scans"))
         if no_of_levels == "2":
-            image_index_list = np.repeat([18,19], 3).tolist()#np.repeat([30,35], 3).tolist()
+            #review
+            image_index_list = np.repeat([5,6,7,8], 3).tolist()#np.repeat([30,35], 3).tolist()
             pattern_num_list = [0, 1, 2] * len(set(image_index_list))
+            # image_index_list = np.repeat([18,19], 3).tolist()#np.repeat([30,35], 3).tolist()
+            # pattern_num_list = [0, 1, 2] * len(set(image_index_list))
         elif no_of_levels == "3":
             image_index_list = np.repeat(np.arange(30, 35), 3).tolist()
             pattern_num_list = [0, 1, 2] * len(set(image_index_list))
@@ -1022,7 +1025,8 @@ def main():
             image_index_list = np.repeat(np.array([12,13,14,15,16,17]),3).tolist()
             pattern_num_list = [0, 1, 2] * len(set(image_index_list))
         #savedir = r'C:\Users\kl001\Documents\grasshopper3_python\images'
-        savedir = r"E:\test\reconst"
+        #savedir = r"E:\test\reconst"
+        savedir = r"E:\review_data\error_map_data\N9_p18\set2"
         result &= run_proj_single_camera(savedir=savedir,
                                          preview_option='Once',
                                          number_scan=number_scan,
@@ -1034,11 +1038,11 @@ def main():
                                          cam_capt_timeout=10,
                                          cam_black_level=0,
                                          cam_ExposureCompensation=0,
-                                         proj_exposure_period=25000,#27084,Check option 2 for recomended value, default is 30000.
+                                         proj_exposure_period=30000,#27084,Check option 2 for recomended value, default is 30000.
                                          proj_frame_period=40000,#34000,#33334,
                                          do_insert_black=True,
                                          led_select=2,
-                                         preview_image_index=20,
+                                         preview_image_index=14,#20,
                                          focus_image_index=None,
                                          image_section_size=None,
                                          pprint_status=True,
