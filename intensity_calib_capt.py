@@ -60,13 +60,13 @@ def inten_fr_calib():
 
 def load_data(data_dir, camx, camy, deltax, deltay, dark_bias):
     
-    path = glob.glob(os.path.join(data_dir,'*.tiff'))
+    path = sorted(glob.glob(os.path.join(data_dir,'*.tiff')), key=lambda x:(int(os.path.basename(x)[-15:-10]), int(os.path.basename(x)[-11:-5])))
     images = np.array([cv2.imread(file,0) for file in tqdm(path,desc="image loading")])
     imag_region = images[1200:,camy : camy + deltay, camx : camx + deltax] - dark_bias[camy : camy + deltay, camx : camx + deltax]
     return imag_region
 
 def group_keys_gen(images):
-    mean_images = np.round(np.mean(images, axis=0)).astype(np.uint8)
+    mean_images = np.round(np.nanmean(images, axis=0)).astype(np.uint8)
     mean_img = mean_images.reshape(mean_images.shape[0], mean_images.shape[-2]*mean_images.shape[-1])
     int_index = np.argsort(mean_img, axis=-1)
     unique_index_lst = []; key_lst = []
@@ -91,10 +91,10 @@ def var_calc(imag_vect, intensity_index, unique_index):
         img = imag_vect[:,i]
         sort_img_vect = img[:,intensity_index[i]]  
         split_vect = np.split(sort_img_vect, unique_index[i], axis=-1)
-        var_map = list(map(np.var, split_vect[1:]))
-        new_var = [np.var(a, axis=0) for a in split_vect[1:]]
-        quant_997 = list(map(np.quantile, new_var, [0.997]*len(new_var)))
-        quant_003 = list(map(np.quantile, new_var, [0.003]*len(new_var)))
+        var_map = list(map(np.nanvar, split_vect[1:]))
+        new_var = [np.nanvar(a, axis=0) for a in split_vect[1:]]
+        quant_997 = list(map(np.nanquantile, new_var, [0.997]*len(new_var)))
+        quant_003 = list(map(np.nanquantile, new_var, [0.003]*len(new_var)))
         for n , q3, q997 in zip(new_var, quant_003, quant_997):
             n[(n < q3) | (n > q997)] = np.nan
         var_map2 = list(map(np.nanmean, new_var))
@@ -140,6 +140,7 @@ def plot_model(full_key_h_list, full_var_h_lst_varmean):
         intercepts.append(intercept1)
     
     return np.array(slopes), np.array(intercepts)
+
 def main():
     result = inten_fr_calib()
     dark_bias = np.load(r"C:\Users\kl001\Documents\pyfringe_test\mean_pixel_std\exp_30_fp_42_retake\black_bias\avg_dark.npy")
