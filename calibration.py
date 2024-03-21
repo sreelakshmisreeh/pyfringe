@@ -125,7 +125,7 @@ class Calibration:
         else:
             self.dark_bias = np.load(dark_bias_path)
         
-    def calib(self, fx, fy, model):
+    def calib(self, fx, fy, model=None):
         """
         Function to calibrate camera and projector and save npz file of calibration parameter based on user choice 
         of temporal phase unwrapping.
@@ -484,12 +484,21 @@ class Calibration:
                                                            mask,
                                                            self.cam_width, 
                                                            self.cam_height)
-        cov_arr_h,_ = nstep.pred_var_fn(data_array[-2*self.N[-1]:-self.N[-1]], model)
-        sigma_sqphi_h = nstep.var_func(data_array[-2*self.N[-1]:-self.N[-1]],
-                                       mask_v,
-                                       self.N[-1],
-                                       cov_arr_h)
-        return unwrap_v, unwrap_h, phase_v, phase_h, orig_img[-1], modulation, mask_v, mask_h, sigma_sqphi_h
+        if model is not None:
+            cov_arr_v,_ = nstep.pred_var_fn(data_array[-2*self.N[-1]:-self.N[-1]], model)
+            sigma_sqphi_v = nstep.var_func(data_array[-2*self.N[-1]:-self.N[-1]],
+                                           mask_v,
+                                           self.N[-1],
+                                           cov_arr_v)
+            cov_arr_h,_ = nstep.pred_var_fn(data_array[-self.N[-1]:], model)
+            sigma_sqphi_h = nstep.var_func(data_array[-self.N[-1]:],
+                                           mask_v,
+                                           self.N[-1],
+                                           cov_arr_v)
+        else:
+            sigma_sqphi_v = None
+            sigma_sqphi_h - None
+        return unwrap_v, unwrap_h, phase_v, phase_h, orig_img[-1], modulation, mask_v, mask_h, sigma_sqphi_v, sigma_sqphi_h
     
     def multifreq_analysis_cupy(self, data_array, model):
         """
@@ -535,12 +544,21 @@ class Calibration:
                                                                 mask, 
                                                                 self.cam_width, 
                                                                 self.cam_height)
-        cov_arr_h,_ = nstep_cp.pred_var_fn(data_array[-2*self.N[-1]:-self.N[-1]], model)
-        sigma_sqphi_h = nstep_cp.var_func(data_array[-2*self.N[-1]:-self.N[-1]],
-                                          mask_v,
-                                          self.N[-1],
-                                          cov_arr_h)
-        return cp.asnumpy(unwrap_v), cp.asnumpy(unwrap_h), cp.asnumpy(phase_v), cp.asnumpy(phase_h), cp.asnumpy(orig_img[-1]), cp.asnumpy(modulation), cp.asnumpy(mask_v), cp.asnumpy(mask_h), cp.asnumpy(sigma_sqphi_h)
+        if model is not None:
+            cov_arr_v,_ = nstep_cp.pred_var_fn(data_array[-2*self.N[-1]:-self.N[-1]], model)
+            sigma_sqphi_v = nstep_cp.var_func(data_array[-2*self.N[-1]:-self.N[-1]],
+                                              mask_v,
+                                              self.N[-1],
+                                              cov_arr_v)
+            cov_arr_h,_ = nstep_cp.pred_var_fn(data_array[-self.N[-1]:], model)
+            sigma_sqphi_h = nstep_cp.var_func(data_array[-self.N[-1]:],
+                                              mask_v,
+                                              self.N[-1],
+                                              cov_arr_h)
+        else:
+            sigma_sqphi_v = None
+            sigma_sqphi_h - None
+        return cp.asnumpy(unwrap_v), cp.asnumpy(unwrap_h), cp.asnumpy(phase_v), cp.asnumpy(phase_h), cp.asnumpy(orig_img[-1]), cp.asnumpy(modulation), cp.asnumpy(mask_v), cp.asnumpy(mask_h), cp.asnumpy(sigma_sqphi_v), cp.asnumpy(sigma_sqphi_h)
 
     def projcam_calib_img_multifreq(self, model):
         """
@@ -594,12 +612,12 @@ class Calibration:
 
             if images_arr is not None:
                 if self.processing == 'cpu':
-                   unwrap_v, unwrap_h, phase_v, phase_h, orig_img, modulation, mask_v, mask_h, sigma_sqphi_h = self.multifreq_analysis(images_arr, model)
+                   unwrap_v, unwrap_h, phase_v, phase_h, orig_img, modulation, mask_v, mask_h, sigma_sqphi_v, sigma_sqphi_h = self.multifreq_analysis(images_arr, model)
                 else:
                     if self.processing != 'gpu':
                         print("WARNING: processing type is not recognized, use 'gpu'")
                     images_arr = cp.asarray(images_arr)
-                    unwrap_v, unwrap_h, phase_v, phase_h, orig_img, modulation, mask_v, mask_h, sigma_sqphi_h = self.multifreq_analysis_cupy(images_arr, model)
+                    unwrap_v, unwrap_h, phase_v, phase_h, orig_img, modulation, mask_v, mask_h, sigma_sqphi_v, sigma_sqphi_h = self.multifreq_analysis_cupy(images_arr, model)
                     cp._default_memory_pool.free_all_blocks()
                     
             else:
@@ -611,7 +629,7 @@ class Calibration:
                 modulation = None
                 mask_v = None
                 mask_h = None
-                sigma_sqphi_h = None 
+                sigma_sqphi_lst = None
             maskv_lst.append(mask_v)
             maskh_lst.append(mask_h)
             mod_lst.append(modulation)
@@ -620,7 +638,10 @@ class Calibration:
             wraph_lst.append(phase_h)
             unwrapv_lst.append(unwrap_v)
             unwraph_lst.append(unwrap_h)
-            sigma_sqphi_lst.append(sigma_sqphi_h)
+            if model is not None:
+                sigma_sqphi_lst.append([sigma_sqphi_v,sigma_sqphi_h])
+            else:
+                sigma_sqphi_lst = None
 
         wrapped_phase_lst = {"wrapv": wrapv_lst,
                              "wraph": wraph_lst}
@@ -1805,12 +1826,12 @@ def main():
     # reconstruction point clouds will also be saved in the same path
     #root_dir = r'C:\Users\kl001\Documents\pyfringe_test'
     #root_dir = r"G:\.shortcut-targets-by-id\11ZFqyAr3JhvpSlWJ7UpG0kR4sVloyf83\structured_light\calibr_data\geometric_calib"
-    path = r"E:\test\calibration"
+    path = r"E:\review_data\geom_calibration"
     data_type = 'npy'
     processing = 'gpu'
     dark_bias_path =  r"C:\Users\kl001\Documents\pyfringe_test\mean_pixel_std\exp_30_fp_42_retake\black_bias\avg_dark.npy"
     #model_path = r"C:\Users\kl001\Documents\pyfringe_test\mean_pixel_std\exp_30_fp_42_retake\const_tiff\calib_fringes\variance_model.npy"
-    model_path = r"G:\.shortcut-targets-by-id\11ZFqyAr3JhvpSlWJ7UpG0kR4sVloyf83\structured_light\calibr_data\intensity_calib\pitch_18\variance_model.npy"
+    model_path = r"E:\review_data\intensity_calib\variance_model.npy"
     model = cp.load(model_path)
     # multi wavelength unwrapping parameters
     if type_unwrap == 'multiwave':
