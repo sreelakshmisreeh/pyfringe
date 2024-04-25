@@ -1014,10 +1014,10 @@ def main():
         number_scan = int(input("\nEnter number of scans"))
         if no_of_levels == "2":
             #review
-            image_index_list = np.repeat([5,6,7,8], 3).tolist()#np.repeat([30,35], 3).tolist()
-            pattern_num_list = [0, 1, 2] * len(set(image_index_list))
-            # image_index_list = np.repeat([18,19], 3).tolist()#np.repeat([30,35], 3).tolist()
+            # image_index_list = np.repeat([5,6,7,8], 3).tolist()#np.repeat([30,35], 3).tolist()
             # pattern_num_list = [0, 1, 2] * len(set(image_index_list))
+            image_index_list = np.repeat([18,19], 3).tolist()#np.repeat([30,35], 3).tolist()
+            pattern_num_list = [0, 1, 2] * len(set(image_index_list))
         elif no_of_levels == "3":
             image_index_list = np.repeat(np.arange(30, 35), 3).tolist()
             pattern_num_list = [0, 1, 2] * len(set(image_index_list))
@@ -1042,7 +1042,7 @@ def main():
                                          proj_frame_period=40000,#34000,#33334,
                                          do_insert_black=True,
                                          led_select=2,
-                                         preview_image_index=14,#20,
+                                         preview_image_index=14,#actual 20,
                                          focus_image_index=None,
                                          image_section_size=None,
                                          pprint_status=True,
