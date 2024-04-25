@@ -302,7 +302,8 @@ def multifreq_unwrap_cp(wavelength_arr_cp: list,
 
 def bilinear_interpolate_cp(image: cp.ndarray,
                             x: cp.ndarray,
-                            y: cp.ndarray)->cp.ndarray:
+                            y: cp.ndarray,
+                            sigma=False, model=None)->cp.ndarray:
     """
     Function to perform bi-linear interpolation to obtain subpixel values.
 
@@ -313,9 +314,13 @@ def bilinear_interpolate_cp(image: cp.ndarray,
         X coordinate
     y = cupy.ndarray.
         Y coordinate
+    sigma = bool
+            If pixel uncertainty has to be estimated
+    model = cp.ndarray
+            The model required to compute pixel uncertainty
     Returns
     -------
-    Subpixel mapped absolute value.
+    Subpixel mapped absolute value and corresponding variance map.
     """
     # neighbours
     x0 = cp.floor(x).astype(int)
@@ -331,12 +336,21 @@ def bilinear_interpolate_cp(image: cp.ndarray,
     wb = (x1-x) * (y-y0)
     wc = (x-x0) * (y1-y)
     wd = (x-x0) * (y-y0)
-
-    return wa*image_a + wb*image_b + wc*image_c + wd*image_d
+    new_image = wa*image_a + wb*image_b + wc*image_c + wd*image_d
+    if sigma:
+        pred_var_a = model[0] * image_a + model[1]
+        pred_var_b = model[0] * image_b + model[1]
+        pred_var_c = model[0] * image_c + model[1]
+        pred_var_d = model[0] * image_d + model[1]
+        int_pred_var = wa**2 * pred_var_a + wb**2 * pred_var_b + wc**2 * pred_var_c + wd**2 * pred_var_d
+    else:
+        int_pred_var = None
+    return new_image, int_pred_var
 
 def undistort_cp(image: cp.ndarray,
                  camera_mtx: cp.ndarray,
-                 camera_dist: cp.ndarray)->cp.ndarray:
+                 camera_dist: cp.ndarray,
+                 sigma=False, model=None)->cp.ndarray:
     """
     Function to un distort  an image.
     Parameters
@@ -347,10 +361,17 @@ def undistort_cp(image: cp.ndarray,
                 Camera intrinsic matrix.
     camera_dist: cp.ndarray
                  Camera distortion matrix.
+    sigma=bool
+            If pixel uncertainty has to be estimated
+    model = cp.ndarray
+            The model required to compute pixel uncertainty
     Returns
     -------
     undistort_image: cp.ndarray
                   Undistorted image
+    image_var : cp.ndarray
+                Variance image
+                  
     """
     u = cp.arange(0, image.shape[1])
     v = cp.arange(0, image.shape[0])
@@ -362,8 +383,8 @@ def undistort_cp(image: cp.ndarray,
     y_double_dash = y*(1 + camera_dist[0, 0] * r_sq + camera_dist[0, 1] * r_sq**2)
     map_x = x_double_dash * camera_mtx[0, 0] + camera_mtx[0, 2]
     map_y = y_double_dash * camera_mtx[1, 1] + camera_mtx[1, 2]
-    undistort_image = bilinear_interpolate_cp(image, map_x, map_y)
-    return undistort_image
+    undistort_image, image_var = bilinear_interpolate_cp(image, map_x, map_y)
+    return undistort_image, image_var
     
     
 # spyder : computing time: 0.026262                         

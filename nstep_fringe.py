@@ -732,18 +732,20 @@ def edge_rectification(multi_phase_123: np.ndarray,
         multi_phase_123[int(img_height/2):][multi_phase_123[int(img_height/2):] < -1.5 * np.pi] = multi_phase_123[int(img_height/2):][multi_phase_123[int(img_height/2):] < -1.5 * np.pi] + 2 * np.pi
     return multi_phase_123
 
-def bilinear_interpolate(unwrap, x, y):
+def bilinear_interpolate(image, x, y,  sigma=False, model=None):
     """
     Function to perform bi-linear interpolation to obtain subpixel circle center phase values.
 
     Parameters
     ----------
-    unwrap = type:float. Absolute phase map
-    center = type:float. Subpixel coordinate from OpenCV circle center detection.
+    image = type:float. Absolute phase map
+    x = type:float. Subpixel x coordinate.
+    y = type:float. Subpixel y coordinate.
+    sigma = 
 
     Returns
     -------
-   Subpixel mapped absolute phase value corresponding to given circle center. 
+   Subpixel mapped absolute value and corresponding variance map. 
 
     """
     # neighbours
@@ -751,19 +753,28 @@ def bilinear_interpolate(unwrap, x, y):
     x1 = x0 + 1
     y0 = np.floor(y).astype(int)
     y1 = y0 + 1
-    unwrap_a = unwrap[y0, x0]
-    unwrap_b = unwrap[y1, x0]
-    unwrap_c = unwrap[y0, x1]
-    unwrap_d = unwrap[y1, x1]
+    image_a = image[y0, x0]
+    image_b = image[y1, x0]
+    image_c = image[y0, x1]
+    image_d = image[y1, x1]
     # weights
     wa = (x1-x) * (y1-y)
     wb = (x1-x) * (y-y0)
     wc = (x-x0) * (y1-y)
     wd = (x-x0) * (y-y0)
+    new_image = wa*image_a + wb*image_b + wc*image_c + wd*image_d
+    if sigma:
+        pred_var_a = model[0] * image_a + model[1]
+        pred_var_b = model[0] * image_b + model[1]
+        pred_var_c = model[0] * image_c + model[1]
+        pred_var_d = model[0] * image_d + model[1]
+        int_pred_var = wa**2 * pred_var_a + wb**2 * pred_var_b + wc**2 * pred_var_c + wd**2 * pred_var_d
+    else:
+        int_pred_var = None
 
-    return wa*unwrap_a + wb*unwrap_b + wc*unwrap_c + wd*unwrap_d
+    return new_image, int_pred_var
 
-def undistort(image, camera_mtx, camera_dist): # image with nan values after undistorting and applying interpolation creates nan values
+def undistort(image, camera_mtx, camera_dist, sigma=False, model=None): # image with nan values after undistorting and applying interpolation creates nan values
     # no_img = image.shape[0]
     u = np.arange(0, image.shape[1])
     v = np.arange(0, image.shape[0])
@@ -777,8 +788,8 @@ def undistort(image, camera_mtx, camera_dist): # image with nan values after und
     y_double_dash = y*(1 + camera_dist[0, 0] * r_sq + camera_dist[0, 1] * r_sq**2)
     map_x = x_double_dash * camera_mtx[0, 0] + camera_mtx[0, 2]
     map_y = y_double_dash * camera_mtx[1, 1] + camera_mtx[1, 2]
-    undist_image = bilinear_interpolate(image, map_x, map_y) 
-    return undist_image
+    undistort_image, image_var = bilinear_interpolate(image, map_x, map_y, sigma, model) 
+    return undistort_image, image_var
 # =====================================================
 # For diagnosis
 # Removing trend
