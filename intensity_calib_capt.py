@@ -7,6 +7,7 @@ Created on Wed Dec 13 11:22:29 2023
 
 import numpy as np
 import matplotlib.pyplot as plt
+plt.rcParams.update({'font.family':'Times New Roman',"mathtext.fontset":"cm"})
 import sys
 sys.path.append(r"C:\Users\kl001\pyfringe")
 import image_acquisation as acq
@@ -29,7 +30,7 @@ def inten_fr_calib():
     pitch = 18
     img = 58
     no_img = 1000
-    fr_dir = r"G:\.shortcut-targets-by-id\11ZFqyAr3JhvpSlWJ7UpG0kR4sVloyf83\structured_light\calibr_data\intensity_calib\pitch_"+ str(pitch)
+    fr_dir = r"E:\review_data\color_board_data\set4"
     image_indices = np.tile(np.repeat([52,img],3),no_img).reshape(no_img,6).tolist()
     patern_indices = [np.tile([0,1,2],2).tolist()]*no_img
     
@@ -140,16 +141,16 @@ def plot_model(full_key_h_list, full_var_h_lst_varmean):
         intercepts.append(intercept1)
     
     return np.array(slopes), np.array(intercepts)
-
+#%%
 def main():
     result = inten_fr_calib()
     dark_bias = np.load(r"C:\Users\kl001\Documents\pyfringe_test\mean_pixel_std\exp_30_fp_42_retake\black_bias\avg_dark.npy")
-    fringe_dir =  r"G:\.shortcut-targets-by-id\11ZFqyAr3JhvpSlWJ7UpG0kR4sVloyf83\structured_light\calibr_data\intensity_calib\pitch_18"
+    fringe_dir =  r"E:\review_data\color_board_data\set3"
     iterations = 800
     pitch_list =[1200, 18]
     N_list = [3] *len(pitch_list)
-    camx = 900
-    camy = 400
+    camx = 450
+    camy = 450
     deltax = 200
     deltay = 200
     full_key_r_list, full_var_r_lst, full_key_h_list, full_var_h_lst, full_var_h_lst_varmean = fringe_full_var(fringe_dir, 
@@ -172,3 +173,42 @@ if __name__ == '__main__':
         sys.exit(1)
 
 #%%
+
+dark_bias = np.load(r"C:\Users\kl001\Documents\pyfringe_test\mean_pixel_std\exp_30_fp_42_retake\black_bias\avg_dark.npy")
+fringe_dir =  r"E:\review_data\color_board_data\set4"
+iterations = 800
+pitch_list =[1200, 18]
+N_list = [3] *len(pitch_list)
+camx_all = 400,800,1220
+camy = 500
+deltax = 50
+deltay = 50
+all_key_h_list=[];all_var_h_lst=[];
+for camx in camx_all:
+    full_key_r_list, full_var_r_lst, full_key_h_list, full_var_h_lst, full_var_h_lst_varmean = fringe_full_var(fringe_dir, 
+                                                                                                               iterations, 
+                                                                                                               camx, camy, 
+                                                                                                               deltax, deltay, 
+                                                                                                               N_list,  
+                                                                                                               dark_bias, 
+                                                                                                               False)
+    all_key_h_list.append(full_key_h_list)
+    all_var_h_lst.append(full_var_h_lst_varmean)
+
+model = np.load(r"C:\Users\kl001\Documents\pyfringe_test\mean_pixel_std\exp_30_fp_42_retake\const_tiff\calib_fringes\variance_model.npy")
+x_values = np.linspace(5,250, num=10000)
+new_yvalues1 = model[0] * x_values + model[1]
+#%%
+fig1, ax1 = plt.subplots()
+
+ax1.scatter(all_key_h_list[1][-1][:-4], all_var_h_lst[1][-1][:-4],
+            color="orange", label="Yellow region", alpha=0.4, marker="v", edgecolor="k")
+ax1.scatter(all_key_h_list[-1][-1][:-8], all_var_h_lst[-1][-1][:-8],
+            color="g", label="Green region", alpha=0.5, marker="s")
+ax1.scatter(all_key_h_list[0][0][:-1], all_var_h_lst[0][0][:-1],color="r", label="Red region", alpha=0.5)
+ax1.plot(x_values, new_yvalues1, color="k",label="Model")
+ax1.tick_params(axis='both', which='major', labelsize=50)
+ax1.legend(loc="upper left", fontsize=28, labelspacing=0.3)
+ax1.set_xlabel("Intensity ($\mu_{I_n}$)", fontsize=50)
+ax1.set_ylabel("Variance ($\sigma^2_{I_n}$)", fontsize=50)
+ax1.text(0.3,0.9,"$\sigma^2_{I_n}$=0.007$\mu_{I_n}$+0.0172", transform=ax1.transAxes, fontsize=50)
