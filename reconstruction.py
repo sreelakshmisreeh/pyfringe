@@ -222,13 +222,14 @@ class Reconstruction:
         return coordintes
    
     def reconstruction_obj(self,
-                           unwrap_vector):
+                           unwrap_vector, sigma_sq_phi):
         """
         Sub function to reconstruct object from phase map
         """
         if self.processing == 'cpu':
             unwrap_image = nstep.recover_image(unwrap_vector, self.mask, self.cam_height, self.cam_width)
-            unwrap_dist = nstep.undistort(unwrap_image, self.cam_mtx, self.cam_dist)
+            unwrap_dist, unwrap_var = nstep.undistort(unwrap_image, self.cam_mtx, self.cam_dist, 
+                                                      sigmasq_image=sigma_sq_phi)
             self.mask = ~np.isnan(unwrap_dist)
             u = np.arange(0, self.cam_width)
             v = np.arange(0, self.cam_height)
@@ -245,7 +246,9 @@ class Reconstruction:
             up = up[self.mask]
         else:
             unwrap_image = nstep_cp.recover_image_cp(unwrap_vector, self.mask, self.cam_height, self.cam_width)
-            unwrap_dist = nstep_cp.undistort_cp(unwrap_image, self.cam_mtx, self.cam_dist)
+            
+            unwrap_dist, unwrap_var = nstep_cp.undistort_cp(unwrap_image, self.cam_mtx, self.cam_dist,
+                                                sigmasq_image=sigma_sq_phi)
             self.mask = ~cp.isnan(unwrap_dist)
             u = cp.arange(0,self.cam_width)
             v = cp.arange(0, self.cam_height)
@@ -258,7 +261,7 @@ class Reconstruction:
             self.mask = cp.asnumpy(self.mask)
         
         coords = self.triangulation(uc, vc, up) #return is numpy
-        return coords, uc, vc, up
+        return coords, uc, vc, up, unwrap_var
 
     @staticmethod
     def diff_funs_x(hc_11, hc_13, hc_22, hc_23, hc_33, hp_11, hp_12, hp_13,
@@ -493,11 +496,11 @@ class Reconstruction:
         cordi_sigma: np.ndarray/cp.ndarray. 
                     Standard deviation of each pixel.
         """
-        coords, uc, vc, up = self.reconstruction_obj(unwrap_vector)
+        coords, uc, vc, up, sigmasq_phi_dist = self.reconstruction_obj(unwrap_vector, sigma_sq_phi)
         inte_img = inte_rgb_image[self.mask] / np.nanmax(inte_rgb_image[self.mask])
         inte_rgb = np.stack((inte_img, inte_img, inte_img), axis=-1)
         if self.probability:
-            sigma_sq_low_phi_vect = sigma_sq_phi[self.mask]
+            sigma_sq_low_phi_vect = sigmasq_phi_dist[self.mask]
             sigmasq_x, sigmasq_y, sigmasq_z, derv_x, derv_y, derv_z = self.sigma_random(sigma_sq_low_phi_vect, uc, vc, up)
             sigma_x = np.sqrt(sigmasq_x)
             sigma_y = np.sqrt(sigmasq_y)
