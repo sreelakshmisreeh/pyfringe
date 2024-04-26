@@ -732,16 +732,16 @@ def edge_rectification(multi_phase_123: np.ndarray,
         multi_phase_123[int(img_height/2):][multi_phase_123[int(img_height/2):] < -1.5 * np.pi] = multi_phase_123[int(img_height/2):][multi_phase_123[int(img_height/2):] < -1.5 * np.pi] + 2 * np.pi
     return multi_phase_123
 
-def bilinear_interpolate(image, x, y,  sigma=False, model=None):
+def bilinear_interpolate(image, x, y,  sigmasq_image=None):
     """
     Function to perform bi-linear interpolation to obtain subpixel circle center phase values.
 
     Parameters
     ----------
-    image = type:float. Absolute phase map
+    image = type:float. numpy array of image
     x = type:float. Subpixel x coordinate.
     y = type:float. Subpixel y coordinate.
-    sigma = 
+    sigmasq_image = type:float. numpy array of variance of image.
 
     Returns
     -------
@@ -763,18 +763,18 @@ def bilinear_interpolate(image, x, y,  sigma=False, model=None):
     wc = (x-x0) * (y1-y)
     wd = (x-x0) * (y-y0)
     new_image = wa*image_a + wb*image_b + wc*image_c + wd*image_d
-    if sigma:
-        pred_var_a = model[0] * image_a + model[1]
-        pred_var_b = model[0] * image_b + model[1]
-        pred_var_c = model[0] * image_c + model[1]
-        pred_var_d = model[0] * image_d + model[1]
-        int_pred_var = wa**2 * pred_var_a + wb**2 * pred_var_b + wc**2 * pred_var_c + wd**2 * pred_var_d
+    if sigmasq_image is not None:
+        pred_var_a = sigmasq_image[y0, x0]
+        pred_var_b = sigmasq_image[y1, x0]
+        pred_var_c = sigmasq_image[y0, x1]
+        pred_var_d = sigmasq_image[y1, x1]
+        int_pred_var = wa ** 2 * pred_var_a + wb ** 2 * pred_var_b + wc ** 2 * pred_var_c + wd ** 2 * pred_var_d
     else:
         int_pred_var = None
 
     return new_image, int_pred_var
 
-def undistort(image, camera_mtx, camera_dist, sigma=False, model=None): # image with nan values after undistorting and applying interpolation creates nan values
+def undistort(image, camera_mtx, camera_dist, sigmasq_image=None): # image with nan values after undistorting and applying interpolation creates nan values
     # no_img = image.shape[0]
     u = np.arange(0, image.shape[1])
     v = np.arange(0, image.shape[0])
@@ -788,7 +788,7 @@ def undistort(image, camera_mtx, camera_dist, sigma=False, model=None): # image 
     y_double_dash = y*(1 + camera_dist[0, 0] * r_sq + camera_dist[0, 1] * r_sq**2)
     map_x = x_double_dash * camera_mtx[0, 0] + camera_mtx[0, 2]
     map_y = y_double_dash * camera_mtx[1, 1] + camera_mtx[1, 2]
-    undistort_image, image_var = bilinear_interpolate(image, map_x, map_y, sigma, model) 
+    undistort_image, image_var = bilinear_interpolate(image, map_x, map_y, sigmasq_image) 
     return undistort_image, image_var
 # =====================================================
 # For diagnosis
