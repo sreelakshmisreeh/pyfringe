@@ -997,11 +997,12 @@ def main():
                       acquisition_index=acquisition_index)
         
     elif option == '5':
-        image_index_list = np.repeat(np.arange(0, 12), 3).tolist()
+        #image_index_list = np.repeat(np.arange(0, 12), 3).tolist()
         #predistorted
         #image_index_list = np.repeat(np.arange(21, 33), 3).tolist()
+        image_index_list = np.repeat(np.arange(0, 12), 3).tolist()
         pattern_num_list = [0, 1, 2] * len(set(image_index_list))
-        savedir = r'E:\review_data\geom_calibration'
+        savedir = r'G:\My Drive\Epistemic_newdata\calibration'
         number_scan = int(input("\nEnter number of scans"))
         acquisition_index = int(input("\nEnter acquisition index"))
         result &= calib_capture(image_index_list=image_index_list,
@@ -1016,13 +1017,19 @@ def main():
             #review
             # image_index_list = np.repeat([5,6,7,8], 3).tolist()#np.repeat([30,35], 3).tolist()
             # pattern_num_list = [0, 1, 2] * len(set(image_index_list))
-            image_index_list = np.repeat([18,19], 3).tolist()#np.repeat([30,35], 3).tolist()
+            # image_index_list = np.repeat([18,19], 3).tolist()#np.repeat([30,35], 3).tolist()
+            # pattern_num_list = [0, 1, 2] * len(set(image_index_list))
+            image_index_list = np.repeat([23,24], 3).tolist()#np.repeat([30,35], 3).tolist()
             pattern_num_list = [0, 1, 2] * len(set(image_index_list))
         elif no_of_levels == "3":
-            image_index_list = np.repeat(np.arange(30, 35), 3).tolist()
+            # image_index_list = np.repeat(np.arange(30, 35), 3).tolist()
+            # pattern_num_list = [0, 1, 2] * len(set(image_index_list))
+            image_index_list = np.repeat(np.arange(18, 23), 3).tolist()
             pattern_num_list = [0, 1, 2] * len(set(image_index_list))
         elif no_of_levels == "4" :
-            image_index_list = np.repeat(np.array([12,13,14,15,16,17]),3).tolist()
+            # image_index_list = np.repeat(np.array([12,13,14,15,16,17]),3).tolist()
+            # pattern_num_list = [0, 1, 2] * len(set(image_index_list))
+            image_index_list = np.repeat(np.arange(12,18),3).tolist()
             pattern_num_list = [0, 1, 2] * len(set(image_index_list))
         #savedir = r'C:\Users\kl001\Documents\grasshopper3_python\images'
         #savedir = r"E:\test\reconst"
