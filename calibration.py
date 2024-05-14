@@ -893,7 +893,7 @@ class Calibration:
     
         cv2.destroyAllWindows()
         if not all(ret_lst):
-            print('Warning: Centers are not detected for some poses. Modify bobdetect_areamin and bobdetect_areamin parameter')
+            print('Warning: Centers are not detected for some poses. Modify bobdetect_areamin and bobdetect_areamin parameter',ret_lst)
         # set flags to have tangential distortion = 0, k4 = 0, k5 = 0, k6 = 0
         flags =   cv2.CALIB_ZERO_TANGENT_DIST + cv2.CALIB_FIX_K3 + cv2.CALIB_FIX_K4 + cv2.CALIB_FIX_K5 + cv2.CALIB_FIX_K6
         # camera calibration
@@ -961,8 +961,8 @@ class Calibration:
         proj_imgpts = []
         for x, c in enumerate(centers):
             # Phase to coordinate conversion for each pose
-            u = (nstep.bilinear_interpolate(unwrap_v_lst[x], c[:,0], c[:,1]) - self.phase_st) * self.pitch[-1] / (2*np.pi)
-            v = (nstep.bilinear_interpolate(unwrap_h_lst[x], c[:,0], c[:,1]) - self.phase_st) * self.pitch[-1] / (2*np.pi)
+            u = (nstep.bilinear_interpolate(unwrap_v_lst[x], c[:,0], c[:,1])[0] - self.phase_st) * self.pitch[-1] / (2*np.pi)
+            v = (nstep.bilinear_interpolate(unwrap_h_lst[x], c[:,0], c[:,1])[0] - self.phase_st) * self.pitch[-1] / (2*np.pi)
             coordi = np.column_stack((u, v)).reshape(cam_objpts[0].shape[0], 1, 2).astype(np.float32)
             proj_imgpts.append(coordi)
             if proj_img_lst is not None:
@@ -1826,7 +1826,7 @@ def main():
     # reconstruction point clouds will also be saved in the same path
     #root_dir = r'C:\Users\kl001\Documents\pyfringe_test'
     #root_dir = r"G:\.shortcut-targets-by-id\11ZFqyAr3JhvpSlWJ7UpG0kR4sVloyf83\structured_light\calibr_data\geometric_calib"
-    path = r"E:\review_data\geom_calibration"
+    path = r"G:\My Drive\Epistemic_newdata\calibration"
     data_type = 'npy'
     processing = 'gpu'
     dark_bias_path =  r"C:\Users\kl001\Documents\pyfringe_test\mean_pixel_std\exp_30_fp_42_retake\black_bias\avg_dark.npy"
@@ -1849,7 +1849,7 @@ def main():
         kernel_v = 7
         kernel_h = 7
 
-    limit =10
+    limit =5
     # Instantiate calibration class
 
     calib_inst = Calibration(proj_width=proj_width, 
