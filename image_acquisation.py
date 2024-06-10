@@ -767,7 +767,7 @@ def gamma_curve(gamma_image_index_list,
                 savedir,
                 cam_width=1920,
                 cam_height=1200,
-                half_cross_length=100):
+                half_cross_length=50):
     """
     Function to generate gamma curve
     """
@@ -786,12 +786,13 @@ def gamma_curve(gamma_image_index_list,
                                     cam_capt_timeout=10,
                                     cam_black_level=0,
                                     cam_ExposureCompensation=0,
-                                    proj_exposure_period=25000,
-                                    proj_frame_period=34000,
+                                    proj_exposure_period=30000,#25000,
+                                    proj_frame_period=40000,
                                     do_insert_black=True,
-                                    led_select=2,
-                                    preview_image_index=21,
+                                    led_select=4,
+                                    preview_image_index=30,
                                     focus_image_index=None,
+                                    image_section_size=None,
                                     pprint_status=True,
                                     save_npy=True,
                                     save_tiff=False)
@@ -972,9 +973,10 @@ def main():
         image_indices = np.arange(starting_index, starting_index+no_images).tolist()
         result &= optimal_frame_rate(image_indices, no_iterations)
     elif option == '3':
-        gamma_image_index_list = np.repeat(np.arange(0, 17), 3).tolist()
+        gamma_image_index_list = np.repeat(np.arange(14, 31), 3).tolist()
         gamma_pattern_num_list = [0, 1, 2] * len(set(gamma_image_index_list))
-        savedir = r'C:\Users\kl001\Documents\pyfringe_test\gamma_images'
+        #savedir = r'C:\Users\kl001\Documents\pyfringe_test\gamma_images'
+        savedir = r"E:\promv_proj_test\constant_intensity_gamma_response"
         result &= gamma_curve(gamma_image_index_list,
                               gamma_pattern_num_list,
                               savedir,
