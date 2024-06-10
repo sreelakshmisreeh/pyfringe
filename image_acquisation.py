@@ -1033,7 +1033,7 @@ def main():
             pattern_num_list = [0, 1, 2] * len(set(image_index_list))
         #savedir = r'C:\Users\kl001\Documents\grasshopper3_python\images'
         #savedir = r"E:\test\reconst"
-        savedir = r"E:\review_data\error_map_data\N9_p18\set2"
+        savedir = r"E:\test2"
         result &= run_proj_single_camera(savedir=savedir,
                                          preview_option='Once',
                                          number_scan=number_scan,
@@ -1049,7 +1049,7 @@ def main():
                                          proj_frame_period=40000,#34000,#33334,
                                          do_insert_black=True,
                                          led_select=2,
-                                         preview_image_index=14,#actual 20,
+                                         preview_image_index=25,#actual 20,
                                          focus_image_index=None,
                                          image_section_size=None,
                                          pprint_status=True,
