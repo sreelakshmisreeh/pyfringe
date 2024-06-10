@@ -1826,7 +1826,7 @@ def main():
     # reconstruction point clouds will also be saved in the same path
     #root_dir = r'C:\Users\kl001\Documents\pyfringe_test'
     #root_dir = r"G:\.shortcut-targets-by-id\11ZFqyAr3JhvpSlWJ7UpG0kR4sVloyf83\structured_light\calibr_data\geometric_calib"
-    path = r"G:\My Drive\Epistemic_newdata\calibration"
+    path = r"G:\My Drive\Epistemic_newdata\calibration_100"
     data_type = 'npy'
     processing = 'gpu'
     dark_bias_path =  r"C:\Users\kl001\Documents\pyfringe_test\mean_pixel_std\exp_30_fp_42_retake\black_bias\avg_dark.npy"
@@ -1849,7 +1849,7 @@ def main():
         kernel_v = 7
         kernel_h = 7
 
-    limit =5
+    limit =10
     # Instantiate calibration class
 
     calib_inst = Calibration(proj_width=proj_width, 
