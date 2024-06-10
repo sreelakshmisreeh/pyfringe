@@ -811,9 +811,9 @@ def main():
     type_unwrap = 'multifreq'
     dark_bias_path = r"C:\Users\kl001\Documents\pyfringe_test\mean_pixel_std\exp_30_fp_42_retake\black_bias\avg_dark.npy"
     #obj_path = r'C:\Users\kl001\Documents\grasshopper3_python\images'
-    obj_path = r"E:\review_data\error_map_data\N3_p18\set2"
-    calib_path = r'E:\review_data\geom_calibration'
-    model_path = r"E:\review_data\intensity_calib\variance_model.npy"
+    obj_path = r"E:\test2"
+    calib_path = r"G:\My Drive\Epistemic_newdata\calibration_100"
+    model_path = r"G:\My Drive\Epistemic_newdata\variance_model.npy"
     reconst_inst = Reconstruction(proj_width=proj_width,
                                   proj_height=proj_height,
                                   cam_width=cam_width,
