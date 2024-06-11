@@ -841,7 +841,7 @@ def calib_capture(image_index_list,
                                     proj_frame_period=40000,#66668,#33334,
                                     do_insert_black=True,
                                     led_select=2,
-                                    preview_image_index=20,
+                                    preview_image_index=18,#20,
                                     focus_image_index=None,
                                     image_section_size=None,
                                     pprint_status=True,
@@ -973,7 +973,7 @@ def main():
         image_indices = np.arange(starting_index, starting_index+no_images).tolist()
         result &= optimal_frame_rate(image_indices, no_iterations)
     elif option == '3':
-        gamma_image_index_list = np.repeat(np.arange(14, 31), 3).tolist()
+        gamma_image_index_list = np.repeat(np.arange(2, 19), 3).tolist()
         gamma_pattern_num_list = [0, 1, 2] * len(set(gamma_image_index_list))
         #savedir = r'C:\Users\kl001\Documents\pyfringe_test\gamma_images'
         savedir = r"E:\promv_proj_test\constant_intensity_gamma_response"
@@ -1002,9 +1002,14 @@ def main():
         #image_index_list = np.repeat(np.arange(0, 12), 3).tolist()
         #predistorted
         #image_index_list = np.repeat(np.arange(21, 33), 3).tolist()
-        image_index_list = np.repeat(np.arange(0, 12), 3).tolist()
+        #all corrected firmware
+        # image_index_list = np.repeat(np.arange(0, 12), 3).tolist()
+        # pattern_num_list = [0, 1, 2] * len(set(image_index_list))
+        # savedir = r'G:\My Drive\Epistemic_newdata\calibration'
+        #microfirmware
+        image_index_list = np.repeat(np.arange(19, 31), 3).tolist()
         pattern_num_list = [0, 1, 2] * len(set(image_index_list))
-        savedir = r'G:\My Drive\Epistemic_newdata\calibration'
+        savedir = r'G:\My Drive\micro_calibration'
         number_scan = int(input("\nEnter number of scans"))
         acquisition_index = int(input("\nEnter acquisition index"))
         result &= calib_capture(image_index_list=image_index_list,
@@ -1050,7 +1055,7 @@ def main():
                                          proj_exposure_period=30000,#27084,Check option 2 for recomended value, default is 30000.
                                          proj_frame_period=40000,#34000,#33334,
                                          do_insert_black=True,
-                                         led_select=2,
+                                         led_select=4,
                                          preview_image_index=25,#actual 20,
                                          focus_image_index=None,
                                          image_section_size=None,
