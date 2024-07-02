@@ -102,7 +102,7 @@ class Reconstruction:
                  print('ERROR:Path for noise error  %s does not exist' % self.calib_path)
             else:
                 self.model = np.load(model_path)
-            if  prob_up == False:
+            if  ((probability == True) & (prob_up == False)):
                 calibration_std = np.load(os.path.join(self.calib_path, '{}_std_calibration_param.npz'.format(self.type_unwrap)))
                 self.cam_h_mtx_std = calibration_std["cam_h_mtx_std"]
                 self.proj_h_mtx_std = calibration_std["proj_h_mtx_std"]
@@ -129,7 +129,7 @@ class Reconstruction:
             else:
                 self.model = cp.load(model_path)
                 
-            if prob_up == False:
+            if ((probability == True) & (prob_up == False)):
                 calibration_std = cp.load(os.path.join(self.calib_path, '{}_std_calibration_param.npz'.format(self.type_unwrap)))
                 self.cam_h_mtx_std = cp.asarray(calibration_std["cam_h_mtx_std"])
                 self.proj_h_mtx_std = cp.asarray(calibration_std["proj_h_mtx_std"])
