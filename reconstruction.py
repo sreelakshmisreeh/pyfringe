@@ -96,8 +96,8 @@ class Reconstruction:
             self.camproj_trans_mtx = calibration_mean["st_tvec_mean"]
             self.cam_h_mtx = calibration_mean["cam_h_mtx_mean"]
             self.proj_h_mtx = calibration_mean["proj_h_mtx_mean"]
-            self.uc_img = np.load(os.path.join(self.calib_path,"uc_img.npy"))
-            self.vc_img = np.load(os.path.join(self.calib_path,"vc_img.npy"))
+            # self.uc_img = np.load(os.path.join(self.calib_path,"uc_img.npy"))
+            # self.vc_img = np.load(os.path.join(self.calib_path,"vc_img.npy"))
             if not os.path.exists(model_path):
                  print('ERROR:Path for noise error  %s does not exist' % self.calib_path)
             else:
@@ -122,8 +122,8 @@ class Reconstruction:
             self.camproj_trans_mtx = cp.asarray(calibration_mean["st_tvec_mean"])
             self.cam_h_mtx = cp.asarray(calibration_mean["cam_h_mtx_mean"])
             self.proj_h_mtx = cp.asarray(calibration_mean["proj_h_mtx_mean"])
-            self.uc_img = cp.load(os.path.join(self.calib_path,"uc_img.npy"))
-            self.vc_img = cp.load(os.path.join(self.calib_path,"vc_img.npy"))
+            #self.uc_img = cp.load(os.path.join(self.calib_path,"uc_img.npy"))
+            #self.vc_img = cp.load(os.path.join(self.calib_path,"vc_img.npy"))
             if not os.path.exists(model_path):
                  print('ERROR:Path for noise error  %s does not exist' % self.calib_path)
             else:
@@ -252,11 +252,12 @@ class Reconstruction:
             self.mask = ~cp.isnan(unwrap_dist)
             u = cp.arange(0,self.cam_width)
             v = cp.arange(0, self.cam_height)
-            uc, vc = cp.meshgrid(u, v)
-            uc = self.uc_img[self.mask]
-            vc = self.vc_img[self.mask]
+            uc_grid, vc_grid = cp.meshgrid(u, v)
+            # uc = self.uc_img[self.mask]
+            # vc = self.vc_img[self.mask]
+            uc = uc_grid[self.mask]
+            vc = vc_grid[self.mask]
             up = (unwrap_dist - self.phase_st) * self.pitch_list[-1] / (2 * cp.pi)
-         
             up = up[self.mask]
             self.mask = cp.asnumpy(self.mask)
         
