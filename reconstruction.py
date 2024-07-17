@@ -274,16 +274,30 @@ class Reconstruction:
     
         """
         df_dup = (det * (-hc_13 * hc_22 * hp_34 + uc * hc_22 * hc_33 * hp_34) - 
-                  x_num * (-hc_11 * hc_22 * hp_33 + hc_13 * hc_22 * hp_31 - uc * hc_22 * hc_33 * hp_31 + hc_11 * hc_23 * hp_32 - vc * hc_11 * hc_33 * hp_32))/det**2
-        df_dhc_11 = (- x_num * (hc_22 * hp_13 - up * hc_22 * hp_33 - hc_23 * hp_12 + up * hc_23 * hp_32 + vc * hc_33 * hp_12 - vc * up * hc_33 * hp_32))/det**2
-        df_dhc_13 = (det * (-up * hc_22 * hp_34 + hc_22 * hp_14) - x_num * (-hc_22 * hp_11 + up * hc_22 * hp_31))/det**2
+                  x_num * (-hc_11 * hc_22 * hp_33 + hc_13 * hc_22 * hp_31 - 
+                           uc * hc_22 * hc_33 * hp_31 + 
+                           hc_11 * hc_23 * hp_32 - vc * hc_11 * hc_33 * hp_32))/det**2
+        df_dhc_11 = (- x_num * (hc_22 * hp_13 - up * hc_22 * hp_33 - 
+                                hc_23 * hp_12 + up * hc_23 * hp_32 + 
+                                vc * hc_33 * hp_12 - 
+                                vc * up * hc_33 * hp_32))/det**2
+        df_dhc_13 = (det * (-up * hc_22 * hp_34 + hc_22 * hp_14) - 
+                     x_num * (-hc_22 * hp_11 + up * hc_22 * hp_31))/det**2
         df_dhc_22 = (det * (-up * hc_13 * hp_34 + hc_13 * hp_14 + uc * up * hc_33 * hp_34 - uc * hc_33 * hp_14) - 
-                     x_num * (hc_11 * hp_13 - up * hc_11 * hp_33 - hc_13 * hp_11 + up * hc_13 * hp_31 + uc * hc_33 * hp_11 - uc * up * hc_33 * hp_31))/det**2
+                     x_num * (hc_11 * hp_13 - 
+                              up * hc_11 * hp_33 - 
+                              hc_13 * hp_11 +
+                              up * hc_13 * hp_31 + 
+                              uc * hc_33 * hp_11 - 
+                              uc * up * hc_33 * hp_31))/det**2
         df_dhc_23 = (- x_num * (-hc_11 * hp_12 + up * hc_11 * hp_32))/det**2
         df_dhc_33 = (det * (uc* up * hc_22 * hp_34 - uc * hc_22 * hp_14) - 
-                     x_num * (uc * hc_22 * hp_11 - uc* up * hc_22 * hp_31 + vc * hc_11 * hp_12 - vc * up * hc_11 * hp_32)) / det**2
+                     x_num * (uc * hc_22 * hp_11 - 
+                              uc* up * hc_22 * hp_31 + 
+                              vc * hc_11 * hp_12 - 
+                              vc * up * hc_11 * hp_32)) / det**2
         df_dhp_11 = (- x_num *(-hc_13 * hc_22 + uc * hc_22 * hc_33))/det**2
-        df_dhp_12 = (- x_num * (-hc_11*hc_23 + vc * hc_11 * hc_33))/det**2
+        df_dhp_12 = (- x_num * (-hc_11 * hc_23 + vc * hc_11 * hc_33))/det**2
         df_dhp_13 = (- x_num * (hc_11 * hc_22))/det**2
         df_dhp_14 = (det * (hc_13 * hc_22 - uc * hc_22 * hc_33))/det**2
         df_dhp_31 = (- x_num * (up * hc_22 * hc_13 - uc * up * hc_22 * hc_33))/det**2
@@ -301,13 +315,31 @@ class Reconstruction:
     
         """
         df_dup = (det * (-hc_11 * hc_23 * hp_34 + vc * hc_11 * hc_33 * hp_34) - 
-                  y_num * (-hc_11 * hc_22 * hp_33 + hc_13 * hc_22 * hp_31 - uc * hc_22 * hc_33 * hp_31 + hc_11 * hc_23 * hp_32 - vc * hc_11 * hc_33 * hp_32))/det**2
+                  y_num * (-hc_11 * hc_22 * hp_33 + 
+                           hc_13 * hc_22 * hp_31 - 
+                           uc * hc_22 * hc_33 * hp_31 + 
+                           hc_11 * hc_23 * hp_32 - 
+                           vc * hc_11 * hc_33 * hp_32))/det**2
         df_dhc_11 = (det * (-up * hc_23 * hp_34 + hc_23 * hp_14 + vc * up * hc_33 * hp_34 - vc * hc_33 * hp_14) -
-                     y_num * (hc_22 * hp_13 - up * hc_22 * hp_33 - hc_23 * hp_12 + up * hc_23 * hp_32 + vc * hc_33 * hp_12 - vc * up * hc_33 * hp_32))/det**2
+                     y_num * (hc_22 * hp_13 - 
+                              up * hc_22 * hp_33 - 
+                              hc_23 * hp_12 + 
+                              up * hc_23 * hp_32 + 
+                              vc * hc_33 * hp_12 - 
+                              vc * up * hc_33 * hp_32))/det**2
         df_dhc_13 = (- y_num * (-hc_22 * hp_11 + up * hc_22 * hp_31))/det**2
-        df_dhc_22 = (- y_num * (hc_11 * hp_13 - up * hc_11 * hp_33 - hc_13 * hp_11 + up * hc_13 * hp_31 + uc * hc_33 * hp_11 - uc * up * hc_33 * hp_31))/det**2
+        df_dhc_22 = (- y_num * (hc_11 * hp_13 - 
+                                up * hc_11 * hp_33 - 
+                                hc_13 * hp_11 + 
+                                up * hc_13 * hp_31 + 
+                                uc * hc_33 * hp_11 - 
+                                uc * up * hc_33 * hp_31))/det**2
         df_dhc_23 = (det * (-up * hc_11 * hp_34 + hc_11 * hp_14) - y_num * (-hc_11 * hp_12 + up * hc_11 * hp_32))/det**2
-        df_dhc_33 = (det * (vc* up * hc_11 * hp_34 - vc * hc_11 * hp_14) - y_num * (uc * hc_22 * hp_11 - uc * up * hc_22 * hp_31 + vc * hc_11 * hp_12 - vc * up * hc_11 * hp_32)) / det**2
+        df_dhc_33 = (det * (vc* up * hc_11 * hp_34 - vc * hc_11 * hp_14) - 
+                     y_num * (uc * hc_22 * hp_11 - 
+                              uc * up * hc_22 * hp_31 + 
+                              vc * hc_11 * hp_12 - 
+                              vc * up * hc_11 * hp_32)) / det**2
         df_dhp_11 = (- y_num * (-hc_13 * hc_22 + uc * hc_22 * hc_33))/det**2
         df_dhp_12 = (- y_num * (-hc_11 * hc_23 + vc * hc_11 * hc_33))/det**2
         df_dhp_13 = (- y_num * (hc_11 * hc_22))/det**2
@@ -326,12 +358,31 @@ class Reconstruction:
         Sub function used to calculate z coordinate variance
     
         """
-        df_dup = (det * (hc_11 * hc_22 * hp_34) - z_num * (-hc_11 * hc_22 * hp_33 + hc_22 * hc_13 * hp_31 - uc * hc_22 * hc_33 * hp_31 + hc_11 * hc_23 * hp_32 - vc * hc_11 * hc_33 * hp_32))/det**2
-        df_dhc_11 = (det * (up * hc_22 * hp_34 - hc_22 * hp_14) - z_num * (hc_22 * hp_13 - up * hc_22 * hp_33 - hc_23 * hp_12 + up * hc_23 * hp_32 + vc * hc_33 * hp_12 - vc * up * hc_33 * hp_32))/det**2
+        df_dup = (det * (hc_11 * hc_22 * hp_34) - 
+                  z_num * (-hc_11 * hc_22 * hp_33 + 
+                           hc_22 * hc_13 * hp_31 - 
+                           uc * hc_22 * hc_33 * hp_31 + 
+                           hc_11 * hc_23 * hp_32 - 
+                           vc * hc_11 * hc_33 * hp_32))/det**2
+        df_dhc_11 = (det * (up * hc_22 * hp_34 - hc_22 * hp_14) - 
+                     z_num * (hc_22 * hp_13 - 
+                              up * hc_22 * hp_33 - 
+                              hc_23 * hp_12 + 
+                              up * hc_23 * hp_32 + 
+                              vc * hc_33 * hp_12 - vc * up * hc_33 * hp_32))/det**2
         df_dhc_13 = (- z_num * (-hc_22 * hp_11 + up * hc_22 * hp_31))/det**2
-        df_dhc_22 = (det * (up * hc_11 * hp_34 - hc_11 * hp_14) - z_num * (hc_11 * hp_13 - up * hc_11 * hp_33 - hc_13 * hp_11 + up * hc_13 * hp_31 + uc * hc_33 * hp_11 - uc * up * hc_33 * hp_31))/det**2
+        df_dhc_22 = (det * (up * hc_11 * hp_34 - hc_11 * hp_14) - 
+                     z_num * (hc_11 * hp_13 - 
+                              up * hc_11 * hp_33 - 
+                              hc_13 * hp_11 + 
+                              up * hc_13 * hp_31 +
+                              uc * hc_33 * hp_11 - 
+                              uc * up * hc_33 * hp_31))/det**2
         df_dhc_23 = (- z_num * (-hc_11 * hp_12 + up * hc_11 * hp_32))/det**2
-        df_dhc_33 = (- z_num * (uc * hc_22 * hp_11 - uc * up * hc_22 * hp_31 + vc * hc_11 * hp_12 - vc * up * hc_11 * hp_32))/det**2
+        df_dhc_33 = (- z_num * (uc * hc_22 * hp_11 - 
+                                uc * up * hc_22 * hp_31 + 
+                                vc * hc_11 * hp_12 - 
+                                vc * up * hc_11 * hp_32))/det**2
         df_dhp_11 = (- z_num * (-hc_13 * hc_22 + uc * hc_22 * hc_33))/det**2
         df_dhp_12 = (- z_num * (-hc_11 * hc_23 + vc * hc_11 * hc_33))/det**2
         df_dhp_13 = (- z_num * (hc_11 * hc_22))/det**2
@@ -381,15 +432,29 @@ class Reconstruction:
         hp_34 = self.proj_h_mtx[2, 3]
         sigmasq_hp_34 = self.proj_h_mtx_std[2, 3]**2
         
-        det = (hc_11 * hc_22 * hp_13 - up * hc_11 * hc_22 * hp_33 - hc_13 * hc_22 * hp_11 + up * hc_13 *hc_22 * hp_31 + uc * hc_22 * hc_33 * hp_11
-                - uc * up * hc_22 * hc_33 * hp_31 - hc_11 * hc_23 * hp_12 + up * hc_11 * hc_23 * hp_32 + vc * hc_11 * hc_33 * hp_12 - vc * up * hc_11 * hc_33 * hp_32)
+        det = (hc_11 * hc_22 * hp_13 - 
+               up * hc_11 * hc_22 * hp_33 - 
+               hc_13 * hc_22 * hp_11 + 
+               up * hc_13 *hc_22 * hp_31 + 
+               uc * hc_22 * hc_33 * hp_11 - 
+               uc * up * hc_22 * hc_33 * hp_31 - 
+               hc_11 * hc_23 * hp_12 + 
+               up * hc_11 * hc_23 * hp_32 + 
+               vc * hc_11 * hc_33 * hp_12 - 
+               vc * up * hc_11 * hc_33 * hp_32)
                
         
-        x_num = -up * hc_13 * hc_22 * hp_34 + hc_13 * hc_22 * hp_14 + uc * up * hc_22 * hc_33 * hp_34 - uc * hc_22 * hc_33 * hp_14
+        x_num = (-up * hc_13 * hc_22 * hp_34 + 
+                 hc_13 * hc_22 * hp_14 + 
+                 uc * up * hc_22 * hc_33 * hp_34 - 
+                 uc * hc_22 * hc_33 * hp_14)
         df_dup_x, df_dhc_11_x, df_dhc_13_x, df_dhc_22_x, df_dhc_23_x, df_dhc_33_x, df_dhp_11_x, df_dhp_12_x, df_dhp_13_x, df_dhp_14_x, df_dhp_31_x, df_dhp_32_x, df_dhp_33_x, df_dhp_34_x = Reconstruction.diff_funs_x(hc_11, hc_13, hc_22, hc_23, hc_33, hp_11, hp_12, hp_13, hp_14, hp_31, hp_32, hp_33, hp_34, det, x_num, uc, vc, up)
         
         
-        y_num = -up * hc_11 * hc_23 * hp_34 + hc_11 * hc_23 * hp_14 + vc * up * hc_11 * hc_33 * hp_34 - vc * hc_11 * hc_33 * hp_14
+        y_num = (-up * hc_11 * hc_23 * hp_34 + 
+                 hc_11 * hc_23 * hp_14 + 
+                 vc * up * hc_11 * hc_33 * hp_34 - 
+                 vc * hc_11 * hc_33 * hp_14)
         #y_num = (-hc_11 * (hc_23 - hc_33)*(up * hp_34 - hp_14))
         df_dup_y, df_dhc_11_y, df_dhc_13_y, df_dhc_22_y, df_dhc_23_y, df_dhc_33_y, df_dhp_11_y, df_dhp_12_y, df_dhp_13_y, df_dhp_14_y, df_dhp_31_y, df_dhp_32_y, df_dhp_33_y, df_dhp_34_y = Reconstruction.diff_funs_y(hc_11, hc_13, hc_22, hc_23, hc_33, hp_11, hp_12, hp_13, hp_14, hp_31, hp_32, hp_33, hp_34, det, y_num, uc, vc, up)
         
