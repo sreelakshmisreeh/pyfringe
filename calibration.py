@@ -1198,9 +1198,9 @@ class Calibration:
             # undistort points
             reconst_instance.mask = mask_lst[i]
             unwrap_vect = unwrap_phase[i][mask_lst[i]]
-            cordi, cord_sigma = reconst_instance.reconstruction_pts(center_pts[i], unwrap_vect,  sigma_sqphi_lst[i])
+            cordi, cord_var = reconst_instance.reconstruction_pts(center_pts[i], unwrap_vect,  sigma_sqphi_lst[i])
             center_cordi_lst.append(cordi)
-            center_sigma_lst.append(cord_sigma)
+            center_sigma_lst.append(np.sqrt(cord_var))
         return np.array(center_cordi_lst), np.array(center_sigma_lst)
 
     # Projective coordinates based on camera - projector extrinsics
