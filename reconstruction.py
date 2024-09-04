@@ -197,7 +197,7 @@ class Reconstruction:
             coords = np.einsum('ijk,ikl->lij', A_inv, c)[0]
         return coords
     
-    def reconstruction_pts(self, uv_true, unwrap_vector):
+    def reconstruction_pts(self, uv_true, unwrap_vector, sigma_sq_phi):
         """
         Function to reconstruct 3D point coordinates of 2D points.
         """
@@ -213,13 +213,17 @@ class Reconstruction:
         uc = uv[:, 0]
         vc = uv[:, 1]
         # Determinate 'up' from circle center
-        up = (nstep.bilinear_interpolate(unwrap_image, uv_true[:, 0], uv_true[:, 1]) - self.phase_st) * self.pitch_list[-1] / (2*np.pi)
+        ph_up, pt_ph_var = nstep.bilinear_interpolate(unwrap_image, uv_true[:, 0], uv_true[:, 1], sigma_sq_phi ) 
+        up = (ph_up - self.phase_st) * self.pitch_list[-1] / (2*np.pi)
         if self.processing == 'gpu':
             uc = cp.asarray(uv[:, 0])
             vc = cp.asarray(uv[:, 1])
             up = cp.asarray(up)
+            pt_ph_var = cp.asarray(pt_ph_var)
         coordintes = self.triangulation(uc, vc, up) #return is numpy
-        return coordintes
+        sigmasq_x, sigmasq_y, sigmasq_z, derv_x, derv_y, derv_z = self.sigma_random(pt_ph_var, uc, vc, up)
+        cordi_sigma = np.stack((sigmasq_x, sigmasq_y, sigmasq_z), axis=-1)
+        return coordintes, cordi_sigma
    
     def reconstruction_obj(self,
                            unwrap_vector, sigma_sq_phi):
