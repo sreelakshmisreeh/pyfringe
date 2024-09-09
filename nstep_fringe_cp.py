@@ -345,7 +345,6 @@ def bilinear_interpolate_cp(image: cp.ndarray,
         pred_var_d = sigmasq_image[y1, x1]
         int_pred_var = wa ** 2 * pred_var_a + wb ** 2 * pred_var_b + wc ** 2 * pred_var_c + wd ** 2 * pred_var_d
     else:
-        print("True")
         int_pred_var = None
     return new_image, int_pred_var
 
