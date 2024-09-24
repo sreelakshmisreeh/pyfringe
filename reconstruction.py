@@ -201,32 +201,21 @@ class Reconstruction:
         """
         Function to reconstruct 3D point coordinates of 2D points.
         """
-        no_pts = uv_true.shape[0]
-        if self.processing == "gpu":
-            c_mtx = cp.asnumpy(self.cam_mtx)
-            c_dist = cp.asnumpy(self.cam_dist)
-        uv = cv2.undistortPoints(uv_true, c_mtx, c_dist, None, c_mtx)
-        uv = uv.reshape(uv.shape[0], 2)
-        uv_true = uv_true.reshape(no_pts, 2)
+        uv = uv_true.reshape(uv_true.shape[0], 2)
         #  Extract x and y coordinate of each point as uc, vc
         uc = uv[:, 0]
         vc = uv[:, 1]
         # Determinate 'up' from circle center
         if self.processing == 'cpu':
             unwrap_image = nstep.recover_image(unwrap_vector, self.mask, self.cam_height, self.cam_width)
-            unwrap_dist, unwrap_var = nstep.undistort(unwrap_image, self.cam_mtx, self.cam_dist, 
-                                                      sigmasq_image=sigma_sq_phi)
-            ph_up, pt_ph_var = nstep.bilinear_interpolate(unwrap_dist, uc, vc, unwrap_var) 
+            ph_up, pt_ph_var = nstep.bilinear_interpolate(unwrap_image, uc, vc, sigma_sq_phi) 
             up = (ph_up - self.phase_st) * self.pitch_list[-1] / (2*np.pi)
         elif self.processing == 'gpu':
             uc = cp.asarray(uv[:, 0])
             vc = cp.asarray(uv[:, 1])
             unwrap_image = nstep_cp.recover_image_cp(unwrap_vector, self.mask, self.cam_height, self.cam_width)
-            unwrap_dist, unwrap_var = nstep_cp.undistort_cp(unwrap_image, self.cam_mtx, self.cam_dist, 
-                                                      sigmasq_image=sigma_sq_phi)
-            ph_up, pt_ph_var = nstep_cp.bilinear_interpolate_cp(unwrap_dist, uc, vc, unwrap_var) 
+            ph_up, pt_ph_var = nstep_cp.bilinear_interpolate_cp(unwrap_image, uc, vc, sigma_sq_phi) 
             up = (ph_up - self.phase_st) * self.pitch_list[-1] / (2*np.pi)
-            
             up = cp.asarray(up)
             pt_ph_var = cp.asarray(pt_ph_var)
         coordintes = self.triangulation(uc, vc, up) #return is numpy
